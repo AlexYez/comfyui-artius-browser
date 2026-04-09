@@ -365,6 +365,15 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     letter-spacing: 0.02em;
                 }
 
+                .ts-title-link {
+                    color: inherit;
+                    text-decoration: none;
+                }
+
+                .ts-title-link:hover {
+                    text-decoration: underline;
+                }
+
                 .ts-toolbar-main,
                 .ts-toolbar-secondary {
                     display: flex;
@@ -805,7 +814,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             </style>
             <div class="ts-shell" tabindex="0">
                 <div class="ts-toolbar">
-                    <div class="ts-title"></div>
+                    <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a></div>
                     <div class="ts-toolbar-main">
                         <input class="ts-search" type="search">
                         <div class="ts-toolbar-cluster">
@@ -849,6 +858,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs = {
             tsShell: this.shadowRoot.querySelector(".ts-shell"),
             tsTitle: this.shadowRoot.querySelector(".ts-title"),
+            tsTitleLink: this.shadowRoot.querySelector(".ts-title-link"),
             tsSearch: this.shadowRoot.querySelector(".ts-search"),
             tsTypeChips: this.shadowRoot.querySelector(".ts-type-chips"),
             tsRootSelect: this.shadowRoot.querySelector(".ts-root-select"),
@@ -1280,7 +1290,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsDebouncedAssetEventRefresh();
     }
     tsHydrateText() {
-        this.tsRefs.tsTitle.textContent = this.tsT("panel.title", tsProjectSettings.title);
+        this.tsRefs.tsTitleLink.textContent = this.tsT("panel.title", tsProjectSettings.title);
         this.tsRefs.tsSearch.placeholder = this.tsT("placeholder.search", "Search filename...");
         this.tsRefs.tsSearch.title = this.tsT("tooltip.search", "Search assets by filename only.");
         this.tsRefs.tsRootSelect.title = this.tsT("tooltip.root", "Choose a root folder.");
