@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-artius-browser"
 description = "Timesaver Artius Browser: lightweight asset browser for modern ComfyUI workflows."
-version = "0.2"
+version = "0.3"
 requires-python = ">=3.10"
 license = { file = "LICENSE.txt" }
 dependencies = [
@@ -15,4 +15,4 @@ Repository = "https://github.com/AlexYez/comfyui-artius-browser"
 [tool.comfy]
 PublisherId = "timesaver"
 DisplayName = "Timesaver Artius Browser"
-Icon = "https://github.com/AlexYez/comfyui-artius-browser/blob/main/icon.png"
+Icon = "https://raw.githubusercontent.com/AlexYez/comfyui-artius-browser/refs/heads/main/icon.png"
