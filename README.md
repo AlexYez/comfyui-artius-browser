@@ -1,6 +1,8 @@
-﻿# Timesaver Artius Browser
+# Timesaver Artius Browser
 
 [English](#english) | [Русский](#russian)
+
+![Timesaver Artius Browser](img/ts-artius-browser.jpg)
 
 ---
 
