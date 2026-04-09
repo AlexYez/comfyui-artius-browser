@@ -15,4 +15,4 @@ Repository = "https://github.com/AlexYez/comfyui-artius-browser"
 [tool.comfy]
 PublisherId = "timesaver"
 DisplayName = "Timesaver Artius Browser"
-Icon = "https://github.com/AlexYez/comfyui-artius-browser/blob/main/icon.svg"
+Icon = "https://github.com/AlexYez/comfyui-artius-browser/blob/main/icon.png"
