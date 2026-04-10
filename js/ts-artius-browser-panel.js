@@ -329,17 +329,29 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     flex: 1 1 auto;
                     min-height: 0;
                     height: 100%;
-                    color: var(--input-text, var(--fg-color, #e8e8e8));
+                    color: var(--input-text, var(--fg-color, inherit));
                     font-family: var(--font-family, "Segoe UI", sans-serif);
-                    --ts-accent: var(--p-button-primary-background, var(--theme-color, #5c9cff));
-                    --ts-accent-contrast: var(--p-button-primary-color, #ffffff);
-                    --ts-bg-0: var(--comfy-menu-bg, var(--bg-color, #171717));
-                    --ts-bg-1: var(--comfy-input-bg, var(--comfy-menu-secondary-bg, #202020));
-                    --ts-bg-2: var(--content-bg, #262626);
-                    --ts-bg-3: rgba(255, 255, 255, 0.03);
-                    --ts-border: var(--border-color, rgba(255, 255, 255, 0.12));
-                    --ts-muted: var(--descrip-text, rgba(255, 255, 255, 0.68));
-                    --ts-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
+                    --ts-accent: var(--p-button-primary-background, var(--theme-color, var(--input-text, var(--fg-color, currentColor))));
+                    --ts-accent-contrast: var(--p-button-primary-color, var(--comfy-menu-bg, var(--bg-color, inherit)));
+                    --ts-bg-0: var(--comfy-menu-bg, var(--bg-color, transparent));
+                    --ts-bg-1: var(--comfy-input-bg, var(--comfy-menu-secondary-bg, var(--ts-bg-0)));
+                    --ts-bg-2: var(--content-bg, var(--comfy-input-bg, var(--ts-bg-1)));
+                    --ts-text: var(--input-text, var(--fg-color, inherit));
+                    --ts-bg-3: color-mix(in srgb, var(--ts-text) 5%, var(--ts-bg-0));
+                    --ts-border: var(--border-color, color-mix(in srgb, var(--ts-text) 14%, transparent));
+                    --ts-muted: var(--descrip-text, color-mix(in srgb, var(--ts-text) 72%, transparent));
+                    --ts-shadow-color: color-mix(in srgb, var(--ts-bg-0) 72%, black);
+                    --ts-shadow: 0 4px 18px color-mix(in srgb, var(--ts-shadow-color) 22%, transparent);
+                    --ts-surface-ghost: color-mix(in srgb, var(--ts-text) 4%, transparent);
+                    --ts-surface-soft: color-mix(in srgb, var(--ts-bg-0) 68%, var(--ts-bg-2));
+                    --ts-surface-overlay: color-mix(in srgb, var(--ts-bg-0) 72%, transparent);
+                    --ts-surface-overlay-strong: color-mix(in srgb, var(--ts-bg-0) 82%, transparent);
+                    --ts-surface-overlay-soft: color-mix(in srgb, var(--ts-bg-0) 58%, transparent);
+                    --ts-folder-icon: var(--ts-muted);
+                    --ts-progress-track: color-mix(in srgb, var(--ts-text) 10%, transparent);
+                    --ts-progress-glow: color-mix(in srgb, var(--ts-accent) 72%, var(--ts-text));
+                    --ts-card-overlay-top: color-mix(in srgb, var(--ts-bg-0) 16%, transparent);
+                    --ts-card-overlay-bottom: color-mix(in srgb, var(--ts-bg-0) 88%, transparent);
                 }
 
                 .ts-shell {
@@ -458,8 +470,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     height: 10px;
                     flex: 0 0 10px;
                     border-radius: 999px;
-                    background: rgba(255, 255, 255, 0.24);
-                    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+                    background: color-mix(in srgb, var(--ts-text) 24%, transparent);
+                    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ts-text) 10%, transparent);
                     transition: background 0.14s ease;
                 }
 
@@ -543,7 +555,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     position: relative;
                     height: 6px;
                     border-radius: 999px;
-                    background: rgba(255, 255, 255, 0.08);
+                    background: var(--ts-progress-track);
                     overflow: hidden;
                 }
 
@@ -552,7 +564,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     inset: 0 auto 0 0;
                     width: 0%;
                     border-radius: inherit;
-                    background: linear-gradient(90deg, color-mix(in srgb, var(--ts-accent) 72%, #ffffff), var(--ts-accent));
+                    background: linear-gradient(90deg, var(--ts-progress-glow), var(--ts-accent));
                     transition: width 0.16s ease;
                 }
 
@@ -639,7 +651,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     height: 13px;
                     flex: 0 0 13px;
                     opacity: 0.92;
-                    background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d8d8d8' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.75 7.5a2.25 2.25 0 0 1 2.25-2.25h4.09a2.25 2.25 0 0 1 1.59.66l1.06 1.06a2.25 2.25 0 0 0 1.59.66H18a2.25 2.25 0 0 1 2.25 2.25v6.75A2.25 2.25 0 0 1 18 19.5H6a2.25 2.25 0 0 1-2.25-2.25V7.5Z'/%3E%3C/svg%3E");
+                    background-color: var(--ts-folder-icon);
+                    mask: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M3.75 7.5a2.25 2.25 0 0 1 2.25-2.25h4.09a2.25 2.25 0 0 1 1.59.66l1.06 1.06a2.25 2.25 0 0 0 1.59.66H18a2.25 2.25 0 0 1 2.25 2.25v6.75A2.25 2.25 0 0 1 18 19.5H6a2.25 2.25 0 0 1-2.25-2.25V7.5Z'/%3E%3C/svg%3E");
+                    -webkit-mask: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M3.75 7.5a2.25 2.25 0 0 1 2.25-2.25h4.09a2.25 2.25 0 0 1 1.59.66l1.06 1.06a2.25 2.25 0 0 0 1.59.66H18a2.25 2.25 0 0 1 2.25 2.25v6.75A2.25 2.25 0 0 1 18 19.5H6a2.25 2.25 0 0 1-2.25-2.25V7.5Z'/%3E%3C/svg%3E");
                 }
 
                 .ts-tree-folder {
@@ -698,7 +712,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 .ts-card:hover {
                     transform: translateY(-1px);
                     border-color: color-mix(in srgb, var(--ts-accent) 70%, var(--ts-border));
-                    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+                    box-shadow: 0 8px 24px color-mix(in srgb, var(--ts-shadow-color) 34%, transparent);
                 }
 
                 .ts-card[data-selected="true"] {
@@ -720,7 +734,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     content: "";
                     position: absolute;
                     inset: 0;
-                    background: linear-gradient(180deg, rgba(0, 0, 0, 0.14) 0%, rgba(0, 0, 0, 0) 34%, rgba(0, 0, 0, 0.82) 100%);
+                    background: linear-gradient(180deg, var(--ts-card-overlay-top) 0%, transparent 34%, var(--ts-card-overlay-bottom) 100%);
                     opacity: 0;
                     transition: opacity 0.14s ease;
                     pointer-events: none;
@@ -759,7 +773,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     width: var(--ts-card-action-size, 22px);
                     padding: 0;
                     border-radius: var(--ts-card-action-radius, 5px);
-                    background: rgba(8, 8, 8, 0.62);
+                    background: var(--ts-surface-overlay-strong);
                     font-size: var(--ts-card-action-font-size, 10px);
                     font-weight: 700;
                 }
@@ -779,14 +793,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 .ts-card-badge {
                     padding: var(--ts-card-badge-pad-y, 3px) var(--ts-card-badge-pad-x, 6px);
                     border-radius: var(--ts-card-badge-radius, 5px);
-                    background: rgba(8, 8, 8, 0.58);
+                    background: var(--ts-surface-overlay-strong);
                     font-size: var(--ts-card-badge-font-size, 10px);
                     line-height: 1.1;
                     white-space: nowrap;
                 }
 
                 .ts-card-badge[data-kind="meta"] {
-                    background: rgba(8, 8, 8, 0.42);
+                    background: var(--ts-surface-overlay-soft);
                 }
                 .ts-empty {
                     position: absolute;

@@ -63,20 +63,26 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     inset: 0;
                     z-index: 2140;
                     pointer-events: none;
-                    --ts-accent: var(--p-button-primary-background, var(--theme-color, #5c9cff));
-                    --ts-accent-contrast: var(--p-button-primary-color, #ffffff);
-                    --ts-bg-0: var(--comfy-menu-bg, var(--bg-color, #141414));
-                    --ts-bg-1: var(--comfy-input-bg, var(--comfy-menu-bg, #1c1c1c));
-                    --ts-bg-2: var(--content-bg, var(--comfy-menu-secondary-bg, #202020));
-                    --ts-border: var(--border-color, rgba(255,255,255,0.14));
-                    --ts-text: var(--input-text, var(--fg-color, #e8e8e8));
-                    --ts-text-muted: var(--descrip-text, rgba(255,255,255,0.7));
+                    --ts-accent: var(--p-button-primary-background, var(--theme-color, var(--input-text, var(--fg-color, currentColor))));
+                    --ts-accent-contrast: var(--p-button-primary-color, var(--comfy-menu-bg, var(--bg-color, inherit)));
+                    --ts-bg-0: var(--comfy-menu-bg, var(--bg-color, transparent));
+                    --ts-bg-1: var(--comfy-input-bg, var(--comfy-menu-bg, var(--ts-bg-0)));
+                    --ts-bg-2: var(--content-bg, var(--comfy-menu-secondary-bg, var(--ts-bg-1)));
+                    --ts-border: var(--border-color, color-mix(in srgb, var(--input-text, var(--fg-color, currentColor)) 16%, transparent));
+                    --ts-text: var(--input-text, var(--fg-color, inherit));
+                    --ts-text-muted: var(--descrip-text, color-mix(in srgb, var(--ts-text) 72%, transparent));
+                    --ts-backdrop: color-mix(in srgb, var(--ts-bg-0) 84%, transparent);
+                    --ts-backdrop-strong: color-mix(in srgb, var(--ts-bg-0) 76%, transparent);
+                    --ts-surface-ghost: color-mix(in srgb, var(--ts-text) 4%, transparent);
+                    --ts-status-surface: color-mix(in srgb, var(--ts-bg-0) 78%, transparent);
+                    --ts-nav-surface: color-mix(in srgb, var(--ts-bg-0) 82%, transparent);
+                    --ts-playhead-shadow: color-mix(in srgb, var(--ts-bg-0) 24%, transparent);
                 }
                 .ts-viewer {
                     position: absolute;
                     inset: 0;
                     display: none;
-                    background: rgba(0, 0, 0, 0.82);
+                    background: var(--ts-backdrop);
                     backdrop-filter: blur(8px);
                     color: var(--ts-text);
                     pointer-events: auto;
@@ -201,7 +207,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     border-radius: 999px;
                     font: 600 11px/1.2 inherit;
                     color: var(--ts-text);
-                    background: rgba(10, 10, 10, 0.68);
+                    background: var(--ts-status-surface);
                     border: 1px solid var(--ts-border);
                     backdrop-filter: blur(6px);
                 }
@@ -232,7 +238,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     min-height: 42px;
                     padding: 0;
                     border-radius: 999px;
-                    background: rgba(10, 10, 10, 0.72);
+                    background: var(--ts-nav-surface);
                     backdrop-filter: blur(8px);
                     font-size: 20px;
                     font-weight: 700;
@@ -282,7 +288,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     padding: 12px;
                     border: 1px solid var(--ts-border);
                     border-radius: 10px;
-                    background: rgba(255, 255, 255, 0.02);
+                    background: var(--ts-surface-ghost);
                 }
                 .ts-technical-grid {
                     display: grid;
@@ -294,7 +300,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     padding: 10px 12px;
                     border: 1px solid var(--ts-border);
                     border-radius: 10px;
-                    background: rgba(255, 255, 255, 0.02);
+                    background: var(--ts-surface-ghost);
                 }
                 .ts-technical-label {
                     font: 600 11px/1.3 inherit;
@@ -349,7 +355,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     left: 0%;
                     width: 2px;
                     background: var(--ts-accent);
-                    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+                    box-shadow: 0 0 0 1px var(--ts-playhead-shadow);
                     pointer-events: none;
                 }
                 .ts-audio-controls {

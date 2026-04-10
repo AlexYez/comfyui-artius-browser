@@ -26,10 +26,10 @@ class TSPreviewCache:
         self.ts_config_store = ts_config_store
         self.ts_resampling = getattr(getattr(Image, "Resampling", Image), "LANCZOS", Image.LANCZOS)
         self.ts_placeholder_specs = {
-            "image": ("placeholder-image", "IMG", "#E76F51"),
-            "video": ("placeholder-video", "VID", "#2A9D8F"),
-            "audio": ("placeholder-audio", "AUD", "#F4A261"),
-            "3d": ("placeholder-3d", "3D", "#457B9D"),
+            "image": ("placeholder-image", "IMG"),
+            "video": ("placeholder-video", "VID"),
+            "audio": ("placeholder-audio", "AUD"),
+            "3d": ("placeholder-3d", "3D"),
         }
 
     def TSBuildPreviewPath(self, ts_preview_key: str, ts_folder_name: str, ts_extension: str | None = None) -> Path:
@@ -71,11 +71,11 @@ class TSPreviewCache:
         return hashlib.blake2b(ts_fallback_text.encode("utf-8"), digest_size=32).hexdigest()
 
     def TSGetTypePlaceholderPreview(self, ts_kind: str) -> str:
-        ts_placeholder_key, ts_label, ts_accent = self.ts_placeholder_specs.get(
+        ts_placeholder_key, ts_label = self.ts_placeholder_specs.get(
             ts_kind,
-            (f"placeholder-{ts_kind}", ts_kind.upper()[:3], "#6B7280"),
+            (f"placeholder-{ts_kind}", ts_kind.upper()[:3]),
         )
-        return self.TSGeneratePlaceholderPreview(ts_placeholder_key, ts_label, ts_accent)
+        return self.TSGeneratePlaceholderPreview(ts_placeholder_key, ts_label)
 
     def TSGenerateImageThumbnail(self, ts_source_path: Path, ts_preview_key: str) -> str:
         ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "thumbnails")
@@ -168,8 +168,8 @@ class TSPreviewCache:
                 return self.TSGenerateImageThumbnail(ts_candidate_path, ts_preview_key)
         return self.TSGetTypePlaceholderPreview("3d")
 
-    def TSGeneratePlaceholderPreview(self, ts_preview_key: str, ts_label: str, ts_accent_color: str) -> str:
-        ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "placeholders")
+    def TSGeneratePlaceholderPreview(self, ts_preview_key: str, ts_label: str) -> str:
+        ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "placeholders", ".png")
         try:
             if not ts_output_path.exists():
                 ts_output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -177,13 +177,15 @@ class TSPreviewCache:
                 ts_inset = max(18, round(min(ts_width, ts_height) * 0.08))
                 ts_radius = max(16, round(min(ts_width, ts_height) * 0.08))
                 ts_border = max(3, round(min(ts_width, ts_height) * 0.012))
-                ts_image = Image.new("RGB", (ts_width, ts_height), "#0F1720")
+                ts_border_color = (148, 163, 184, 176)
+                ts_text_color = (148, 163, 184, 220)
+                ts_image = Image.new("RGBA", (ts_width, ts_height), (0, 0, 0, 0))
                 ts_draw = ImageDraw.Draw(ts_image)
                 ts_draw.rounded_rectangle(
                     (ts_inset, ts_inset, ts_width - ts_inset, ts_height - ts_inset),
                     radius=ts_radius,
-                    fill="#16212B",
-                    outline=ts_accent_color,
+                    fill=(0, 0, 0, 0),
+                    outline=ts_border_color,
                     width=ts_border,
                 )
                 ts_font = ImageFont.load_default()
@@ -193,10 +195,10 @@ class TSPreviewCache:
                 ts_draw.text(
                     ((ts_width - ts_text_width) / 2, (ts_height - ts_text_height) / 2),
                     ts_label,
-                    fill=ts_accent_color,
+                    fill=ts_text_color,
                     font=ts_font,
                 )
-                self._TSSavePreviewImage(ts_image, ts_output_path)
+                ts_image.save(ts_output_path, format="PNG", optimize=True, compress_level=6)
             return self.TSRelativePreviewPath(ts_output_path)
         except Exception as ts_error:
             TSLogVerbose("preview.placeholder.failed", label=ts_label, preview_path=str(ts_output_path), error=str(ts_error))
