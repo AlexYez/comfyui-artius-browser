@@ -82,6 +82,22 @@ class TSConfigStore:
         if int(ts_result.get("version", 0) or 0) < 10:
             ts_result.setdefault("ui", {}).setdefault("autoscan", True)
             ts_result["version"] = 10
+        if int(ts_result.get("version", 0) or 0) < 11:
+            ts_ui = ts_result.setdefault("ui", {})
+            ts_ui.setdefault("asset_view_mode", "flat")
+            ts_ui.setdefault("workflow_view_mode", "flat")
+            ts_ui.setdefault("asset_sort_key", "created_at")
+            ts_ui.setdefault("asset_sort_direction", "desc")
+            ts_ui.setdefault("asset_preview_size", 120)
+            ts_ui.setdefault("workflow_sort_key", "created_at")
+            ts_ui.setdefault("workflow_sort_direction", "desc")
+            ts_ui.setdefault("workflow_preview_size", 120)
+            ts_ui.setdefault("asset_types", [])
+            ts_ui.setdefault("workflow_selected_folder_path", "")
+            ts_ui.setdefault("expanded_folders", [])
+            for ts_legacy_key in ("view_mode", "sort_key", "sort_direction", "preview_size"):
+                ts_ui.pop(ts_legacy_key, None)
+            ts_result["version"] = 11
         return ts_result
 
     def _TSDeepMerge(self, ts_base: dict, ts_override: dict) -> dict:

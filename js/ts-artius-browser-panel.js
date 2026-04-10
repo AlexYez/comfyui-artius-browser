@@ -8,9 +8,11 @@ import {
     tsCopyText,
     tsDebounce,
     tsFetchAssetDetail,
+    tsFetchWorkflowBrowserLibrary,
     tsEnsureCanvasDropBridge,
     tsFetchBrowserSettings,
     tsFetchJSON,
+    tsLoadWorkflowIntoComfy,
     tsLoadLocale,
     tsOpenDownload,
     tsPostJSON,
@@ -29,6 +31,7 @@ const tsGridLayout = tsPanelSettings.gridLayout;
 const tsGridOverscanRows = Math.max(0, Number(tsPanelSettings.gridOverscanRows || 1));
 const tsCardChromeScale = tsPanelSettings.cardChromeScale;
 const ts3DThumbnailSettings = tsPanelSettings.threeDThumbnails;
+const tsBrowserSections = Object.freeze(["assets", "workflows"]);
 
 function tsLerp(tsStart, tsEnd, tsRatio) {
     return tsStart + ((tsEnd - tsStart) * tsRatio);
@@ -59,15 +62,24 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsItems: [],
             tsHasMore: false,
             tsLoading: false,
+            tsSection: "assets",
             tsSearch: "",
             tsRootId: tsPanelSettings.defaultRootId,
             tsMode: tsPanelSettings.defaultMode,
+            tsAssetMode: tsPanelSettings.defaultMode,
+            tsWorkflowMode: tsPanelSettings.defaultMode,
             tsAutoscan: Boolean(tsPanelSettings.defaultAutoscan),
             tsFolder: "",
             tsTypes: new Set(),
             tsSortKey: tsPanelSettings.defaultSort.key,
             tsSortDirection: tsPanelSettings.defaultSort.direction,
             tsPreviewSize: tsPreviewSizeRange.default,
+            tsAssetSortKey: tsPanelSettings.defaultSort.key,
+            tsAssetSortDirection: tsPanelSettings.defaultSort.direction,
+            tsAssetPreviewSize: tsPreviewSizeRange.default,
+            tsWorkflowSortKey: tsPanelSettings.defaultSort.key === "size_bytes" ? "created_at" : tsPanelSettings.defaultSort.key,
+            tsWorkflowSortDirection: tsPanelSettings.defaultSort.direction,
+            tsWorkflowPreviewSize: tsPreviewSizeRange.default,
             tsSelection: new Set(),
             tsLastSelectedIndex: -1,
             tsRoots: [],
@@ -104,6 +116,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }, 80);
         this.tsDebouncedSaveSettings = tsDebounce(() => this.tsPersistUISettings(), 220);
         this.tsCurrentFetchPromise = null;
+        this.tsLastAssetRootId = tsPanelSettings.defaultRootId || "all";
+        this.tsLastAssetFolder = "";
+        this.tsWorkflowSelectedFolder = "";
         this.ts3DThumbnailDisposed = false;
         this.ts3DThumbnailQueue = [];
         this.ts3DThumbnailPending = new Set();
@@ -116,6 +131,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.ts3DThumbnailWarmupKey = "";
         this.ts3DThumbnailWarmupToken = 0;
         this.tsSidebarRefreshTimer = 0;
+        this.tsWorkflowLibrary = [];
+        this.tsWorkflowLibraryLoaded = false;
         this.attachShadow({ mode: "open" });
     }
 
@@ -170,6 +187,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsScheduleSidebarRefresh(32);
         this.tsScheduleSidebarRefresh(96);
         this.tsScheduleSidebarRefresh(180);
+        if (this.tsIsWorkflowSection()) {
+            this.tsWorkflowLibraryLoaded = false;
+            void this.tsFetchAssets(true);
+        }
     }
 
     tsScheduleSidebarRefresh(tsDelayMs = 0) {
@@ -244,32 +265,70 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         try {
             const tsPayload = await tsFetchBrowserSettings();
             const tsUI = tsPayload?.ui || {};
-            if (tsUI.view_mode === "flat" || tsUI.view_mode === "tree") {
-                this.tsState.tsMode = tsUI.view_mode;
+            if (tsBrowserSections.includes(tsUI.browser_section)) {
+                this.tsState.tsSection = tsUI.browser_section;
             }
+            this.tsState.tsAssetMode = tsUI.asset_view_mode === "flat" || tsUI.asset_view_mode === "tree"
+                ? tsUI.asset_view_mode
+                : tsPanelSettings.defaultMode;
+            this.tsState.tsWorkflowMode = tsUI.workflow_view_mode === "flat" || tsUI.workflow_view_mode === "tree"
+                ? tsUI.workflow_view_mode
+                : tsPanelSettings.defaultMode;
             if (typeof tsUI.autoscan === "boolean") {
                 this.tsState.tsAutoscan = tsUI.autoscan;
             }
-            if (tsUI.sort_key === "created_at" || tsUI.sort_key === "filename" || tsUI.sort_key === "size_bytes") {
-                this.tsState.tsSortKey = tsUI.sort_key;
-            }
-            if (tsUI.sort_direction === "asc" || tsUI.sort_direction === "desc") {
-                this.tsState.tsSortDirection = tsUI.sort_direction;
+            const tsResolvePreviewSize = (tsValue, tsFallback) => {
+                const tsSize = Number(tsValue || 0);
+                return Number.isFinite(tsSize) && tsSize > 0
+                    ? tsClamp(tsSize, tsPreviewSizeRange.min, tsPreviewSizeRange.max)
+                    : tsFallback;
+            };
+            this.tsState.tsAssetSortKey = tsUI.asset_sort_key === "created_at" || tsUI.asset_sort_key === "filename" || tsUI.asset_sort_key === "size_bytes"
+                ? tsUI.asset_sort_key
+                : tsPanelSettings.defaultSort.key;
+            this.tsState.tsAssetSortDirection = tsUI.asset_sort_direction === "asc" || tsUI.asset_sort_direction === "desc"
+                ? tsUI.asset_sort_direction
+                : tsPanelSettings.defaultSort.direction;
+            this.tsState.tsWorkflowSortKey = tsUI.workflow_sort_key === "created_at" || tsUI.workflow_sort_key === "filename"
+                ? tsUI.workflow_sort_key
+                : (tsPanelSettings.defaultSort.key === "size_bytes" ? "created_at" : tsPanelSettings.defaultSort.key);
+            this.tsState.tsWorkflowSortDirection = tsUI.workflow_sort_direction === "asc" || tsUI.workflow_sort_direction === "desc"
+                ? tsUI.workflow_sort_direction
+                : tsPanelSettings.defaultSort.direction;
+            this.tsState.tsAssetPreviewSize = tsResolvePreviewSize(tsUI.asset_preview_size, tsPreviewSizeRange.default);
+            this.tsState.tsWorkflowPreviewSize = tsResolvePreviewSize(tsUI.workflow_preview_size, tsPreviewSizeRange.default);
+            if (Array.isArray(tsUI.asset_types)) {
+                this.tsState.tsTypes = new Set(
+                    tsUI.asset_types
+                        .map((tsType) => String(tsType || ""))
+                        .filter((tsType) => tsTypeOrder.includes(tsType))
+                );
             }
             if (typeof tsUI.selected_root_id === "string" && tsUI.selected_root_id) {
                 this.tsState.tsRootId = tsUI.selected_root_id;
+                if (tsUI.selected_root_id !== "workflows") {
+                    this.tsLastAssetRootId = tsUI.selected_root_id;
+                }
             }
             if (typeof tsUI.selected_folder_path === "string") {
                 this.tsState.tsFolder = tsUI.selected_folder_path.replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+                this.tsLastAssetFolder = this.tsState.tsFolder;
             }
-            const tsPreviewSize = Number(tsUI.preview_size || 0);
-            if (Number.isFinite(tsPreviewSize) && tsPreviewSize > 0) {
-                this.tsState.tsPreviewSize = tsClamp(tsPreviewSize, tsPreviewSizeRange.min, tsPreviewSizeRange.max);
+            if (typeof tsUI.workflow_selected_folder_path === "string") {
+                this.tsWorkflowSelectedFolder = tsUI.workflow_selected_folder_path.replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+            }
+            if (Array.isArray(tsUI.expanded_folders)) {
+                this.tsState.tsExpandedFolders = new Set(
+                    tsUI.expanded_folders
+                        .map((tsKey) => String(tsKey || ""))
+                        .filter(Boolean)
+                );
             }
             const tsBrowserWidth = Number(tsUI.browser_width || 0);
             if (Number.isFinite(tsBrowserWidth) && tsBrowserWidth > 0) {
                 this.tsState.tsBrowserWidth = Math.round(tsBrowserWidth);
             }
+            this.tsApplySectionSettings();
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser settings fetch failed", tsError);
         } finally {
@@ -297,20 +356,73 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (!this.tsState.tsSettingsHydrated) {
             return;
         }
+        this.tsSyncSectionSettingsFromActive();
+        const tsSelectedRootId = this.tsIsWorkflowSection()
+            ? (this.tsLastAssetRootId || tsPanelSettings.defaultRootId || "all")
+            : this.tsState.tsRootId;
+        const tsSelectedFolderPath = this.tsIsWorkflowSection()
+            ? (this.tsLastAssetFolder || "")
+            : (this.tsState.tsMode === "tree" ? this.tsState.tsFolder : "");
         try {
             await tsSaveBrowserSettings({
                 autoscan: Boolean(this.tsState.tsAutoscan),
-                view_mode: this.tsState.tsMode,
-                sort_key: this.tsState.tsSortKey,
-                sort_direction: this.tsState.tsSortDirection,
-                preview_size: this.tsState.tsPreviewSize,
-                selected_root_id: this.tsState.tsRootId,
-                selected_folder_path: this.tsState.tsMode === "tree" ? this.tsState.tsFolder : "",
+                browser_section: this.tsState.tsSection,
+                asset_view_mode: this.tsState.tsAssetMode,
+                workflow_view_mode: this.tsState.tsWorkflowMode,
+                asset_sort_key: this.tsState.tsAssetSortKey,
+                asset_sort_direction: this.tsState.tsAssetSortDirection,
+                asset_preview_size: this.tsState.tsAssetPreviewSize,
+                workflow_sort_key: this.tsState.tsWorkflowSortKey,
+                workflow_sort_direction: this.tsState.tsWorkflowSortDirection,
+                workflow_preview_size: this.tsState.tsWorkflowPreviewSize,
+                asset_types: [...this.tsState.tsTypes],
+                selected_root_id: tsSelectedRootId,
+                selected_folder_path: tsSelectedFolderPath,
+                workflow_selected_folder_path: this.tsWorkflowSelectedFolder || "",
+                expanded_folders: [...this.tsState.tsExpandedFolders],
                 browser_width: this.tsState.tsBrowserWidth,
             });
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser settings save failed", tsError);
         }
+    }
+
+    tsRememberAssetLocation() {
+        if (this.tsIsWorkflowSection()) {
+            return;
+        }
+        this.tsLastAssetRootId = this.tsState.tsRootId || tsPanelSettings.defaultRootId || "all";
+        this.tsLastAssetFolder = String(this.tsState.tsFolder || "");
+    }
+
+    tsSyncSectionSettingsFromActive() {
+        if (this.tsIsWorkflowSection()) {
+            this.tsState.tsWorkflowMode = this.tsState.tsMode;
+            this.tsState.tsWorkflowSortKey = this.tsState.tsSortKey === "size_bytes" ? "created_at" : this.tsState.tsSortKey;
+            this.tsState.tsWorkflowSortDirection = this.tsState.tsSortDirection;
+            this.tsState.tsWorkflowPreviewSize = this.tsState.tsPreviewSize;
+            return;
+        }
+        this.tsState.tsAssetMode = this.tsState.tsMode;
+        this.tsState.tsAssetSortKey = this.tsState.tsSortKey;
+        this.tsState.tsAssetSortDirection = this.tsState.tsSortDirection;
+        this.tsState.tsAssetPreviewSize = this.tsState.tsPreviewSize;
+    }
+
+    tsApplySectionSettings() {
+        if (this.tsIsWorkflowSection()) {
+            this.tsState.tsMode = this.tsState.tsWorkflowMode;
+            this.tsState.tsSortKey = this.tsState.tsWorkflowSortKey === "size_bytes" ? "created_at" : this.tsState.tsWorkflowSortKey;
+            this.tsState.tsSortDirection = this.tsState.tsWorkflowSortDirection;
+            this.tsState.tsPreviewSize = this.tsState.tsWorkflowPreviewSize;
+            this.tsState.tsFolder = this.tsState.tsMode === "tree" ? (this.tsWorkflowSelectedFolder || "") : "";
+            return;
+        }
+        this.tsState.tsMode = this.tsState.tsAssetMode;
+        this.tsState.tsSortKey = this.tsState.tsAssetSortKey;
+        this.tsState.tsSortDirection = this.tsState.tsAssetSortDirection;
+        this.tsState.tsPreviewSize = this.tsState.tsAssetPreviewSize;
+        this.tsState.tsFolder = this.tsState.tsMode === "tree" ? (this.tsLastAssetFolder || "") : "";
     }
 
     tsEmitAutoscanChanged() {
@@ -319,6 +431,75 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 autoscan: Boolean(this.tsState.tsAutoscan),
             },
         }));
+    }
+
+    tsIsWorkflowSection() {
+        return this.tsState.tsSection === "workflows";
+    }
+
+    tsGetWorkflowRootNodes() {
+        return [{
+            root_id: "workflows",
+            label: this.tsT("section.workflows", "Workflows"),
+        }];
+    }
+
+    async tsEnsureWorkflowLibrary(tsForce = false) {
+        if (this.tsWorkflowLibraryLoaded && !tsForce) {
+            return this.tsWorkflowLibrary;
+        }
+        this.tsWorkflowLibrary = await tsFetchWorkflowBrowserLibrary().catch((tsError) => {
+            tsConsoleWarn("Timesaver Artius Browser workflow fetch failed", tsError);
+            return [];
+        });
+        this.tsWorkflowLibraryLoaded = true;
+        return this.tsWorkflowLibrary;
+    }
+
+    tsBuildWorkflowFolders(tsItems) {
+        const tsFolderCounts = new Map();
+        (tsItems || []).forEach((tsItem) => {
+            const tsFolderPath = String(tsItem?.folder_path || "");
+            tsFolderCounts.set(tsFolderPath, Number(tsFolderCounts.get(tsFolderPath) || 0) + 1);
+        });
+        return [...tsFolderCounts.entries()].map(([tsFolderPath, tsAssetCount]) => ({
+            root_id: "workflows",
+            folder_path: tsFolderPath,
+            asset_count: tsAssetCount,
+        }));
+    }
+
+    tsBuildWorkflowQueryResult() {
+        const tsSearchNeedle = String(this.tsState.tsSearch || "").trim().toLowerCase();
+        const tsSelectedFolder = this.tsState.tsMode === "tree" ? String(this.tsState.tsFolder || "") : "";
+        const tsFilteredForTree = this.tsWorkflowLibrary.filter((tsItem) => {
+            if (tsSearchNeedle && !String(tsItem?.filename || "").toLowerCase().includes(tsSearchNeedle)) {
+                return false;
+            }
+            return true;
+        });
+        const tsVisibleItems = tsFilteredForTree.filter((tsItem) => {
+            if (!tsSelectedFolder) {
+                return true;
+            }
+            const tsItemFolder = String(tsItem?.folder_path || "");
+            return tsItemFolder === tsSelectedFolder || tsItemFolder.startsWith(`${tsSelectedFolder}/`);
+        });
+        const tsSortDirectionFactor = this.tsState.tsSortDirection === "asc" ? 1 : -1;
+        const tsSortedItems = [...tsVisibleItems].sort((tsLeft, tsRight) => {
+            if (this.tsState.tsSortKey === "filename") {
+                return tsSortDirectionFactor * String(tsLeft?.filename || "").localeCompare(String(tsRight?.filename || ""), undefined, { sensitivity: "base" });
+            }
+            if (this.tsState.tsSortKey === "size_bytes") {
+                return tsSortDirectionFactor * (Number(tsLeft?.size_bytes || 0) - Number(tsRight?.size_bytes || 0));
+            }
+            return tsSortDirectionFactor * (Number(tsLeft?.modified_at || tsLeft?.created_at || 0) - Number(tsRight?.modified_at || tsRight?.created_at || 0));
+        });
+        return {
+            items: tsSortedItems,
+            folders: this.tsBuildWorkflowFolders(tsFilteredForTree),
+            roots: this.tsGetWorkflowRootNodes(),
+        };
     }
 
     tsBuildShell() {
@@ -413,20 +594,39 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     flex-wrap: wrap;
                 }
 
-                .ts-sort-select {
-                    min-width: 112px;
+                .ts-section-button {
+                    min-width: 84px;
                 }
 
                 .ts-root-select,
                 .ts-sort-select {
+                    appearance: none;
+                    -webkit-appearance: none;
+                    font: inherit;
+                    cursor: pointer;
+                    padding: 0 28px 0 10px;
+                    border-radius: 8px;
                     color: var(--ts-text);
                     background: transparent;
+                    background-image:
+                        linear-gradient(45deg, transparent 50%, var(--ts-muted) 50%),
+                        linear-gradient(135deg, var(--ts-muted) 50%, transparent 50%);
+                    background-position:
+                        calc(100% - 14px) calc(50% - 2px),
+                        calc(100% - 9px) calc(50% - 2px);
+                    background-size: 5px 5px, 5px 5px;
+                    background-repeat: no-repeat;
                 }
 
                 .ts-root-select option,
                 .ts-sort-select option {
                     color: var(--ts-text);
                     background: var(--ts-bg-1);
+                }
+
+                .ts-root-select::-ms-expand,
+                .ts-sort-select::-ms-expand {
+                    display: none;
                 }
 
                 .ts-toolbar-cluster button,
@@ -529,6 +729,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 }
 
                 .ts-chip[data-active="true"],
+                .ts-section-button[data-active="true"],
                 .ts-mode-button[data-active="true"] {
                     background: color-mix(in srgb, var(--ts-accent) 20%, var(--ts-bg-2));
                     border-color: var(--ts-accent);
@@ -751,6 +952,37 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     object-fit: contain;
                     display: block;
                 }
+
+                .ts-card-media img.ts-workflow-preview {
+                    object-fit: cover;
+                }
+
+                .ts-card-media video {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: contain;
+                    display: block;
+                }
+
+                .ts-card-media video.ts-workflow-preview {
+                    object-fit: cover;
+                }
+
+                .ts-card-placeholder {
+                    display: grid;
+                    place-items: center;
+                    width: 100%;
+                    height: 100%;
+                    color: var(--ts-muted);
+                    padding: 14px;
+                    text-align: center;
+                    font-size: 16px;
+                    line-height: 1.25;
+                    font-weight: 600;
+                    letter-spacing: 0.01em;
+                    word-break: break-word;
+                    overflow-wrap: anywhere;
+                }
                 .ts-card-actions {
                     position: absolute;
                     top: var(--ts-card-inset, 8px);
@@ -830,11 +1062,17 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 <div class="ts-toolbar">
                     <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a></div>
                     <div class="ts-toolbar-main">
+                        <div class="ts-toolbar-cluster ts-section-group">
+                            <button class="ts-section-button ts-section-assets" type="button"></button>
+                            <button class="ts-section-button ts-section-workflows" type="button"></button>
+                        </div>
                         <input class="ts-search" type="search">
-                        <div class="ts-toolbar-cluster">
+                        <div class="ts-toolbar-cluster ts-root-group">
+                            <select class="ts-root-select"></select>
+                        </div>
+                        <div class="ts-toolbar-cluster ts-type-cluster">
                             <div class="ts-type-chips"></div>
                         </div>
-                        <select class="ts-root-select"></select>
                         <div class="ts-toolbar-cluster ts-sort-group">
                             <select class="ts-sort-select"></select>
                             <button class="ts-sort-direction" type="button"></button>
@@ -873,7 +1111,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsShell: this.shadowRoot.querySelector(".ts-shell"),
             tsTitle: this.shadowRoot.querySelector(".ts-title"),
             tsTitleLink: this.shadowRoot.querySelector(".ts-title-link"),
+            tsSectionAssets: this.shadowRoot.querySelector(".ts-section-assets"),
+            tsSectionWorkflows: this.shadowRoot.querySelector(".ts-section-workflows"),
             tsSearch: this.shadowRoot.querySelector(".ts-search"),
+            tsTypeCluster: this.shadowRoot.querySelector(".ts-type-cluster"),
             tsTypeChips: this.shadowRoot.querySelector(".ts-type-chips"),
             tsRootSelect: this.shadowRoot.querySelector(".ts-root-select"),
             tsSortSelect: this.shadowRoot.querySelector(".ts-sort-select"),
@@ -938,6 +1179,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsBindEvents() {
+        this.tsRefs.tsSectionAssets.addEventListener("click", () => {
+            void this.tsSetSection("assets");
+        });
+        this.tsRefs.tsSectionWorkflows.addEventListener("click", () => {
+            void this.tsSetSection("workflows");
+        });
         this.tsRefs.tsSearch.addEventListener("input", (tsEvent) => {
             this.tsState.tsSearch = tsEvent.target.value;
             this.tsDebouncedSearch();
@@ -945,16 +1192,19 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRootSelect.addEventListener("change", (tsEvent) => {
             this.tsState.tsRootId = tsEvent.target.value || "all";
             this.tsState.tsFolder = "";
+            this.tsRememberAssetLocation();
             this.tsQueueSaveUISettings();
             this.tsFetchAssets(true);
         });
         this.tsRefs.tsSortSelect.addEventListener("change", (tsEvent) => {
             this.tsState.tsSortKey = tsEvent.target.value;
+            this.tsSyncSectionSettingsFromActive();
             this.tsQueueSaveUISettings();
             this.tsFetchAssets(true);
         });
         this.tsRefs.tsSortDirection.addEventListener("click", () => {
             this.tsState.tsSortDirection = this.tsState.tsSortDirection === "asc" ? "desc" : "asc";
+            this.tsSyncSectionSettingsFromActive();
             this.tsQueueSaveUISettings();
             this.tsFetchAssets(true);
         });
@@ -962,6 +1212,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsModeTree.addEventListener("click", () => this.tsSetMode("tree"));
         this.tsRefs.tsPreviewSize.addEventListener("input", (tsEvent) => {
             this.tsState.tsPreviewSize = Number(tsEvent.target.value || tsPreviewSizeRange.default);
+            this.tsSyncSectionSettingsFromActive();
             this.tsScheduleGridRender(true, true);
             this.tsQueueSaveUISettings();
         });
@@ -994,6 +1245,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsHandleScanEvent(tsEvent, tsShouldRefresh) {
+        if (this.tsIsWorkflowSection()) {
+            return;
+        }
         const tsDetail = this.tsReadEventDetail(tsEvent);
         if (tsDetail.status) {
             this.tsState.tsScanStatus = tsDetail.status;
@@ -1006,6 +1260,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsHandleHealthEvent(tsEvent) {
+        if (this.tsIsWorkflowSection()) {
+            this.tsState.tsHealth = [];
+            this.tsRenderHealth();
+            return;
+        }
         const tsDetail = this.tsReadEventDetail(tsEvent);
         this.tsState.tsHealth = Array.isArray(tsDetail.issues) ? tsDetail.issues : [];
         this.tsRenderHealth();
@@ -1041,7 +1300,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 return tsCapturedPreviewURL;
             }
         }
-        return tsItem?.preview_url ? tsApiURL(tsItem.preview_url) : "";
+        const tsPreviewURL = String(tsItem?.preview_url || "");
+        if (!tsPreviewURL) {
+            return "";
+        }
+        return /^https?:\/\//i.test(tsPreviewURL) || tsPreviewURL.startsWith("/api/")
+            ? tsPreviewURL
+            : tsApiURL(tsPreviewURL);
     }
 
     tsPatchVisibleThumbnail(tsAssetId, tsPreviewURL, tsAlt = "") {
@@ -1259,6 +1524,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsHandleAssetUpsertEvent(tsEvent) {
+        if (this.tsIsWorkflowSection()) {
+            return;
+        }
         if (this.tsState.tsScanStatus?.running) {
             return;
         }
@@ -1282,6 +1550,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsHandleAssetRemoveEvent(tsEvent) {
+        if (this.tsIsWorkflowSection()) {
+            return;
+        }
         if (this.tsState.tsScanStatus?.running) {
             return;
         }
@@ -1305,9 +1576,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
     tsHydrateText() {
         this.tsRefs.tsTitleLink.textContent = this.tsT("panel.title", tsProjectSettings.title);
-        this.tsRefs.tsSearch.placeholder = this.tsT("placeholder.search", "Search filename...");
-        this.tsRefs.tsSearch.title = this.tsT("tooltip.search", "Search assets by filename only.");
-        this.tsRefs.tsRootSelect.title = this.tsT("tooltip.root", "Choose a root folder.");
+        this.tsRefs.tsSectionAssets.textContent = this.tsT("button.assets", "Assets");
+        this.tsRefs.tsSectionWorkflows.textContent = this.tsT("button.workflows", "Workflows");
         this.tsRefs.tsSortDirection.title = this.tsT("tooltip.sortDirection", "Toggle ascending and descending sorting.");
         this.tsRefs.tsModeFlat.textContent = this.tsT("button.flat", "Flat");
         this.tsRefs.tsModeFlat.title = this.tsT("tooltip.mode.flat", "Switch to the flat feed.");
@@ -1320,21 +1590,63 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRescan.title = this.tsT("tooltip.rescan", "Scan configured asset roots now.");
         this.tsRefs.tsDeleteSelected.textContent = this.tsT("button.deleteSelected", "Delete Selected");
         this.tsRefs.tsDeleteSelected.title = this.tsT("tooltip.deleteSelected", "Delete selected assets from allowed roots.");
+        this.tsRenderSectionButtons();
+        this.tsRenderToolbarForSection();
         this.tsRenderTypeChips();
         this.tsRenderSortOptions();
         this.tsViewer?.tsSetLocale(this.tsState.tsLocale);
     }
 
+    tsRenderSectionButtons() {
+        this.tsRefs.tsSectionAssets.dataset.active = String(this.tsState.tsSection === "assets");
+        this.tsRefs.tsSectionWorkflows.dataset.active = String(this.tsState.tsSection === "workflows");
+        this.tsRefs.tsSectionAssets.title = this.tsT("tooltip.section.assets", "Browse indexed assets.");
+        this.tsRefs.tsSectionWorkflows.title = this.tsT("tooltip.section.workflows", "Browse ComfyUI workflows.");
+    }
+
+    tsRenderToolbarForSection() {
+        const tsWorkflowSection = this.tsIsWorkflowSection();
+        const tsWorkflowHiddenDisplay = tsWorkflowSection ? "none" : "";
+        this.tsRefs.tsSearch.placeholder = tsWorkflowSection
+            ? this.tsT("placeholder.search.workflows", "Search workflow filename...")
+            : this.tsT("placeholder.search", "Search filename...");
+        this.tsRefs.tsSearch.title = tsWorkflowSection
+            ? this.tsT("tooltip.search.workflows", "Search workflows by filename only.")
+            : this.tsT("tooltip.search", "Search assets by filename only.");
+        this.tsRefs.tsRootSelect.title = this.tsT("tooltip.root", "Choose a root folder.");
+        this.tsRefs.tsTypeCluster.hidden = tsWorkflowSection;
+        this.tsRefs.tsRootSelect.hidden = tsWorkflowSection;
+        this.tsRefs.tsAutoscan.hidden = tsWorkflowSection;
+        this.tsRefs.tsRescan.hidden = tsWorkflowSection;
+        this.tsRefs.tsDeleteSelected.hidden = tsWorkflowSection;
+        this.tsRefs.tsTypeCluster.style.display = tsWorkflowHiddenDisplay;
+        this.tsRefs.tsRootSelect.style.display = tsWorkflowHiddenDisplay;
+        this.tsRefs.tsAutoscan.style.display = tsWorkflowHiddenDisplay;
+        this.tsRefs.tsRescan.style.display = tsWorkflowHiddenDisplay;
+        this.tsRefs.tsDeleteSelected.style.display = tsWorkflowHiddenDisplay;
+    }
+
     tsRenderSortOptions() {
-        const tsOptions = [
-            ["created_at", this.tsT("sort.created_at", "Date")],
-            ["filename", this.tsT("sort.filename", "Filename")],
-            ["size_bytes", this.tsT("sort.size_bytes", "Size")],
-        ];
+        const tsFilenameLabel = String(this.tsT("sort.filename", "Names") || "Names").replace(/^Filename$/i, "Names");
+        const tsOptions = this.tsIsWorkflowSection()
+            ? [
+                ["created_at", this.tsT("sort.created_at", "Date")],
+                ["filename", tsFilenameLabel],
+            ]
+            : [
+                ["created_at", this.tsT("sort.created_at", "Date")],
+                ["filename", tsFilenameLabel],
+                ["size_bytes", this.tsT("sort.size_bytes", "Size")],
+            ];
+        if (!tsOptions.some(([tsValue]) => tsValue === this.tsState.tsSortKey)) {
+            this.tsState.tsSortKey = "created_at";
+        }
         this.tsRefs.tsSortSelect.innerHTML = tsOptions
             .map(([tsValue, tsLabel]) => `<option value="${tsValue}">${tsLabel}</option>`)
             .join("");
         this.tsRefs.tsSortSelect.value = this.tsState.tsSortKey;
+        const tsLongestLabelLength = Math.max(...tsOptions.map(([, tsLabel]) => String(tsLabel || "").length), 4);
+        this.tsRefs.tsSortSelect.style.width = `${Math.max(9, tsLongestLabelLength + 5)}ch`;
     }
 
     tsRenderTypeChips() {
@@ -1358,6 +1670,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     this.tsState.tsTypes.add(tsType);
                 }
                 this.tsRenderTypeChips();
+                this.tsQueueSaveUISettings();
                 this.tsFetchAssets(true);
             });
         });
@@ -1365,11 +1678,52 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsSetMode(tsMode) {
         this.tsState.tsMode = tsMode;
-        if (tsMode === "flat") {
-            this.tsState.tsFolder = "";
+        if (this.tsIsWorkflowSection()) {
+            this.tsState.tsFolder = tsMode === "tree" ? (this.tsWorkflowSelectedFolder || "") : "";
+        } else {
+            this.tsState.tsFolder = tsMode === "tree" ? (this.tsLastAssetFolder || "") : "";
         }
+        this.tsRememberAssetLocation();
+        this.tsSyncSectionSettingsFromActive();
         this.tsQueueSaveUISettings();
         this.tsFetchAssets(true);
+    }
+
+    async tsSetSection(tsSection) {
+        if (!tsBrowserSections.includes(tsSection) || this.tsState.tsSection === tsSection) {
+            return;
+        }
+        this.tsSyncSectionSettingsFromActive();
+        if (!this.tsIsWorkflowSection()) {
+            this.tsRememberAssetLocation();
+        }
+        this.tsState.tsSection = tsSection;
+        if (tsSection === "workflows") {
+            this.tsState.tsRootId = "workflows";
+            this.tsState.tsFolder = this.tsState.tsMode === "tree" ? (this.tsWorkflowSelectedFolder || "") : "";
+        } else {
+            this.tsState.tsRootId = this.tsLastAssetRootId || tsPanelSettings.defaultRootId || "all";
+            this.tsState.tsFolder = this.tsState.tsMode === "tree" ? (this.tsLastAssetFolder || "") : "";
+        }
+        this.tsState.tsSelection.clear();
+        this.tsState.tsLastSelectedIndex = -1;
+        if (tsSection === "workflows") {
+            this.tsWorkflowLibraryLoaded = false;
+        }
+        this.tsApplySectionSettings();
+        this.tsQueueSaveUISettings();
+        this.tsRenderSectionButtons();
+        this.tsRenderToolbarForSection();
+        this.tsRenderSortOptions();
+        await this.tsFetchAssets(true);
+        this.tsRefs.tsGalleryContent.innerHTML = "";
+        this.tsLastGridMarkupKey = "";
+        this.tsLastScrollWindowKey = "";
+        this.tsScheduleGridRender(true, true);
+        this.tsHandleGalleryScroll();
+        this.tsScheduleSidebarRefresh(0);
+        this.tsScheduleSidebarRefresh(48);
+        this.tsScheduleSidebarRefresh(120);
     }
 
     async tsRequestRescan(tsOverridePayload = undefined) {
@@ -1404,6 +1758,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     async tsMaybeBootstrapScan() {
+        if (this.tsIsWorkflowSection()) {
+            return;
+        }
         if (!this.tsState.tsAutoscan) {
             return;
         }
@@ -1469,7 +1826,22 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsState.tsLoading = true;
             const tsOffset = tsReset ? 0 : this.tsState.tsItems.length;
             try {
-                const tsPayload = await tsFetchJSON(this.tsBuildRequestPath(tsOffset));
+                let tsPayload;
+                if (this.tsIsWorkflowSection()) {
+                    await this.tsEnsureWorkflowLibrary(false);
+                    const tsWorkflowQuery = this.tsBuildWorkflowQueryResult();
+                    const tsWindowItems = tsWorkflowQuery.items.slice(tsOffset, tsOffset + tsDefaultLimit);
+                    tsPayload = {
+                        items: tsWindowItems,
+                        has_more: tsOffset + tsWindowItems.length < tsWorkflowQuery.items.length,
+                        roots: tsWorkflowQuery.roots,
+                        folders: tsWorkflowQuery.folders,
+                        health: [],
+                        scan_status: null,
+                    };
+                } else {
+                    tsPayload = await tsFetchJSON(this.tsBuildRequestPath(tsOffset));
+                }
                 const tsIncomingItems = Array.isArray(tsPayload.items) ? tsPayload.items : [];
                 if (tsReset) {
                     this.tsState.tsItems = tsIncomingItems;
@@ -1502,7 +1874,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 this.tsRenderAll();
                 if (tsReset) {
                     void this.tsMaybeBootstrapScan();
-                            }
+                }
             } catch (tsError) {
                 tsConsoleWarn("Timesaver Artius Browser fetch failed", tsError);
             } finally {
@@ -1531,6 +1903,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsRenderAll() {
+        this.tsRenderSectionButtons();
+        this.tsRenderToolbarForSection();
         this.tsRenderRootOptions();
         this.tsRenderModeButtons();
         this.tsRefs.tsPreviewSize.value = String(this.tsState.tsPreviewSize);
@@ -1543,12 +1917,17 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsRenderRootOptions() {
-        const tsOptions = [`<option value="all">${this.tsT("label.allRoots", "All Folders")}</option>`]
-            .concat((this.tsState.tsRoots || []).map((tsRoot) => `<option value="${tsRoot.root_id}">${tsRoot.label}</option>`));
+        const tsOptions = this.tsIsWorkflowSection()
+            ? (this.tsState.tsRoots || []).map((tsRoot) => `<option value="${tsRoot.root_id}">${tsRoot.label}</option>`)
+            : [`<option value="all">${this.tsT("label.allRoots", "All Folders")}</option>`]
+                .concat((this.tsState.tsRoots || []).map((tsRoot) => `<option value="${tsRoot.root_id}">${tsRoot.label}</option>`));
         this.tsRefs.tsRootSelect.innerHTML = tsOptions.join("");
-        const tsKnownRootIds = new Set(["all", ...this.tsState.tsRoots.map((tsRoot) => tsRoot.root_id)]);
+        const tsKnownRootIds = new Set([
+            ...(this.tsIsWorkflowSection() ? [] : ["all"]),
+            ...this.tsState.tsRoots.map((tsRoot) => tsRoot.root_id),
+        ]);
         if (!tsKnownRootIds.has(this.tsState.tsRootId)) {
-            this.tsState.tsRootId = "all";
+            this.tsState.tsRootId = this.tsIsWorkflowSection() ? "workflows" : "all";
             this.tsState.tsFolder = "";
             this.tsQueueSaveUISettings();
         }
@@ -1762,8 +2141,23 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsTreePanel.innerHTML = tsRenderNodes(tsTree);
     }
 
+    tsBuildCardMediaMarkup(tsItem, tsPreviewURL) {
+        if (!tsPreviewURL) {
+            const tsPlaceholderLabel = this.tsIsWorkflowSection()
+                ? String(tsItem?.filename || this.tsT("type.workflow", "WORKFLOW")).replace(/\.json$/i, "")
+                : String(tsItem?.type || "").toUpperCase();
+            return `<div class="ts-card-placeholder">${this.tsEscapeHTML(tsPlaceholderLabel)}</div>`;
+        }
+        if (this.tsIsWorkflowSection() && tsItem?.preview_kind === "video" && tsPreviewURL) {
+            return `<video class="ts-workflow-preview" src="${this.tsEscapeAttribute(tsPreviewURL)}" muted loop autoplay playsinline preload="metadata"></video>`;
+        }
+        const tsImageClass = this.tsIsWorkflowSection() ? ` class="ts-workflow-preview"` : "";
+        return `<img${tsImageClass} src="${this.tsEscapeAttribute(tsPreviewURL)}" alt="${this.tsEscapeAttribute(tsItem?.filename || "")}" loading="eager" decoding="async" fetchpriority="low" draggable="false">`;
+    }
+
     tsRenderGrid(tsForce = false) {
         const tsItems = this.tsState.tsItems;
+        const tsWorkflowSection = this.tsIsWorkflowSection();
         const tsMetrics = this.tsGetGridMetrics();
         const tsGap = tsMetrics.tsGap;
         const tsPaddingTop = tsMetrics.tsPaddingTop;
@@ -1778,9 +2172,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsSpacerHeight = Math.max(0, tsPaddingTop + tsPaddingBottom + tsRowCount * tsRowHeight);
         this.tsRefs.tsGallerySpacer.style.height = `${tsSpacerHeight}px`;
 
-        const tsEmptyMessage = tsItems.length === 0 && !this.tsState.tsScanStatus?.running && !this.tsState.tsScanStatus?.started_at
-            ? this.tsT("empty.scan", "No indexed assets yet. Click Rescan to scan ComfyUI output.")
-            : this.tsT("empty.title", "No assets match the current filters.");
+        const tsEmptyMessage = tsWorkflowSection
+            ? this.tsT("empty.workflows", "No workflows match the current filters.")
+            : (tsItems.length === 0 && !this.tsState.tsScanStatus?.running && !this.tsState.tsScanStatus?.started_at
+                ? this.tsT("empty.scan", "No indexed assets yet. Click Rescan to scan ComfyUI output.")
+                : this.tsT("empty.title", "No assets match the current filters."));
         this.tsRefs.tsEmpty.textContent = tsItems.length === 0 ? tsEmptyMessage : "";
         if (tsItems.length === 0) {
             this.tsRefs.tsGalleryContent.innerHTML = "";
@@ -1814,7 +2210,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             const tsSelected = this.tsState.tsSelection.has(tsItem.id);
             const tsLeft = tsPaddingLeft + tsColumn * (tsCardWidth + tsGap);
             const tsTop = tsPaddingTop + tsRow * tsRowHeight;
-            const tsBadges = [tsItem.type.toUpperCase()];
+            const tsBadges = tsWorkflowSection ? [] : [tsItem.type.toUpperCase()];
             const tsResolutionBadge = Number(tsItem.width) > 0 && Number(tsItem.height) > 0
                 ? `${tsItem.width}x${tsItem.height}`
                 : "";
@@ -1833,26 +2229,30 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             if (tsItem.type === "audio" && tsDurationBadge) {
                 tsBadges.push(tsDurationBadge);
             }
-            const tsShowCopyAction = tsItem.type !== "video" && tsItem.type !== "audio";
-            const tsShowWorkflowAction = tsItem.type === "image" && String(tsItem.extension || "").toLowerCase() === ".png" && Boolean(tsItem.has_workflow);
+            const tsShowActions = !tsWorkflowSection;
+            const tsShowCopyAction = tsShowActions && tsItem.type !== "video" && tsItem.type !== "audio";
+            const tsShowWorkflowAction = tsShowActions && tsItem.type === "image" && String(tsItem.extension || "").toLowerCase() === ".png" && Boolean(tsItem.has_workflow);
             const tsPreviewURL = this.tsResolveCardPreviewURL(tsItem);
+            const tsMediaMarkup = this.tsBuildCardMediaMarkup(tsItem, tsPreviewURL);
             tsCards.push(`
                 <div
                     class="ts-card"
                     data-card-id="${tsItem.id}"
                     data-card-index="${tsIndex}"
                     data-selected="${String(tsSelected)}"
-                    draggable="true"
+                    draggable="${tsWorkflowSection ? "false" : "true"}"
                     style="width:${tsCardWidth}px;height:${tsCardHeight}px;transform:translate(${tsLeft}px,${tsTop}px);"
                 >
                     <div class="ts-card-media">
-                        <img src="${this.tsEscapeAttribute(tsPreviewURL)}" alt="${this.tsEscapeAttribute(tsItem.filename)}" loading="lazy" decoding="async" fetchpriority="low" draggable="false">
-                        <div class="ts-card-actions">
-                            ${tsShowCopyAction ? `<button type="button" data-action="copy" data-card-id="${tsItem.id}" title="${this.tsT("button.copyPrompt", "Copy Prompt")}">P</button>` : ""}
-                            ${tsShowWorkflowAction ? `<button type="button" data-action="workflow" data-card-id="${tsItem.id}" title="${this.tsT("button.copyWorkflow", "Copy Workflow")}">W</button>` : ""}
-                            <button type="button" data-action="download" data-card-id="${tsItem.id}" title="${this.tsT("button.download", "Download")}">D</button>
-                            <button type="button" data-action="delete" data-card-id="${tsItem.id}" title="${this.tsT("button.delete", "Delete")}" ${tsItem.allow_delete ? "" : "disabled"}>X</button>
-                        </div>
+                        ${tsMediaMarkup}
+                        ${tsShowActions ? `
+                            <div class="ts-card-actions">
+                                ${tsShowCopyAction ? `<button type="button" data-action="copy" data-card-id="${tsItem.id}" title="${this.tsT("button.copyPrompt", "Copy Prompt")}">P</button>` : ""}
+                                ${tsShowWorkflowAction ? `<button type="button" data-action="workflow" data-card-id="${tsItem.id}" title="${this.tsT("button.copyWorkflow", "Copy Workflow")}">W</button>` : ""}
+                                <button type="button" data-action="download" data-card-id="${tsItem.id}" title="${this.tsT("button.download", "Download")}">D</button>
+                                <button type="button" data-action="delete" data-card-id="${tsItem.id}" title="${this.tsT("button.delete", "Delete")}" ${tsItem.allow_delete ? "" : "disabled"}>X</button>
+                            </div>
+                        ` : ""}
                         <div class="ts-card-badges">
                             ${tsBadges.map((tsBadge, tsBadgeIndex) => `
                                 <div class="ts-card-badge" data-kind="${tsBadgeIndex === 0 ? "type" : "meta"}">${this.tsEscapeHTML(tsBadge)}</div>
@@ -1880,8 +2280,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsRenderSelectionButtons() {
         const tsSelectedItems = this.tsGetSelectedItems();
-        const tsHasDeletable = tsSelectedItems.some((tsItem) => tsItem.allow_delete);
-        this.tsRefs.tsRescan.disabled = Boolean(this.tsState.tsScanStatus?.running);
+        const tsWorkflowSection = this.tsIsWorkflowSection();
+        const tsHasDeletable = !tsWorkflowSection && tsSelectedItems.some((tsItem) => tsItem.allow_delete);
+        this.tsRefs.tsRescan.disabled = tsWorkflowSection || Boolean(this.tsState.tsScanStatus?.running);
         this.tsRefs.tsDeleteSelected.disabled = !tsHasDeletable;
     }
 
@@ -2000,10 +2401,19 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         tsEvent.preventDefault();
         tsEvent.stopPropagation();
-        this.tsOpenViewer(Number(tsCard.dataset.cardId));
+        const tsAssetId = Number(tsCard.dataset.cardId);
+        if (this.tsIsWorkflowSection()) {
+            void this.tsOpenWorkflowById(tsAssetId);
+            return;
+        }
+        this.tsOpenViewer(tsAssetId);
     }
 
     tsHandleDragStart(tsEvent) {
+        if (this.tsIsWorkflowSection()) {
+            tsEvent.preventDefault();
+            return;
+        }
         const tsCard = tsEvent.target.closest("[data-card-id]");
         if (!tsCard) {
             return;
@@ -2032,6 +2442,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             } else {
                 this.tsState.tsExpandedFolders.add(tsToggleKey);
             }
+            this.tsQueueSaveUISettings();
             this.tsRenderTree();
             return;
         }
@@ -2041,6 +2452,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         this.tsState.tsRootId = tsFolderButton.dataset.treeRoot || this.tsState.tsRootId;
         this.tsState.tsFolder = tsFolderButton.dataset.treeFolder || "";
+        if (this.tsIsWorkflowSection()) {
+            this.tsWorkflowSelectedFolder = this.tsState.tsFolder;
+        }
+        this.tsRememberAssetLocation();
         this.tsQueueSaveUISettings();
         this.tsFetchAssets(true);
     }
@@ -2077,7 +2492,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsEvent.preventDefault();
             const tsSelectedItem = this.tsGetSelectedItems()[0] || this.tsState.tsItems[0];
             if (tsSelectedItem) {
-                this.tsOpenViewer(tsSelectedItem.id);
+                if (this.tsIsWorkflowSection()) {
+                    void this.tsOpenWorkflowById(tsSelectedItem.id);
+                } else {
+                    this.tsOpenViewer(tsSelectedItem.id);
+                }
             }
         }
     }
@@ -2119,6 +2538,21 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 return this.tsState.tsItems.length > tsBefore;
             },
         });
+    }
+
+    async tsOpenWorkflowById(tsWorkflowId) {
+        const tsWorkflow = this.tsFindItemById(tsWorkflowId);
+        if (!tsWorkflow?.relative_path) {
+            return;
+        }
+        try {
+            const tsLoaded = await tsLoadWorkflowIntoComfy(tsWorkflow.relative_path);
+            if (!tsLoaded) {
+                tsConsoleWarn("Timesaver Artius Browser workflow load API is unavailable");
+            }
+        } catch (tsError) {
+            tsConsoleWarn("Timesaver Artius Browser failed to load workflow", tsError);
+        }
     }
 
     async tsDeleteAssets(tsAssets) {

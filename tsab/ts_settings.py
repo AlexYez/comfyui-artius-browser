@@ -115,7 +115,7 @@ TS_EVENT_ASSET_REMOVE = f"{TS_EVENT_PREFIX}:asset-remove"
 TS_EVENT_HEALTH = f"{TS_EVENT_PREFIX}:health"
 
 TS_DEFAULT_CONFIG = {
-    "version": 10,
+    "version": 11,
     "roots": {
         "output": {"enabled": True, "allow_delete": True},
         "input": {"enabled": True, "allow_delete": True},
@@ -130,12 +130,19 @@ TS_DEFAULT_CONFIG = {
     "ui": {
         "language": "en",
         "autoscan": True,
-        "view_mode": "flat",
-        "sort_key": "created_at",
-        "sort_direction": "desc",
-        "preview_size": TS_DEFAULT_PREVIEW_SIZE,
+        "asset_view_mode": "flat",
+        "workflow_view_mode": "flat",
+        "asset_sort_key": "created_at",
+        "asset_sort_direction": "desc",
+        "asset_preview_size": TS_DEFAULT_PREVIEW_SIZE,
+        "workflow_sort_key": "created_at",
+        "workflow_sort_direction": "desc",
+        "workflow_preview_size": TS_DEFAULT_PREVIEW_SIZE,
+        "asset_types": [],
         "selected_root_id": "all",
         "selected_folder_path": "",
+        "workflow_selected_folder_path": "",
+        "expanded_folders": [],
         "browser_width": 0,
     },
     "indexing": {

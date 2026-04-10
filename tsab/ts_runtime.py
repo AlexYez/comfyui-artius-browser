@@ -128,12 +128,19 @@ class TSAssetBrowserRuntime:
         return {
             "language": str(ts_ui.get("language") or "en"),
             "autoscan": bool(ts_ui.get("autoscan", True)),
-            "view_mode": str(ts_ui.get("view_mode") or "flat"),
-            "sort_key": str(ts_ui.get("sort_key") or "created_at"),
-            "sort_direction": str(ts_ui.get("sort_direction") or "desc"),
-            "preview_size": max(48, min(512, int(ts_ui.get("preview_size") or 180))),
+            "asset_view_mode": str(ts_ui.get("asset_view_mode") or "flat"),
+            "workflow_view_mode": str(ts_ui.get("workflow_view_mode") or "flat"),
+            "asset_sort_key": str(ts_ui.get("asset_sort_key") or "created_at"),
+            "asset_sort_direction": str(ts_ui.get("asset_sort_direction") or "desc"),
+            "asset_preview_size": max(48, min(512, int(ts_ui.get("asset_preview_size") or 180))),
+            "workflow_sort_key": str(ts_ui.get("workflow_sort_key") or "created_at"),
+            "workflow_sort_direction": str(ts_ui.get("workflow_sort_direction") or "desc"),
+            "workflow_preview_size": max(48, min(512, int(ts_ui.get("workflow_preview_size") or 180))),
+            "asset_types": [str(ts_type) for ts_type in (ts_ui.get("asset_types") or []) if str(ts_type) in {"image", "video", "audio", "3d"}],
             "selected_root_id": str(ts_ui.get("selected_root_id") or "all"),
             "selected_folder_path": str(ts_ui.get("selected_folder_path") or "").replace("\\", "/").strip("/"),
+            "workflow_selected_folder_path": str(ts_ui.get("workflow_selected_folder_path") or "").replace("\\", "/").strip("/"),
+            "expanded_folders": [str(ts_key) for ts_key in (ts_ui.get("expanded_folders") or []) if str(ts_key)],
             "browser_width": max(0, min(1600, int(ts_ui.get("browser_width") or 0))),
         }
 
@@ -145,24 +152,48 @@ class TSAssetBrowserRuntime:
             ts_ui["language"] = str(ts_updates.get("language") or "en")
         if "autoscan" in ts_updates:
             ts_ui["autoscan"] = bool(ts_updates.get("autoscan", True))
-        if "view_mode" in ts_updates:
-            ts_view_mode = str(ts_updates.get("view_mode") or "flat")
-            ts_ui["view_mode"] = ts_view_mode if ts_view_mode in {"flat", "tree"} else "flat"
-        if "sort_key" in ts_updates:
-            ts_sort_key = str(ts_updates.get("sort_key") or "created_at")
-            ts_ui["sort_key"] = ts_sort_key if ts_sort_key in {"created_at", "filename", "size_bytes"} else "created_at"
-        if "sort_direction" in ts_updates:
-            ts_sort_direction = str(ts_updates.get("sort_direction") or "desc")
-            ts_ui["sort_direction"] = ts_sort_direction if ts_sort_direction in {"asc", "desc"} else "desc"
-        if "preview_size" in ts_updates:
+        if "asset_view_mode" in ts_updates:
+            ts_view_mode = str(ts_updates.get("asset_view_mode") or "flat")
+            ts_ui["asset_view_mode"] = ts_view_mode if ts_view_mode in {"flat", "tree"} else "flat"
+        if "workflow_view_mode" in ts_updates:
+            ts_view_mode = str(ts_updates.get("workflow_view_mode") or "flat")
+            ts_ui["workflow_view_mode"] = ts_view_mode if ts_view_mode in {"flat", "tree"} else "flat"
+        if "asset_sort_key" in ts_updates:
+            ts_sort_key = str(ts_updates.get("asset_sort_key") or "created_at")
+            ts_ui["asset_sort_key"] = ts_sort_key if ts_sort_key in {"created_at", "filename", "size_bytes"} else "created_at"
+        if "workflow_sort_key" in ts_updates:
+            ts_sort_key = str(ts_updates.get("workflow_sort_key") or "created_at")
+            ts_ui["workflow_sort_key"] = ts_sort_key if ts_sort_key in {"created_at", "filename"} else "created_at"
+        if "asset_sort_direction" in ts_updates:
+            ts_sort_direction = str(ts_updates.get("asset_sort_direction") or "desc")
+            ts_ui["asset_sort_direction"] = ts_sort_direction if ts_sort_direction in {"asc", "desc"} else "desc"
+        if "workflow_sort_direction" in ts_updates:
+            ts_sort_direction = str(ts_updates.get("workflow_sort_direction") or "desc")
+            ts_ui["workflow_sort_direction"] = ts_sort_direction if ts_sort_direction in {"asc", "desc"} else "desc"
+        if "asset_preview_size" in ts_updates:
             try:
-                ts_ui["preview_size"] = max(48, min(512, int(ts_updates.get("preview_size") or 180)))
+                ts_ui["asset_preview_size"] = max(48, min(512, int(ts_updates.get("asset_preview_size") or 180)))
             except (TypeError, ValueError):
                 pass
+        if "workflow_preview_size" in ts_updates:
+            try:
+                ts_ui["workflow_preview_size"] = max(48, min(512, int(ts_updates.get("workflow_preview_size") or 180)))
+            except (TypeError, ValueError):
+                pass
+        if "asset_types" in ts_updates:
+            ts_asset_types = ts_updates.get("asset_types") or []
+            if isinstance(ts_asset_types, (list, tuple, set)):
+                ts_ui["asset_types"] = [str(ts_type) for ts_type in ts_asset_types if str(ts_type) in {"image", "video", "audio", "3d"}]
         if "selected_root_id" in ts_updates:
             ts_ui["selected_root_id"] = str(ts_updates.get("selected_root_id") or "all")
         if "selected_folder_path" in ts_updates:
             ts_ui["selected_folder_path"] = str(ts_updates.get("selected_folder_path") or "").replace("\\", "/").strip("/")
+        if "workflow_selected_folder_path" in ts_updates:
+            ts_ui["workflow_selected_folder_path"] = str(ts_updates.get("workflow_selected_folder_path") or "").replace("\\", "/").strip("/")
+        if "expanded_folders" in ts_updates:
+            ts_expanded_folders = ts_updates.get("expanded_folders") or []
+            if isinstance(ts_expanded_folders, (list, tuple, set)):
+                ts_ui["expanded_folders"] = [str(ts_key) for ts_key in ts_expanded_folders if str(ts_key)]
         if "browser_width" in ts_updates:
             try:
                 ts_ui["browser_width"] = max(0, min(1600, int(ts_updates.get("browser_width") or 0)))

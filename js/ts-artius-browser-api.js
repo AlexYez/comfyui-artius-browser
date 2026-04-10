@@ -15,6 +15,9 @@ const tsFallbackWorkflowTargets = tsApiSettings.fallbackWorkflowTargets;
 const tsAnnotationSuffixByRootId = tsApiSettings.annotationSuffixByRootId;
 const tsLocaleCache = new Map();
 const tsEnableConsoleDebug = Boolean(tsBrowserRuntimeSettings.enableConsoleDebug);
+const tsWorkflowUserdataRoot = "workflows";
+const tsWorkflowPreviewImageExtensions = new Set([".png", ".jpg", ".jpeg", ".webp", ".avif", ".gif"]);
+const tsWorkflowPreviewVideoExtensions = new Set([".mp4", ".webm", ".mov", ".m4v"]);
 let tsLoad3DServiceFactoryPromise = null;
 
 export function tsConsoleWarn(...tsArgs) {
@@ -31,6 +34,84 @@ export function tsConsoleDebug(...tsArgs) {
 
 export function tsApiURL(tsPath) {
     return typeof api?.apiURL === "function" ? api.apiURL(tsPath) : tsPath;
+}
+
+function tsNormalizeRelativePath(tsPath) {
+    return String(tsPath || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+}
+
+function tsBuildUserdataFilePath(tsRelativePath) {
+    const tsNormalizedPath = tsNormalizeRelativePath(tsRelativePath);
+    if (!tsNormalizedPath) {
+        return "";
+    }
+    return `/userdata/${encodeURIComponent(tsNormalizedPath)}`;
+}
+
+function tsBuildUserdataFileURL(tsRelativePath) {
+    const tsPath = tsBuildUserdataFilePath(tsRelativePath);
+    return tsPath ? tsApiURL(tsPath) : "";
+}
+
+function tsGetPathExtension(tsPath) {
+    const tsFilename = tsNormalizeRelativePath(tsPath).split("/").at(-1) || "";
+    const tsDotIndex = tsFilename.lastIndexOf(".");
+    return tsDotIndex >= 0 ? tsFilename.slice(tsDotIndex).toLowerCase() : "";
+}
+
+function tsGetPathStem(tsPath) {
+    const tsFilename = tsNormalizeRelativePath(tsPath).split("/").at(-1) || "";
+    const tsDotIndex = tsFilename.lastIndexOf(".");
+    return tsDotIndex >= 0 ? tsFilename.slice(0, tsDotIndex) : tsFilename;
+}
+
+function tsGetParentFolderPath(tsPath) {
+    const tsNormalizedPath = tsNormalizeRelativePath(tsPath);
+    const tsSegments = tsNormalizedPath.split("/").filter(Boolean);
+    return tsSegments.slice(0, -1).join("/");
+}
+
+function tsParseModifiedEpoch(tsValue) {
+    if (Number.isFinite(tsValue)) {
+        return Math.floor(Number(tsValue));
+    }
+    if (typeof tsValue !== "string" || !tsValue) {
+        return 0;
+    }
+    const tsEpochMs = Date.parse(tsValue);
+    return Number.isFinite(tsEpochMs) ? Math.floor(tsEpochMs / 1000) : 0;
+}
+
+function tsPickWorkflowPreview(tsCandidates) {
+    if (!Array.isArray(tsCandidates) || tsCandidates.length === 0) {
+        return null;
+    }
+    const tsImageCandidate = tsCandidates.find((tsCandidate) => tsCandidate.preview_kind === "image");
+    return tsImageCandidate || tsCandidates[0] || null;
+}
+
+function tsToWorkflowBrowserFolderPath(tsRelativePath) {
+    const tsNormalizedPath = tsNormalizeRelativePath(tsRelativePath);
+    if (!tsNormalizedPath.toLowerCase().startsWith(`${tsWorkflowUserdataRoot}/`)) {
+        return "";
+    }
+    return tsNormalizedPath
+        .slice(tsWorkflowUserdataRoot.length + 1)
+        .split("/")
+        .filter(Boolean)
+        .slice(0, -1)
+        .join("/");
+}
+
+function tsToWorkflowStorePath(tsRelativePath) {
+    const tsNormalizedPath = tsNormalizeRelativePath(tsRelativePath);
+    if (!tsNormalizedPath) {
+        return "";
+    }
+    if (!tsNormalizedPath.toLowerCase().startsWith(`${tsWorkflowUserdataRoot}/`)) {
+        return tsNormalizedPath;
+    }
+    return tsNormalizedPath.slice(tsWorkflowUserdataRoot.length + 1);
 }
 
 async function tsLoad3DServiceFactory() {
@@ -109,6 +190,106 @@ export async function tsFetchBrowserSettings() {
 
 export async function tsSaveBrowserSettings(tsUISettings = {}) {
     return tsPostJSON(`${tsRouteBase}/settings`, { ui: tsUISettings });
+}
+
+export async function tsFetchWorkflowBrowserLibrary() {
+    const tsParams = new URLSearchParams({ path: tsWorkflowUserdataRoot });
+    const tsPayload = await tsFetchJSON(`/v2/userdata?${tsParams.toString()}`);
+    const tsEntries = Array.isArray(tsPayload) ? tsPayload : [];
+    const tsFileEntries = tsEntries
+        .filter((tsEntry) => String(tsEntry?.type || "").toLowerCase() === "file")
+        .map((tsEntry) => {
+            const tsPath = tsNormalizeRelativePath(tsEntry?.path || "");
+            return {
+                ...tsEntry,
+                path: tsPath,
+                name: String(tsEntry?.name || tsPath.split("/").at(-1) || ""),
+            };
+        })
+        .filter((tsEntry) => tsEntry.path.toLowerCase().startsWith(`${tsWorkflowUserdataRoot}/`));
+
+    const tsPreviewsByKey = new Map();
+    const tsWorkflowEntries = [];
+    for (const tsEntry of tsFileEntries) {
+        const tsExtension = tsGetPathExtension(tsEntry.path);
+        const tsFolderKey = tsGetParentFolderPath(tsEntry.path);
+        const tsStem = tsGetPathStem(tsEntry.path);
+        if (tsExtension === ".json") {
+            tsWorkflowEntries.push(tsEntry);
+            continue;
+        }
+        const tsPreviewKind = tsWorkflowPreviewImageExtensions.has(tsExtension)
+            ? "image"
+            : (tsWorkflowPreviewVideoExtensions.has(tsExtension) ? "video" : "");
+        if (!tsPreviewKind) {
+            continue;
+        }
+        const tsPreviewKey = `${tsFolderKey}::${tsStem}`;
+        const tsExistingCandidates = tsPreviewsByKey.get(tsPreviewKey) || [];
+        tsExistingCandidates.push({
+            preview_kind: tsPreviewKind,
+            path: tsEntry.path,
+            extension: tsExtension,
+        });
+        tsPreviewsByKey.set(tsPreviewKey, tsExistingCandidates);
+    }
+
+    const tsSortedWorkflows = [...tsWorkflowEntries].sort((tsLeft, tsRight) => tsLeft.path.localeCompare(tsRight.path));
+    return tsSortedWorkflows.map((tsEntry, tsIndex) => {
+        const tsPreviewKey = `${tsGetParentFolderPath(tsEntry.path)}::${tsGetPathStem(tsEntry.path)}`;
+        const tsPreview = tsPickWorkflowPreview(tsPreviewsByKey.get(tsPreviewKey));
+        const tsModifiedAt = tsParseModifiedEpoch(tsEntry.modified);
+        return {
+            id: -(tsIndex + 1),
+            type: "workflow",
+            filename: tsEntry.name,
+            extension: ".json",
+            folder_path: tsToWorkflowBrowserFolderPath(tsEntry.path),
+            relative_path: tsEntry.path,
+            file_url: tsBuildUserdataFileURL(tsEntry.path),
+            preview_url: tsPreview ? tsBuildUserdataFileURL(tsPreview.path) : "",
+            preview_kind: tsPreview?.preview_kind || "",
+            size_bytes: Number(tsEntry.size || 0),
+            created_at: tsModifiedAt,
+            modified_at: tsModifiedAt,
+            allow_delete: false,
+            detail_loaded: true,
+        };
+    });
+}
+
+export async function tsLoadWorkflowIntoComfy(tsRelativePath) {
+    const tsWorkflowPath = tsNormalizeRelativePath(tsRelativePath);
+    if (!tsWorkflowPath) {
+        return false;
+    }
+    const tsResponse = typeof api?.getUserData === "function"
+        ? await api.getUserData(tsWorkflowPath)
+        : await tsFetchResponse(tsBuildUserdataFilePath(tsWorkflowPath));
+    if (!tsResponse.ok) {
+        throw new Error(`${tsResponse.status} ${tsResponse.statusText}`);
+    }
+    if (typeof app?.loadGraphData === "function") {
+        const tsWorkflowData = await tsResponse.json();
+        const tsWorkflowStorePath = tsToWorkflowStorePath(tsWorkflowPath);
+        await app.loadGraphData(tsWorkflowData, true, true, tsWorkflowStorePath, {
+            openSource: "workflow_browser",
+            deferWarnings: false,
+            showMissingModelsDialog: true,
+            showMissingNodesDialog: true,
+        });
+        return true;
+    }
+    const tsWorkflowName = tsWorkflowPath.split("/").at(-1) || "workflow.json";
+    const tsWorkflowBlob = await tsResponse.blob();
+    if (typeof app?.handleFile === "function") {
+        const tsWorkflowFile = new File([tsWorkflowBlob], tsWorkflowName, {
+            type: tsWorkflowBlob.type || "application/json",
+        });
+        await app.handleFile(tsWorkflowFile, "workflow_browser", { deferWarnings: false });
+        return true;
+    }
+    return false;
 }
 
 export async function tsLoadLocale(tsLocaleCode = tsProjectSettings.defaultLocale) {

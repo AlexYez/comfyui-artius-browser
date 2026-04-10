@@ -18,6 +18,7 @@ It helps you browse, preview, inspect, and reuse:
 - 🎬 videos
 - 🎵 audio
 - 🧊 3D models
+- 🧩 ComfyUI workflows
 - 📁 files from `input`, `output`, and custom folders
 
 The goal is simple: keep your workflow focused while giving your assets a clean, practical home.
@@ -25,6 +26,7 @@ The goal is simple: keep your workflow focused while giving your assets a clean,
 ### Why people use it
 
 - ⚡ Fast browsing with cached previews
+- 🧩 A dedicated `Workflows` tab for ComfyUI workflow files
 - 🧭 Flat feed and Tree folder navigation
 - 🔎 Filename search
 - 🏷️ Filters by asset type
@@ -82,6 +84,32 @@ Available browsing modes:
 - **Flat**: one feed across the selected root
 - **Tree**: folder-first browsing with aggregated child counts
 - **All Folders**: browse all enabled roots together
+
+#### Browse ComfyUI workflows
+
+The browser also includes a separate **Workflows** tab.
+
+This mode is intentionally different from the normal asset browser:
+
+- it reads the native ComfyUI `user/default/workflows` library
+- it works in both **Flat** and **Tree** modes
+- it searches by workflow filename
+- it does **not** use the asset database
+- it does **not** build browser cache entries for workflows
+- it loads workflow previews directly from the workflow folder
+
+Workflow previews support:
+
+- sidecar image previews with the same filename stem
+- sidecar video previews with the same filename stem
+- `.webp` image previews
+- a clean placeholder with the workflow name when no preview file exists
+
+Workflow actions:
+
+- double click a workflow card to load it into ComfyUI
+- browse workflow folders without affecting asset-folder state
+- keep workflow preview size, sort, and Flat/Tree mode independent from the Assets tab
 
 #### Fast cached previews
 
