@@ -21,7 +21,9 @@ from .ts_routes import TSRegisterRoutes
 from .ts_storage import TSStoragePaths
 from .ts_tools import TSToolLocator
 from .ts_types import TSAssetStat
-from .ts_utils import TSExtractPromptText, TSExtractWorkflowText, TSJsonLoads, TSNormalizePathString, TSRelativePosixPath
+from .ts_utils import TSExtractPromptText, TSExtractWorkflowText, TSJsonDumps, TSJsonLoads, TSNormalizePathString, TSParseMaybeFloat, TSRelativePosixPath
+
+TS_WORKFLOW_PREVIEW_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".avif", ".gif", ".mp4", ".webm", ".mov", ".m4v"}
 
 TSLogger = logging.getLogger("TSArtiusBrowser")
 TSRuntimeSingleton = None
@@ -128,14 +130,17 @@ class TSAssetBrowserRuntime:
         return {
             "language": str(ts_ui.get("language") or "en"),
             "autoscan": bool(ts_ui.get("autoscan", True)),
+            "browser_section": str(ts_ui.get("browser_section") or "assets") if str(ts_ui.get("browser_section") or "assets") in {"assets", "workflows"} else "assets",
             "asset_view_mode": str(ts_ui.get("asset_view_mode") or "flat"),
             "workflow_view_mode": str(ts_ui.get("workflow_view_mode") or "flat"),
             "asset_sort_key": str(ts_ui.get("asset_sort_key") or "created_at"),
             "asset_sort_direction": str(ts_ui.get("asset_sort_direction") or "desc"),
             "asset_preview_size": max(48, min(512, int(ts_ui.get("asset_preview_size") or 180))),
+            "asset_search": str(ts_ui.get("asset_search") or ""),
             "workflow_sort_key": str(ts_ui.get("workflow_sort_key") or "created_at"),
             "workflow_sort_direction": str(ts_ui.get("workflow_sort_direction") or "desc"),
             "workflow_preview_size": max(48, min(512, int(ts_ui.get("workflow_preview_size") or 180))),
+            "workflow_search": str(ts_ui.get("workflow_search") or ""),
             "asset_types": [str(ts_type) for ts_type in (ts_ui.get("asset_types") or []) if str(ts_type) in {"image", "video", "audio", "3d"}],
             "selected_root_id": str(ts_ui.get("selected_root_id") or "all"),
             "selected_folder_path": str(ts_ui.get("selected_folder_path") or "").replace("\\", "/").strip("/"),
@@ -152,6 +157,9 @@ class TSAssetBrowserRuntime:
             ts_ui["language"] = str(ts_updates.get("language") or "en")
         if "autoscan" in ts_updates:
             ts_ui["autoscan"] = bool(ts_updates.get("autoscan", True))
+        if "browser_section" in ts_updates:
+            ts_browser_section = str(ts_updates.get("browser_section") or "assets")
+            ts_ui["browser_section"] = ts_browser_section if ts_browser_section in {"assets", "workflows"} else "assets"
         if "asset_view_mode" in ts_updates:
             ts_view_mode = str(ts_updates.get("asset_view_mode") or "flat")
             ts_ui["asset_view_mode"] = ts_view_mode if ts_view_mode in {"flat", "tree"} else "flat"
@@ -175,11 +183,15 @@ class TSAssetBrowserRuntime:
                 ts_ui["asset_preview_size"] = max(48, min(512, int(ts_updates.get("asset_preview_size") or 180)))
             except (TypeError, ValueError):
                 pass
+        if "asset_search" in ts_updates:
+            ts_ui["asset_search"] = str(ts_updates.get("asset_search") or "")
         if "workflow_preview_size" in ts_updates:
             try:
                 ts_ui["workflow_preview_size"] = max(48, min(512, int(ts_updates.get("workflow_preview_size") or 180)))
             except (TypeError, ValueError):
                 pass
+        if "workflow_search" in ts_updates:
+            ts_ui["workflow_search"] = str(ts_updates.get("workflow_search") or "")
         if "asset_types" in ts_updates:
             ts_asset_types = ts_updates.get("asset_types") or []
             if isinstance(ts_asset_types, (list, tuple, set)):
@@ -335,6 +347,8 @@ class TSAssetBrowserRuntime:
                 ts_technical["width"] = ts_row["width"]
             if not ts_technical.get("height") and ts_row["height"] is not None:
                 ts_technical["height"] = ts_row["height"]
+            if not ts_technical.get("fps") and ts_row["fps"] is not None:
+                ts_technical["fps"] = ts_row["fps"]
             return ts_technical
         ts_result: dict[str, Any] = {"kind": str(ts_row["type"] or "")}
         if ts_row["duration"] is not None:
@@ -343,9 +357,98 @@ class TSAssetBrowserRuntime:
             ts_result["width"] = ts_row["width"]
         if ts_row["height"] is not None:
             ts_result["height"] = ts_row["height"]
+        if ts_row["fps"] is not None:
+            ts_result["fps"] = ts_row["fps"]
         if str(ts_row["extension"] or ""):
             ts_result["format_name"] = str(ts_row["extension"] or "").lstrip(".").upper()
         return ts_result
+
+    def _TSFormatChannelLayout(self, ts_channels: Any) -> str:
+        ts_channel_count = int(ts_channels or 0) if str(ts_channels or "").strip() else 0
+        if ts_channel_count <= 0:
+            return ""
+        if ts_channel_count == 1:
+            return "Mono"
+        if ts_channel_count == 2:
+            return "Stereo"
+        return f"{ts_channel_count}ch"
+
+    def _TSEnrichVideoTechnicalInfo(self, ts_row, ts_technical: dict[str, Any] | None = None):
+        if str(ts_row["type"] or "") != "video":
+            return ts_row, (ts_technical or self._TSResolveTechnicalInfo(ts_row))
+        ts_technical_info = dict(ts_technical or self._TSResolveTechnicalInfo(ts_row))
+        if ts_technical_info.get("codec_name") and ts_technical_info.get("fps"):
+            return ts_row, ts_technical_info
+        ts_source_path = Path(str(ts_row["path"] or ""))
+        if not ts_source_path.exists():
+            return ts_row, ts_technical_info
+        ts_probe = self.ts_tools.TSRunFFProbe(ts_source_path)
+        ts_streams = ts_probe.get("streams", []) if isinstance(ts_probe, dict) else []
+        ts_video_stream = next(
+            (ts_stream for ts_stream in ts_streams if isinstance(ts_stream, dict) and ts_stream.get("codec_type") == "video"),
+            {},
+        )
+        ts_codec_name = str(ts_video_stream.get("codec_name") or ts_video_stream.get("codec_tag_string") or "").strip()
+        ts_audio_stream = next(
+            (ts_stream for ts_stream in ts_streams if isinstance(ts_stream, dict) and ts_stream.get("codec_type") == "audio"),
+            {},
+        )
+        ts_audio_codec_name = str(ts_audio_stream.get("codec_name") or ts_audio_stream.get("codec_tag_string") or "").strip()
+        ts_audio_channels = TSParseMaybeFloat(ts_audio_stream.get("channels"))
+        ts_fps = TSParseMaybeFloat(ts_video_stream.get("avg_frame_rate") or ts_video_stream.get("r_frame_rate"))
+        ts_changed = False
+        if ts_codec_name and not ts_technical_info.get("codec_name"):
+            ts_technical_info["codec_name"] = ts_codec_name
+            ts_changed = True
+        if ts_audio_codec_name and not ts_technical_info.get("audio_codec_name"):
+            ts_technical_info["audio_codec_name"] = ts_audio_codec_name
+            ts_changed = True
+        if ts_audio_channels and not ts_technical_info.get("audio_channels"):
+            ts_technical_info["audio_channels"] = int(ts_audio_channels)
+            ts_changed = True
+        if ts_fps and not ts_technical_info.get("fps"):
+            ts_technical_info["fps"] = ts_fps
+            ts_changed = True
+        if not ts_changed:
+            return ts_row, ts_technical_info
+        ts_updated_row = self.ts_database.TSUpsertAsset(self.ts_database.TSBuildUpdatedPayload(
+            ts_row,
+            ts_technical_json=TSJsonDumps(ts_technical_info),
+            ts_fps=ts_technical_info.get("fps"),
+        ))
+        return ts_updated_row, ts_technical_info
+
+    def _TSEnrichAudioTechnicalInfo(self, ts_row, ts_technical: dict[str, Any] | None = None):
+        if str(ts_row["type"] or "") != "audio":
+            return ts_row, (ts_technical or self._TSResolveTechnicalInfo(ts_row))
+        ts_technical_info = dict(ts_technical or self._TSResolveTechnicalInfo(ts_row))
+        if ts_technical_info.get("codec_name") and ts_technical_info.get("channels"):
+            return ts_row, ts_technical_info
+        ts_source_path = Path(str(ts_row["path"] or ""))
+        if not ts_source_path.exists():
+            return ts_row, ts_technical_info
+        ts_probe = self.ts_tools.TSRunFFProbe(ts_source_path)
+        ts_streams = ts_probe.get("streams", []) if isinstance(ts_probe, dict) else []
+        ts_audio_stream = next(
+            (ts_stream for ts_stream in ts_streams if isinstance(ts_stream, dict) and ts_stream.get("codec_type") == "audio"),
+            {},
+        )
+        ts_codec_name = str(ts_audio_stream.get("codec_name") or ts_audio_stream.get("codec_tag_string") or "").strip()
+        ts_channels = TSParseMaybeFloat(ts_audio_stream.get("channels"))
+        ts_changed = False
+        if ts_codec_name and not ts_technical_info.get("codec_name"):
+            ts_technical_info["codec_name"] = ts_codec_name
+            ts_changed = True
+        if ts_channels and not ts_technical_info.get("channels"):
+            ts_technical_info["channels"] = int(ts_channels)
+            ts_changed = True
+        if not ts_changed:
+            return ts_row, ts_technical_info
+        ts_updated_row = self.ts_database.TSUpsertAsset(self.ts_database.TSBuildUpdatedPayload(
+            ts_row,
+            ts_technical_json=TSJsonDumps(ts_technical_info),
+        ))
+        return ts_updated_row, ts_technical_info
 
     def _TSEnsureIndexed(self, ts_row):
         if ts_row is None:
@@ -504,13 +607,18 @@ class TSAssetBrowserRuntime:
         if ts_row is None:
             return None
         ts_roots = {ts_root["root_id"]: ts_root for ts_root in self.TSGetRoots()}
+        ts_technical_info = self._TSResolveTechnicalInfo(ts_row)
+        if str(ts_row["type"] or "") == "video":
+            ts_row, ts_technical_info = self._TSEnrichVideoTechnicalInfo(ts_row, ts_technical_info)
+        elif str(ts_row["type"] or "") == "audio":
+            ts_row, ts_technical_info = self._TSEnrichAudioTechnicalInfo(ts_row, ts_technical_info)
         ts_payload = self._TSAssetRowToCard(ts_row, ts_roots)
         ts_payload["detail_loaded"] = True
         ts_payload["metadata"] = TSJsonLoads(ts_row["metadata"], {})
         ts_payload["metadata_json"] = ts_row["metadata"]
         ts_payload["prompt_text"] = self._TSResolvePromptText(ts_row)
         ts_payload["workflow_text"] = self._TSResolveWorkflowText(ts_row)
-        ts_payload["technical_info"] = self._TSResolveTechnicalInfo(ts_row)
+        ts_payload["technical_info"] = ts_technical_info
         return ts_payload
 
     def _TSApplyNoStoreHeaders(self, ts_response: TSWeb.StreamResponse) -> TSWeb.StreamResponse:
@@ -591,6 +699,32 @@ class TSAssetBrowserRuntime:
             self.TSEmitEvent("tsab:asset-remove", {"id": ts_asset_id, "path": ts_row["path"]})
         return {"deleted": ts_deleted_ids, "skipped": ts_skipped_ids}
 
+    def _TSFindWorkflowPreviewSidecars(self, ts_workflow_path: Path) -> list[Path]:
+        ts_sidecars: list[Path] = []
+        if not ts_workflow_path.exists():
+            return ts_sidecars
+        ts_workflow_stem = ts_workflow_path.stem.lower()
+        for ts_candidate in ts_workflow_path.parent.iterdir():
+            if not ts_candidate.is_file() or ts_candidate == ts_workflow_path:
+                continue
+            if ts_candidate.stem.lower() != ts_workflow_stem:
+                continue
+            if ts_candidate.suffix.lower() not in TS_WORKFLOW_PREVIEW_EXTENSIONS:
+                continue
+            ts_sidecars.append(ts_candidate)
+        return sorted(ts_sidecars, key=lambda ts_path: ts_path.name.lower())
+
+    def TSDeleteWorkflowFile(self, ts_workflow_path: Path) -> dict[str, Any]:
+        if not ts_workflow_path.exists():
+            raise TSWeb.HTTPNotFound()
+        ts_deleted_paths: list[str] = []
+        for ts_target_path in [ts_workflow_path, *self._TSFindWorkflowPreviewSidecars(ts_workflow_path)]:
+            if not ts_target_path.exists():
+                continue
+            TSSendToTrash(str(ts_target_path))
+            ts_deleted_paths.append(ts_target_path.name)
+        return {"deleted": ts_deleted_paths}
+
     def TSSave3DThumbnail(self, ts_asset_id: int, ts_image_data_url: str) -> dict[str, Any]:
         ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
         if ts_row is None:
@@ -632,6 +766,7 @@ class TSAssetBrowserRuntime:
         ts_preview_cache_token = str(ts_preview_path if ts_preview_exists else f"placeholder-{ts_row['id']}")
         ts_preview_url = f"/asset_browser/preview/{ts_row['id']}?v={ts_preview_cache_token}"
         ts_file_url = f"/asset_browser/file?id={ts_row['id']}&v={ts_file_cache_token}"
+        ts_technical_info = self._TSResolveTechnicalInfo(ts_row) if str(ts_row["type"] or "") in {"video", "audio"} else {}
         return {
             "id": ts_row["id"],
             "path": ts_row["path"],
@@ -650,12 +785,17 @@ class TSAssetBrowserRuntime:
             "width": ts_row["width"],
             "height": ts_row["height"],
             "duration": ts_row["duration"],
+            "fps": ts_row["fps"],
             "allow_delete": bool(ts_root.get("allow_delete")),
             "root_label": ts_root.get("label", ts_row["root_id"]),
             "is_indexed": bool(ts_row["is_indexed"]),
             "has_preview": bool(ts_row["has_preview"]),
             "has_metadata": bool(ts_row["has_metadata"]),
             "has_workflow": bool(str(ts_row["workflow_text"] or "")),
+            "codec_name": str(ts_technical_info.get("codec_name") or ""),
+            "audio_codec_name": str(ts_technical_info.get("audio_codec_name") or ""),
+            "channel_layout": self._TSFormatChannelLayout(ts_technical_info.get("channels")),
+            "audio_channel_layout": self._TSFormatChannelLayout(ts_technical_info.get("audio_channels")),
             "status": str(ts_row["status"] or "discovered"),
             "detail_loaded": False,
         }

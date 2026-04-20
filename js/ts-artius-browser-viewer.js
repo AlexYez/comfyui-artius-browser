@@ -46,6 +46,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsCanLoadMore = null;
         this.tsMoreRequestPromise = null;
         this.tsStageCleanup = null;
+        this.tsVideoFrameStepper = null;
         this.tsDetailRequestToken = 0;
         this.tsBoundKeydown = (tsEvent) => this.tsHandleKeydown(tsEvent);
         this.attachShadow({ mode: "open" });
@@ -313,6 +314,41 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     color: var(--ts-text);
                     word-break: break-word;
                 }
+                .ts-video-shell {
+                    width: min(100%, 1180px);
+                    margin: 0 auto;
+                    display: grid;
+                    gap: 12px;
+                    align-items: center;
+                    justify-self: stretch;
+                }
+                .ts-video-shell video {
+                    width: 100%;
+                    max-height: min(72vh, calc(100vh - 260px));
+                    justify-self: center;
+                }
+                .ts-video-controls {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                }
+                .ts-video-step {
+                    min-height: 30px;
+                    padding: 6px 10px;
+                    font-size: 12px;
+                }
+                .ts-video-frame {
+                    min-width: 120px;
+                    text-align: center;
+                    padding: 6px 10px;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 10px;
+                    background: var(--ts-surface-ghost);
+                    color: var(--ts-text);
+                    font: 600 12px/1.4 "Cascadia Code", "Consolas", monospace;
+                }
                 .ts-audio-shell {
                     width: min(var(--ts-audio-shell-max-width, 1600px), 100%);
                     margin: 0 auto;
@@ -511,6 +547,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             }
         }
         this.tsStageCleanup = null;
+        this.tsVideoFrameStepper = null;
         this.tsDetailRequestToken = 0;
     }
 
@@ -531,6 +568,20 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         if (tsEvent.key === "ArrowRight") {
             tsEvent.preventDefault();
             void this.tsNavigate(1);
+            return;
+        }
+        if (tsEvent.key === "ArrowUp") {
+            if (this.tsItems[this.tsIndex]?.type === "video" && typeof this.tsVideoFrameStepper === "function") {
+                tsEvent.preventDefault();
+                this.tsVideoFrameStepper(-1);
+            }
+            return;
+        }
+        if (tsEvent.key === "ArrowDown") {
+            if (this.tsItems[this.tsIndex]?.type === "video" && typeof this.tsVideoFrameStepper === "function") {
+                tsEvent.preventDefault();
+                this.tsVideoFrameStepper(1);
+            }
             return;
         }
         if (tsEvent.key === "Delete") {
@@ -787,6 +838,30 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         if (tsAsset?.type === "video" && Number(tsTechnical.width) > 0 && Number(tsTechnical.height) > 0) {
             tsRows.push({ tsLabel: this.tsT("meta.resolution", "Resolution"), tsValue: `${tsTechnical.width}x${tsTechnical.height}` });
         }
+        if (tsAsset?.type === "video" && tsTechnical.codec_name) {
+            tsRows.push({ tsLabel: this.tsT("meta.codec", "Codec"), tsValue: String(tsTechnical.codec_name).toUpperCase() });
+        }
+        if (tsAsset?.type === "audio" && tsTechnical.codec_name) {
+            tsRows.push({ tsLabel: this.tsT("meta.codec", "Codec"), tsValue: String(tsTechnical.codec_name).toUpperCase() });
+        }
+        if (tsAsset?.type === "video" && Number(tsTechnical.fps) > 0) {
+            const tsRoundedFPS = Math.round(Number(tsTechnical.fps) * 100) / 100;
+            tsRows.push({ tsLabel: this.tsT("meta.fps", "FPS"), tsValue: Number.isInteger(tsRoundedFPS) ? `${tsRoundedFPS}` : `${tsRoundedFPS}` });
+        }
+        if (tsAsset?.type === "video" && (tsTechnical.audio_codec_name || tsAsset.audio_codec_name || tsTechnical.audio_channels || tsAsset.audio_channel_layout)) {
+            const tsAudioCodec = String(tsTechnical.audio_codec_name || tsAsset.audio_codec_name || "").toUpperCase();
+            const tsAudioChannels = String(tsAsset.audio_channel_layout || (Number(tsTechnical.audio_channels) === 1 ? "Mono" : (Number(tsTechnical.audio_channels) === 2 ? "Stereo" : (Number(tsTechnical.audio_channels) > 2 ? `${Number(tsTechnical.audio_channels)}ch` : ""))) || "");
+            const tsAudioParts = [tsAudioCodec, tsAudioChannels].filter(Boolean);
+            if (tsAudioParts.length > 0) {
+                tsRows.push({ tsLabel: this.tsT("meta.audioTrack", "Audio Track"), tsValue: tsAudioParts.join(" / ") });
+            }
+        }
+        if (tsAsset?.type === "audio" && (tsTechnical.channels || tsAsset.channel_layout)) {
+            const tsChannelLayout = String(tsAsset.channel_layout || (Number(tsTechnical.channels) === 1 ? "Mono" : (Number(tsTechnical.channels) === 2 ? "Stereo" : (Number(tsTechnical.channels) > 2 ? `${Number(tsTechnical.channels)}ch` : ""))) || "");
+            if (tsChannelLayout) {
+                tsRows.push({ tsLabel: this.tsT("meta.channels", "Channels"), tsValue: tsChannelLayout });
+            }
+        }
         if (Number(tsTechnical.duration) > 0) {
             tsRows.push({ tsLabel: this.tsT("meta.duration", "Duration"), tsValue: tsFormatTime(tsTechnical.duration) });
         }
@@ -870,8 +945,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return;
         }
         if (tsAsset.type === "video") {
-            const tsVideo = this.tsRefs.tsStage.querySelector("video");
-            this.tsStageCleanup = () => tsVideo?.pause();
+            this.tsStageCleanup = this.tsSetupVideoStage(tsAsset);
             return;
         }
         if (tsAsset.type === "3d") {
@@ -879,7 +953,103 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return;
         }
         this.tsStageCleanup = null;
+        this.tsVideoFrameStepper = null;
         this.tsDetailRequestToken = 0;
+    }
+
+    tsSetupVideoStage(tsAsset) {
+        const tsStage = this.tsRefs.tsStage;
+        const tsVideo = tsStage?.querySelector("video");
+        const tsPrevFrameButton = tsStage?.querySelector(".ts-video-prev-frame");
+        const tsNextFrameButton = tsStage?.querySelector(".ts-video-next-frame");
+        const tsFrameLabel = tsStage?.querySelector(".ts-video-frame");
+        if (!tsStage || !tsVideo || !tsPrevFrameButton || !tsNextFrameButton || !tsFrameLabel) {
+            this.tsVideoFrameStepper = null;
+            return null;
+        }
+
+        const tsResolveFPS = () => {
+            const tsFPS = Number(tsAsset?.technical_info?.fps || tsAsset?.fps || 0);
+            return Number.isFinite(tsFPS) && tsFPS > 0 ? tsFPS : 30;
+        };
+        const tsFormatFrameText = () => {
+            const tsFPS = tsResolveFPS();
+            const tsFrameIndex = Math.max(0, Math.round(Number(tsVideo.currentTime || 0) * tsFPS));
+            return `${this.tsT("label.currentFrame", "Frame")} ${tsFrameIndex}`;
+        };
+        const tsUpdateFrameLabel = () => {
+            tsFrameLabel.textContent = tsFormatFrameText();
+        };
+        let tsAnimationFrameId = 0;
+        const tsStopTicker = () => {
+            if (tsAnimationFrameId) {
+                window.cancelAnimationFrame(tsAnimationFrameId);
+                tsAnimationFrameId = 0;
+            }
+        };
+        const tsTick = () => {
+            tsUpdateFrameLabel();
+            if (!tsVideo.paused && !tsVideo.ended) {
+                tsAnimationFrameId = window.requestAnimationFrame(tsTick);
+            } else {
+                tsAnimationFrameId = 0;
+            }
+        };
+        const tsStartTicker = () => {
+            if (!tsAnimationFrameId) {
+                tsAnimationFrameId = window.requestAnimationFrame(tsTick);
+            }
+        };
+        const tsStepFrame = (tsDirection) => {
+            const tsFPS = tsResolveFPS();
+            const tsFrameDuration = 1 / tsFPS;
+            const tsDuration = Number(tsVideo.duration || 0);
+            const tsMaxTime = Number.isFinite(tsDuration) && tsDuration > 0 ? Math.max(0, tsDuration - (tsFrameDuration / 2)) : Number.MAX_SAFE_INTEGER;
+            tsVideo.pause();
+            const tsDelta = tsDirection >= 0 ? tsFrameDuration : -tsFrameDuration;
+            const tsTargetTime = Math.max(0, Math.min(tsMaxTime, Number(tsVideo.currentTime || 0) + tsDelta));
+            tsVideo.currentTime = tsTargetTime;
+            tsUpdateFrameLabel();
+        };
+
+        const tsHandleLoadedMetadata = () => tsUpdateFrameLabel();
+        const tsHandleTimeUpdate = () => tsUpdateFrameLabel();
+        const tsHandleSeeked = () => tsUpdateFrameLabel();
+        const tsHandlePause = () => {
+            tsStopTicker();
+            tsUpdateFrameLabel();
+        };
+        const tsHandlePlay = () => tsStartTicker();
+        const tsHandlePrevFrame = () => tsStepFrame(-1);
+        const tsHandleNextFrame = () => tsStepFrame(1);
+
+        this.tsVideoFrameStepper = tsStepFrame;
+        tsPrevFrameButton.addEventListener("click", tsHandlePrevFrame);
+        tsNextFrameButton.addEventListener("click", tsHandleNextFrame);
+        tsVideo.addEventListener("loadedmetadata", tsHandleLoadedMetadata);
+        tsVideo.addEventListener("timeupdate", tsHandleTimeUpdate);
+        tsVideo.addEventListener("seeked", tsHandleSeeked);
+        tsVideo.addEventListener("pause", tsHandlePause);
+        tsVideo.addEventListener("play", tsHandlePlay);
+        tsVideo.addEventListener("ended", tsHandlePause);
+        tsUpdateFrameLabel();
+        if (!tsVideo.paused) {
+            tsStartTicker();
+        }
+
+        return () => {
+            tsStopTicker();
+            this.tsVideoFrameStepper = null;
+            tsPrevFrameButton.removeEventListener("click", tsHandlePrevFrame);
+            tsNextFrameButton.removeEventListener("click", tsHandleNextFrame);
+            tsVideo.removeEventListener("loadedmetadata", tsHandleLoadedMetadata);
+            tsVideo.removeEventListener("timeupdate", tsHandleTimeUpdate);
+            tsVideo.removeEventListener("seeked", tsHandleSeeked);
+            tsVideo.removeEventListener("pause", tsHandlePause);
+            tsVideo.removeEventListener("play", tsHandlePlay);
+            tsVideo.removeEventListener("ended", tsHandlePause);
+            tsVideo.pause();
+        };
     }
 
     tsSetup3DStage(tsAsset) {
@@ -1272,7 +1442,16 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return `<img src="${tsFileURL}" alt="${this.tsEscapeAttribute(tsAsset.filename || "asset")}">`;
         }
         if (tsAsset.type === "video") {
-            return `<video src="${tsFileURL}" controls autoplay playsinline></video>`;
+            return `
+                <div class="ts-video-shell">
+                    <video src="${tsFileURL}" controls autoplay playsinline></video>
+                    <div class="ts-video-controls">
+                        <button class="ts-video-step ts-video-prev-frame" type="button">${this.tsT("button.prevFrame", "Previous Frame")}</button>
+                        <div class="ts-video-frame">${this.tsT("label.currentFrame", "Frame")} 0</div>
+                        <button class="ts-video-step ts-video-next-frame" type="button">${this.tsT("button.nextFrame", "Next Frame")}</button>
+                    </div>
+                </div>
+            `;
         }
         if (tsAsset.type === "audio") {
             return `

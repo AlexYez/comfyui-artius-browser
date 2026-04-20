@@ -32,9 +32,19 @@ class TSVideoHandler:
         ts_height = TSParseMaybeInt(ts_video_stream.get("height"))
         ts_fps = TSParseMaybeFloat(ts_video_stream.get("avg_frame_rate") or ts_video_stream.get("r_frame_rate"))
         ts_duration = TSParseMaybeFloat(ts_format.get("duration") or ts_video_stream.get("duration"))
+        ts_codec_name = str(ts_video_stream.get("codec_name") or ts_video_stream.get("codec_tag_string") or "").strip()
+        ts_audio_stream = next(
+            (ts_stream for ts_stream in ts_streams if isinstance(ts_stream, dict) and ts_stream.get("codec_type") == "audio"),
+            {},
+        )
+        ts_audio_codec_name = str(ts_audio_stream.get("codec_name") or ts_audio_stream.get("codec_tag_string") or "").strip()
+        ts_audio_channels = TSParseMaybeInt(ts_audio_stream.get("channels"))
         ts_technical = {
             "kind": self.ts_kind,
             "format_name": str(ts_format.get("format_long_name") or ts_format.get("format_name") or ts_asset_stat.ts_extension.lstrip(".").upper()),
+            "codec_name": ts_codec_name,
+            "audio_codec_name": ts_audio_codec_name,
+            "audio_channels": ts_audio_channels,
             "bit_rate": TSParseMaybeInt(ts_format.get("bit_rate") or ts_video_stream.get("bit_rate")),
             "duration": ts_duration,
             "width": ts_width,

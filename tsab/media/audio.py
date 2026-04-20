@@ -29,9 +29,11 @@ class TSAudioHandler:
         )
         ts_format = ts_probe.get("format", {}) if isinstance(ts_probe, dict) else {}
         ts_duration = TSParseMaybeFloat(ts_format.get("duration") or ts_audio_stream.get("duration"))
+        ts_codec_name = str(ts_audio_stream.get("codec_name") or ts_audio_stream.get("codec_tag_string") or "").strip()
         ts_technical = {
             "kind": self.ts_kind,
             "format_name": str(ts_format.get("format_long_name") or ts_format.get("format_name") or ts_asset_stat.ts_extension.lstrip(".").upper()),
+            "codec_name": ts_codec_name,
             "bit_rate": TSParseMaybeInt(ts_format.get("bit_rate") or ts_audio_stream.get("bit_rate")),
             "duration": ts_duration,
             "sample_rate": TSParseMaybeInt(ts_audio_stream.get("sample_rate")),

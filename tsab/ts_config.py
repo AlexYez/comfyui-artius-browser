@@ -98,6 +98,15 @@ class TSConfigStore:
             for ts_legacy_key in ("view_mode", "sort_key", "sort_direction", "preview_size"):
                 ts_ui.pop(ts_legacy_key, None)
             ts_result["version"] = 11
+        if int(ts_result.get("version", 0) or 0) < 12:
+            ts_ui = ts_result.setdefault("ui", {})
+            ts_ui.setdefault("asset_search", "")
+            ts_ui.setdefault("workflow_search", "")
+            ts_result["version"] = 12
+        if int(ts_result.get("version", 0) or 0) < 13:
+            ts_ui = ts_result.setdefault("ui", {})
+            ts_ui.setdefault("browser_section", "assets")
+            ts_result["version"] = 13
         return ts_result
 
     def _TSDeepMerge(self, ts_base: dict, ts_override: dict) -> dict:

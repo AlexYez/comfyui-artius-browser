@@ -2,7 +2,7 @@
     extensionId: "timesaver.artius.browser",
     sidebarId: "timesaver-artius-browser",
     sidebarIcon: "tsArtiusSidebarIcon",
-    title: "Timesaver Artius Browser",
+    title: "Artius Browser",
     label: "Browser",
     tooltip: "Timesaver Artius Browser",
     defaultLocale: "en",

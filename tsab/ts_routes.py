@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from aiohttp import web as TSWeb
+from pathlib import Path
 
 from .ts_settings import TS_DEFAULT_PAGE_SIZE
 from .ts_logging import TSLogVerbose
@@ -46,6 +47,8 @@ def TSRegisterRoutes(ts_runtime) -> None:
     for ts_path in TSBuildRouteVariants("/asset_browser/settings"):
         ts_routes.append(TSWeb.get(ts_path, lambda ts_request: TSHandleSettingsGet(ts_runtime, ts_request)))
         ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandleSettingsPost(ts_runtime, ts_request)))
+    for ts_path in TSBuildRouteVariants("/asset_browser/workflow/delete"):
+        ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandleWorkflowDelete(ts_runtime, ts_request)))
     for ts_path in TSBuildRouteVariants("/asset_browser/3d/viewer"):
         ts_routes.append(TSWeb.get(ts_path, lambda ts_request: TSHandle3DViewer(ts_runtime, ts_request)))
     for ts_path in TSBuildRouteVariants("/asset_browser/3d/thumbnail/{id}"):
@@ -68,6 +71,7 @@ def TSRegisterRoutes(ts_runtime) -> None:
             "/asset_browser/rescan",
             "/asset_browser/delete",
             "/asset_browser/settings",
+            "/asset_browser/workflow/delete",
             "/asset_browser/3d/viewer",
             "/asset_browser/3d/thumbnail/{id}",
             "/asset_browser/3d/stage/{id}",
@@ -169,6 +173,30 @@ async def TSHandleSettingsPost(ts_runtime, ts_request):
     TSLogVerbose("route.settings.post", path=ts_request.path, keys=sorted((ts_payload or {}).keys()))
     ts_ui_updates = ts_payload.get("ui") if isinstance(ts_payload, dict) else {}
     return TSWeb.json_response({"ui": ts_runtime.TSSaveUISettings(ts_ui_updates)})
+
+
+def _TSResolveWorkflowAbsolutePath(ts_request, ts_relative_path: str) -> Path:
+    from server import PromptServer
+
+    ts_normalized_path = str(ts_relative_path or "").replace("\\", "/").strip("/")
+    if not ts_normalized_path.lower().startswith("workflows/") or not ts_normalized_path.lower().endswith(".json"):
+        raise TSWeb.HTTPBadRequest(reason="Invalid workflow path")
+    ts_server = getattr(PromptServer, "instance", None)
+    ts_user_manager = getattr(ts_server, "user_manager", None)
+    if ts_user_manager is None:
+        raise TSWeb.HTTPInternalServerError(reason="User manager unavailable")
+    ts_absolute_path = ts_user_manager.get_request_user_filepath(ts_request, ts_normalized_path, create_dir=False)
+    if not ts_absolute_path:
+        raise TSWeb.HTTPBadRequest(reason="Invalid workflow path")
+    return Path(str(ts_absolute_path)).resolve()
+
+
+async def TSHandleWorkflowDelete(ts_runtime, ts_request):
+    ts_payload = await ts_request.json() if ts_request.can_read_body else {}
+    ts_relative_path = str(ts_payload.get("path") or "") if isinstance(ts_payload, dict) else ""
+    TSLogVerbose("route.workflow.delete.request", path=ts_request.path, workflow_path=ts_relative_path)
+    ts_workflow_path = _TSResolveWorkflowAbsolutePath(ts_request, ts_relative_path)
+    return TSWeb.json_response(ts_runtime.TSDeleteWorkflowFile(ts_workflow_path))
 
 
 async def TSHandle3DViewer(ts_runtime, ts_request):

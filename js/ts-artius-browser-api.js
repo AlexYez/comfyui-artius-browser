@@ -292,6 +292,10 @@ export async function tsLoadWorkflowIntoComfy(tsRelativePath) {
     return false;
 }
 
+export async function tsDeleteWorkflowFile(tsRelativePath) {
+    return tsPostJSON(`${tsRouteBase}/workflow/delete`, { path: tsNormalizeRelativePath(tsRelativePath) });
+}
+
 export async function tsLoadLocale(tsLocaleCode = tsProjectSettings.defaultLocale) {
     const tsResolvedCode = tsLocaleCode || tsProjectSettings.defaultLocale;
     if (tsLocaleCache.has(tsResolvedCode)) {
@@ -373,12 +377,23 @@ export async function tsCopyText(tsText) {
     }
 }
 
+function tsResolveOpenableURL(tsURL) {
+    const tsValue = String(tsURL || "");
+    if (!tsValue) {
+        return "";
+    }
+    if (tsValue.startsWith("/api/") || tsValue.startsWith("http://") || tsValue.startsWith("https://") || tsValue.startsWith("blob:") || tsValue.startsWith("data:")) {
+        return tsValue;
+    }
+    return tsApiURL(tsValue);
+}
+
 export function tsOpenDownload(tsAsset) {
     if (!tsAsset?.file_url) {
         return;
     }
     const tsLink = document.createElement("a");
-    tsLink.href = tsApiURL(tsAsset.file_url);
+    tsLink.href = tsResolveOpenableURL(tsAsset.file_url);
     tsLink.download = tsAsset.filename || "asset";
     tsLink.rel = "noopener";
     document.body.append(tsLink);
@@ -398,7 +413,7 @@ export function tsOpenAssetInNewTab(tsAsset) {
         return false;
     }
     const tsLink = document.createElement("a");
-    tsLink.href = tsApiURL(tsAsset.file_url);
+    tsLink.href = tsResolveOpenableURL(tsAsset.file_url);
     tsLink.target = "_blank";
     tsLink.rel = "noopener noreferrer";
     document.body.append(tsLink);

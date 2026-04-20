@@ -15,6 +15,7 @@ import {
     tsLoadWorkflowIntoComfy,
     tsLoadLocale,
     tsOpenDownload,
+    tsDeleteWorkflowFile,
     tsPostJSON,
     tsRouteBase,
     tsSave3DThumbnail,
@@ -35,6 +36,20 @@ const tsBrowserSections = Object.freeze(["assets", "workflows"]);
 
 function tsLerp(tsStart, tsEnd, tsRatio) {
     return tsStart + ((tsEnd - tsStart) * tsRatio);
+}
+
+function tsFormatCardFPS(tsFPS) {
+    const tsValue = Number(tsFPS || 0);
+    if (!Number.isFinite(tsValue) || tsValue <= 0) {
+        return "";
+    }
+    const tsRounded = Math.round(tsValue * 100) / 100;
+    return `${Number.isInteger(tsRounded) ? tsRounded.toFixed(0) : tsRounded.toFixed(tsRounded < 10 ? 2 : 1).replace(/\.0$/, "")}` + " FPS";
+}
+
+function tsBuildAudioChannelBadge(tsChannelLayout) {
+    const tsValue = String(tsChannelLayout || "").trim();
+    return tsValue || "";
 }
 
 function tsFormatCardDuration(tsSeconds) {
@@ -64,6 +79,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsLoading: false,
             tsSection: "assets",
             tsSearch: "",
+            tsAssetSearch: "",
+            tsWorkflowSearch: "",
             tsRootId: tsPanelSettings.defaultRootId,
             tsMode: tsPanelSettings.defaultMode,
             tsAssetMode: tsPanelSettings.defaultMode,
@@ -297,6 +314,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 : tsPanelSettings.defaultSort.direction;
             this.tsState.tsAssetPreviewSize = tsResolvePreviewSize(tsUI.asset_preview_size, tsPreviewSizeRange.default);
             this.tsState.tsWorkflowPreviewSize = tsResolvePreviewSize(tsUI.workflow_preview_size, tsPreviewSizeRange.default);
+            this.tsState.tsAssetSearch = typeof tsUI.asset_search === "string" ? tsUI.asset_search : "";
+            this.tsState.tsWorkflowSearch = typeof tsUI.workflow_search === "string" ? tsUI.workflow_search : "";
             if (Array.isArray(tsUI.asset_types)) {
                 this.tsState.tsTypes = new Set(
                     tsUI.asset_types
@@ -333,6 +352,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsConsoleWarn("Timesaver Artius Browser settings fetch failed", tsError);
         } finally {
             this.tsState.tsSettingsHydrated = true;
+            if (this.tsRefs?.tsSearch) {
+                this.tsRefs.tsSearch.value = String(this.tsState.tsSearch || "");
+            }
             if (this.tsRefs?.tsPreviewSize) {
                 this.tsRefs.tsPreviewSize.value = String(this.tsState.tsPreviewSize);
             }
@@ -372,9 +394,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 asset_sort_key: this.tsState.tsAssetSortKey,
                 asset_sort_direction: this.tsState.tsAssetSortDirection,
                 asset_preview_size: this.tsState.tsAssetPreviewSize,
+                asset_search: this.tsState.tsAssetSearch,
                 workflow_sort_key: this.tsState.tsWorkflowSortKey,
                 workflow_sort_direction: this.tsState.tsWorkflowSortDirection,
                 workflow_preview_size: this.tsState.tsWorkflowPreviewSize,
+                workflow_search: this.tsState.tsWorkflowSearch,
                 asset_types: [...this.tsState.tsTypes],
                 selected_root_id: tsSelectedRootId,
                 selected_folder_path: tsSelectedFolderPath,
@@ -401,12 +425,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsState.tsWorkflowSortKey = this.tsState.tsSortKey === "size_bytes" ? "created_at" : this.tsState.tsSortKey;
             this.tsState.tsWorkflowSortDirection = this.tsState.tsSortDirection;
             this.tsState.tsWorkflowPreviewSize = this.tsState.tsPreviewSize;
+            this.tsState.tsWorkflowSearch = this.tsState.tsSearch;
             return;
         }
         this.tsState.tsAssetMode = this.tsState.tsMode;
         this.tsState.tsAssetSortKey = this.tsState.tsSortKey;
         this.tsState.tsAssetSortDirection = this.tsState.tsSortDirection;
         this.tsState.tsAssetPreviewSize = this.tsState.tsPreviewSize;
+        this.tsState.tsAssetSearch = this.tsState.tsSearch;
     }
 
     tsApplySectionSettings() {
@@ -415,6 +441,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsState.tsSortKey = this.tsState.tsWorkflowSortKey === "size_bytes" ? "created_at" : this.tsState.tsWorkflowSortKey;
             this.tsState.tsSortDirection = this.tsState.tsWorkflowSortDirection;
             this.tsState.tsPreviewSize = this.tsState.tsWorkflowPreviewSize;
+            this.tsState.tsSearch = this.tsState.tsWorkflowSearch;
             this.tsState.tsFolder = this.tsState.tsMode === "tree" ? (this.tsWorkflowSelectedFolder || "") : "";
             return;
         }
@@ -422,6 +449,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsState.tsSortKey = this.tsState.tsAssetSortKey;
         this.tsState.tsSortDirection = this.tsState.tsAssetSortDirection;
         this.tsState.tsPreviewSize = this.tsState.tsAssetPreviewSize;
+        this.tsState.tsSearch = this.tsState.tsAssetSearch;
         this.tsState.tsFolder = this.tsState.tsMode === "tree" ? (this.tsLastAssetFolder || "") : "";
     }
 
@@ -1034,6 +1062,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 .ts-card-badge[data-kind="meta"] {
                     background: var(--ts-surface-overlay-soft);
                 }
+
+                .ts-card-badge[data-kind="workflow-folder"] {
+                    background: var(--ts-surface-overlay-soft);
+                    max-width: calc(100% - (var(--ts-card-inset, 8px) * 2));
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
                 .ts-empty {
                     position: absolute;
                     inset: 0;
@@ -1116,6 +1151,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsSearch: this.shadowRoot.querySelector(".ts-search"),
             tsTypeCluster: this.shadowRoot.querySelector(".ts-type-cluster"),
             tsTypeChips: this.shadowRoot.querySelector(".ts-type-chips"),
+            tsRootGroup: this.shadowRoot.querySelector(".ts-root-group"),
             tsRootSelect: this.shadowRoot.querySelector(".ts-root-select"),
             tsSortSelect: this.shadowRoot.querySelector(".ts-sort-select"),
             tsSortDirection: this.shadowRoot.querySelector(".ts-sort-direction"),
@@ -1187,6 +1223,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         });
         this.tsRefs.tsSearch.addEventListener("input", (tsEvent) => {
             this.tsState.tsSearch = tsEvent.target.value;
+            this.tsSyncSectionSettingsFromActive();
+            this.tsQueueSaveUISettings();
             this.tsDebouncedSearch();
         });
         this.tsRefs.tsRootSelect.addEventListener("change", (tsEvent) => {
@@ -1613,13 +1651,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsSearch.title = tsWorkflowSection
             ? this.tsT("tooltip.search.workflows", "Search workflows by filename only.")
             : this.tsT("tooltip.search", "Search assets by filename only.");
+        this.tsRefs.tsSearch.value = String(this.tsState.tsSearch || "");
         this.tsRefs.tsRootSelect.title = this.tsT("tooltip.root", "Choose a root folder.");
         this.tsRefs.tsTypeCluster.hidden = tsWorkflowSection;
+        this.tsRefs.tsRootGroup.hidden = tsWorkflowSection;
         this.tsRefs.tsRootSelect.hidden = tsWorkflowSection;
         this.tsRefs.tsAutoscan.hidden = tsWorkflowSection;
         this.tsRefs.tsRescan.hidden = tsWorkflowSection;
         this.tsRefs.tsDeleteSelected.hidden = tsWorkflowSection;
         this.tsRefs.tsTypeCluster.style.display = tsWorkflowHiddenDisplay;
+        this.tsRefs.tsRootGroup.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRootSelect.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsAutoscan.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRescan.style.display = tsWorkflowHiddenDisplay;
@@ -2210,17 +2251,24 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             const tsSelected = this.tsState.tsSelection.has(tsItem.id);
             const tsLeft = tsPaddingLeft + tsColumn * (tsCardWidth + tsGap);
             const tsTop = tsPaddingTop + tsRow * tsRowHeight;
+            const tsWorkflowFolderBadge = tsWorkflowSection
+                ? String(tsItem.folder_path || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "")
+                : "";
             const tsBadges = tsWorkflowSection ? [] : [tsItem.type.toUpperCase()];
             const tsResolutionBadge = Number(tsItem.width) > 0 && Number(tsItem.height) > 0
                 ? `${tsItem.width}x${tsItem.height}`
                 : "";
             const tsDurationBadge = tsFormatCardDuration(tsItem.duration);
+            const tsFPSBadge = tsItem.type === "video" ? tsFormatCardFPS(tsItem.fps) : "";
             if (tsItem.type === "image" && tsResolutionBadge) {
                 tsBadges.push(tsResolutionBadge);
             }
             if (tsItem.type === "video") {
                 if (tsResolutionBadge) {
                     tsBadges.push(tsResolutionBadge);
+                }
+                if (tsFPSBadge) {
+                    tsBadges.push(tsFPSBadge);
                 }
                 if (tsDurationBadge) {
                     tsBadges.push(tsDurationBadge);
@@ -2229,9 +2277,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             if (tsItem.type === "audio" && tsDurationBadge) {
                 tsBadges.push(tsDurationBadge);
             }
-            const tsShowActions = !tsWorkflowSection;
-            const tsShowCopyAction = tsShowActions && tsItem.type !== "video" && tsItem.type !== "audio";
-            const tsShowWorkflowAction = tsShowActions && tsItem.type === "image" && String(tsItem.extension || "").toLowerCase() === ".png" && Boolean(tsItem.has_workflow);
+            const tsShowActions = true;
+            const tsShowCopyAction = !tsWorkflowSection && tsItem.type !== "video" && tsItem.type !== "audio";
+            const tsShowWorkflowAction = !tsWorkflowSection && tsItem.type === "image" && String(tsItem.extension || "").toLowerCase() === ".png" && Boolean(tsItem.has_workflow);
             const tsPreviewURL = this.tsResolveCardPreviewURL(tsItem);
             const tsMediaMarkup = this.tsBuildCardMediaMarkup(tsItem, tsPreviewURL);
             tsCards.push(`
@@ -2247,13 +2295,17 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         ${tsMediaMarkup}
                         ${tsShowActions ? `
                             <div class="ts-card-actions">
+                                ${tsWorkflowSection ? `<button type="button" data-action="load-workflow" data-card-id="${tsItem.id}" title="${this.tsT("button.loadWorkflow", "Load Workflow")}">L</button>` : ""}
                                 ${tsShowCopyAction ? `<button type="button" data-action="copy" data-card-id="${tsItem.id}" title="${this.tsT("button.copyPrompt", "Copy Prompt")}">P</button>` : ""}
                                 ${tsShowWorkflowAction ? `<button type="button" data-action="workflow" data-card-id="${tsItem.id}" title="${this.tsT("button.copyWorkflow", "Copy Workflow")}">W</button>` : ""}
                                 <button type="button" data-action="download" data-card-id="${tsItem.id}" title="${this.tsT("button.download", "Download")}">D</button>
-                                <button type="button" data-action="delete" data-card-id="${tsItem.id}" title="${this.tsT("button.delete", "Delete")}" ${tsItem.allow_delete ? "" : "disabled"}>X</button>
+                                <button type="button" data-action="delete" data-card-id="${tsItem.id}" title="${this.tsT("button.delete", "Delete")}" ${tsWorkflowSection || tsItem.allow_delete ? "" : "disabled"}>X</button>
                             </div>
                         ` : ""}
                         <div class="ts-card-badges">
+                            ${tsWorkflowFolderBadge ? `
+                                <div class="ts-card-badge" data-kind="workflow-folder" title="${this.tsEscapeAttribute(tsWorkflowFolderBadge)}">${this.tsEscapeHTML(tsWorkflowFolderBadge)}</div>
+                            ` : ""}
                             ${tsBadges.map((tsBadge, tsBadgeIndex) => `
                                 <div class="ts-card-badge" data-kind="${tsBadgeIndex === 0 ? "type" : "meta"}">${this.tsEscapeHTML(tsBadge)}</div>
                             `).join("")}
@@ -2362,10 +2414,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 void this.tsCopyAssetPrompt(tsAsset.id);
             } else if (tsAction === "workflow") {
                 void this.tsCopyAssetWorkflow(tsAsset.id);
+            } else if (tsAction === "load-workflow") {
+                void this.tsOpenWorkflowById(tsAsset.id);
             } else if (tsAction === "download") {
                 tsOpenDownload(tsAsset);
             } else if (tsAction === "delete") {
-                this.tsDeleteAssets([tsAsset]);
+                if (this.tsIsWorkflowSection()) {
+                    void this.tsDeleteWorkflowById(tsAsset.id);
+                } else {
+                    this.tsDeleteAssets([tsAsset]);
+                }
             }
             return;
         }
@@ -2552,6 +2610,23 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             }
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser failed to load workflow", tsError);
+        }
+    }
+
+
+    async tsDeleteWorkflowById(tsWorkflowId) {
+        const tsWorkflow = this.tsFindItemById(tsWorkflowId);
+        if (!tsWorkflow?.relative_path) {
+            return;
+        }
+        try {
+            await tsDeleteWorkflowFile(tsWorkflow.relative_path);
+            this.tsState.tsSelection.delete(tsWorkflowId);
+            this.tsState.tsLastSelectedIndex = -1;
+            await this.tsEnsureWorkflowLibrary(true);
+            await this.tsFetchAssets(true);
+        } catch (tsError) {
+            tsConsoleWarn("Timesaver Artius Browser failed to delete workflow", tsError);
         }
     }
 
