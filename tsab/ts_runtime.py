@@ -119,6 +119,16 @@ class TSAssetBrowserRuntime:
         TSLogVerbose("runtime.scan.requested", scope=ts_scope, root_id=ts_root_id)
         return await self.ts_indexer.TSStartBackgroundScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
 
+    async def TSRequestCacheRebuild(self) -> dict[str, Any]:
+        TSLogVerbose("runtime.rebuild.requested")
+        if bool(self.TSGetScanStatus().get("running")):
+            TSLogVerbose("runtime.rebuild.skipped", reason="scan_running")
+            return {"started": False, "status": self.TSGetScanStatus()}
+        self.ts_database.TSResetIndex()
+        self.ts_preview_cache.TSClearGeneratedCache()
+        ts_started = await self.ts_indexer.TSStartBackgroundScan()
+        return {"started": ts_started, "status": self.TSGetScanStatus()}
+
     def TSGetScanStatus(self) -> dict[str, Any]:
         return self.ts_indexer.TSGetStatus()
 
@@ -321,13 +331,23 @@ class TSAssetBrowserRuntime:
         return {"queued": False, "reason": "disabled"}
 
     def _TSResolvePromptText(self, ts_row) -> str:
+        ts_metadata = TSJsonLoads(ts_row["metadata"], {})
+        if isinstance(ts_metadata, dict):
+            ts_positive_prompt_text = str(ts_metadata.get("positive_prompt_text") or "")
+            if ts_positive_prompt_text:
+                return ts_positive_prompt_text
         ts_prompt_text = str(ts_row["prompt_text"] or "")
         if ts_prompt_text:
             return ts_prompt_text
-        ts_metadata = TSJsonLoads(ts_row["metadata"], {})
         if ts_metadata:
             return TSExtractPromptText(ts_metadata)
         return ""
+
+    def _TSResolveNegativePromptText(self, ts_row) -> str:
+        ts_metadata = TSJsonLoads(ts_row["metadata"], {})
+        if not isinstance(ts_metadata, dict):
+            return ""
+        return str(ts_metadata.get("negative_prompt_text") or "")
 
     def _TSResolveWorkflowText(self, ts_row) -> str:
         ts_workflow_text = str(ts_row["workflow_text"] or "")
@@ -540,7 +560,11 @@ class TSAssetBrowserRuntime:
             ts_fresh_row = self.ts_database.TSGetAssetById(ts_asset_id)
             if ts_fresh_row is None:
                 return None
-            if bool(ts_fresh_row["has_metadata"]):
+            ts_metadata = TSJsonLoads(ts_fresh_row["metadata"], {})
+            ts_needs_image_prompt_refresh = str(ts_fresh_row["type"] or "") == "image" and (
+                not isinstance(ts_metadata, dict) or int(ts_metadata.get("prompt_parts_version") or 0) < 3
+            )
+            if bool(ts_fresh_row["has_metadata"]) and not ts_needs_image_prompt_refresh:
                 return ts_fresh_row
             ts_handler = self.ts_handler_registry.TSResolveHandler(str(ts_fresh_row["extension"] or ""), str(ts_fresh_row["type"] or ""))
             if ts_handler is None:
@@ -606,6 +630,7 @@ class TSAssetBrowserRuntime:
         ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
         if ts_row is None:
             return None
+        ts_row = self._TSEnsureMetadata(ts_row) or ts_row
         ts_roots = {ts_root["root_id"]: ts_root for ts_root in self.TSGetRoots()}
         ts_technical_info = self._TSResolveTechnicalInfo(ts_row)
         if str(ts_row["type"] or "") == "video":
@@ -617,6 +642,7 @@ class TSAssetBrowserRuntime:
         ts_payload["metadata"] = TSJsonLoads(ts_row["metadata"], {})
         ts_payload["metadata_json"] = ts_row["metadata"]
         ts_payload["prompt_text"] = self._TSResolvePromptText(ts_row)
+        ts_payload["negative_prompt_text"] = self._TSResolveNegativePromptText(ts_row)
         ts_payload["workflow_text"] = self._TSResolveWorkflowText(ts_row)
         ts_payload["technical_info"] = ts_technical_info
         return ts_payload

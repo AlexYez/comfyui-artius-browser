@@ -42,6 +42,8 @@ def TSRegisterRoutes(ts_runtime) -> None:
         ts_routes.append(TSWeb.get(ts_path, lambda ts_request: TSHandleFile(ts_runtime, ts_request)))
     for ts_path in TSBuildRouteVariants("/asset_browser/rescan"):
         ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandleRescan(ts_runtime, ts_request)))
+    for ts_path in TSBuildRouteVariants("/asset_browser/rebuild_cache"):
+        ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandleRebuildCache(ts_runtime, ts_request)))
     for ts_path in TSBuildRouteVariants("/asset_browser/delete"):
         ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandleDelete(ts_runtime, ts_request)))
     for ts_path in TSBuildRouteVariants("/asset_browser/settings"):
@@ -69,6 +71,7 @@ def TSRegisterRoutes(ts_runtime) -> None:
             "/asset_browser/preview/{id}/warm",
             "/asset_browser/file",
             "/asset_browser/rescan",
+            "/asset_browser/rebuild_cache",
             "/asset_browser/delete",
             "/asset_browser/settings",
             "/asset_browser/workflow/delete",
@@ -153,6 +156,11 @@ async def TSHandleRescan(ts_runtime, ts_request):
     TSLogVerbose("route.rescan.request", scope=ts_scope, root_id=ts_root_id, path=ts_request.path)
     ts_started = await ts_runtime.TSRequestScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
     return TSWeb.json_response({"started": ts_started, "status": ts_runtime.TSGetScanStatus()})
+
+
+async def TSHandleRebuildCache(ts_runtime, ts_request):
+    TSLogVerbose("route.rebuild_cache.request", path=ts_request.path)
+    return TSWeb.json_response(await ts_runtime.TSRequestCacheRebuild())
 
 
 async def TSHandleDelete(ts_runtime, ts_request):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import shutil
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -203,6 +204,16 @@ class TSPreviewCache:
         except Exception as ts_error:
             TSLogVerbose("preview.placeholder.failed", label=ts_label, preview_path=str(ts_output_path), error=str(ts_error))
             return ""
+
+    def TSClearGeneratedCache(self) -> None:
+        ts_cache_directory = self.ts_storage_paths.ts_cache_directory
+        try:
+            if ts_cache_directory.exists():
+                shutil.rmtree(ts_cache_directory)
+            self.ts_storage_paths.TSEnsureDirectories()
+            TSLogVerbose("preview.cache.cleared", path=str(ts_cache_directory))
+        except OSError as ts_error:
+            TSLogVerbose("preview.cache.clear_failed", path=str(ts_cache_directory), error=str(ts_error))
 
     def _TSPreviewConfig(self) -> dict:
         return self.ts_config_store.TSLoadConfig().get("preview", {})

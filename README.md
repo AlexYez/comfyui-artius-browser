@@ -1,255 +1,191 @@
-# Timesaver Artius Browser
+# Artius Browser for ComfyUI
 
-[English](#english) | [Русский](#russian) | [Español](#spanish) | [中文](#chinese)
+<p align="center">
+  <strong>Fast asset browsing, workflow browsing, native drag-and-drop, and clean previews inside ComfyUI.</strong>
+</p>
 
-![Timesaver Artius Browser](img/ts-artius-browser.jpg)
+<p align="center">
+  <a href="#english">English</a> |
+  <a href="#russian">Русский</a> |
+  <a href="#spanish">Español</a> |
+  <a href="#chinese">中文</a> |
+  <a href="#german">Deutsch</a> |
+  <a href="#italian">Italiano</a> |
+  <a href="#french">Français</a> |
+  <a href="#portuguese">Português</a>
+</p>
+
+![Artius Browser](img/ts-artius-browser.jpg)
 
 ---
 
 <a id="english"></a>
 ## English
 
-### A friendly asset browser for ComfyUI
+### What it is
 
-**Timesaver Artius Browser** is a fast sidebar browser for the files you actually use in ComfyUI every day.  
-It helps you browse, preview, inspect, and reuse:
+**Artius Browser** is a sidebar browser for ComfyUI focused on the files you actually use every day:
 
-- 🖼️ images
-- 🎬 videos
-- 🎵 audio
-- 🧊 3D models
-- 🧩 ComfyUI workflows
-- 📁 files from `input`, `output`, and custom folders
+- images
+- videos
+- audio
+- 3D models
+- ComfyUI workflow JSON files
 
-The goal is simple: keep your workflow focused while giving your assets a clean, practical home.
+It is designed to stay fast on large libraries, keep previews compact, and use native ComfyUI behavior wherever possible.
 
-### Why people use it
+### Highlights
 
-- ⚡ Fast browsing with cached previews
-- 🧩 A dedicated `Workflows` tab for ComfyUI workflow files
-- 🧭 Flat feed and Tree folder navigation
-- 🔎 Filename search
-- 🏷️ Filters by asset type
-- ↕️ Sorting by date, filename, or size
-- 🔍 Adjustable preview size
-- 🖥️ Lightbox viewer for every supported media type
-- 🧲 Drag and drop into the ComfyUI canvas
-- 🧠 PNG prompt and workflow extraction
-- 🧩 Native 3D integration with ComfyUI viewers and `Load 3D & Animation`
-- 🗑️ Delete to the system trash instead of hard delete
-- 🔄 Autoscan toggle plus manual rescan
+- `Assets` and `Workflows` tabs
+- `Flat` and `Tree` browsing modes in both tabs
+- independent saved state per tab:
+  - search
+  - sort
+  - preview size
+  - flat/tree mode
+- cached previews for image, video, audio, and 3D assets
+- native workflow browsing from `user/default/workflows`
+- PNG prompt parsing with separate positive and negative prompt display
+- PNG workflow extraction with one-click copy
+- lightbox viewer for every supported asset type
+- frame stepping for videos in the lightbox
+- synchronized compare mode for `2` or `4` selected videos
+- native ComfyUI 3D viewer integration
+- drag-and-drop into native ComfyUI nodes
+- delete to the system trash instead of hard delete
+- `Autoscan`, `Rescan`, and full `Rebuild Cache`
 
 ### Supported formats
 
-#### Images
+- Images: `.png`, `.jpg`, `.jpeg`, `.webp`, `.avif`
+- Videos: `.mp4`, `.mov`, `.webm`, `.prores`
+- Audio: `.mp3`, `.wav`, `.flac`, `.opus`, `.ogg`
+- 3D: `.glb`, `.obj`
+- Workflows: `.json`
 
-- `.png`
-- `.jpg`
-- `.jpeg`
-- `.webp`
-- `.avif`
+### Assets tab
 
-#### Video
-
-- `.mp4`
-- `.mov`
-- `.webm`
-- `.prores`
-
-#### Audio
-
-- `.mp3`
-- `.wav`
-- `.flac`
-- `.opus`
-- `.ogg`
-
-#### 3D
-
-- `.glb`
-- `.obj`
-
-### Main browsing features
-
-#### Browse your library
-
-You can browse assets from:
+The `Assets` tab works with indexed asset roots such as:
 
 - `ComfyUI/output`
 - `ComfyUI/input`
-- custom roots from config
+- your configured custom roots
 
-Available browsing modes:
+Main tools:
 
-- **Flat**: one feed across the selected root
-- **Tree**: folder-first browsing with aggregated child counts
-- **All Folders**: browse all enabled roots together
+- filename-only search
+- asset type filters
+- root selector
+- sort by date, name, or size
+- `Flat / Tree` switch
+- preview size slider
+- `Autoscan` toggle
+- `Rescan`
+- `Rebuild Cache`
 
-#### Browse ComfyUI workflows
+### Workflows tab
 
-The browser also includes a separate **Workflows** tab.
+The `Workflows` tab is intentionally separate from the normal asset index.
 
-This mode is intentionally different from the normal asset browser:
+It:
 
-- it reads the native ComfyUI `user/default/workflows` library
-- it works in both **Flat** and **Tree** modes
-- it searches by workflow filename
-- it does **not** use the asset database
-- it does **not** build browser cache entries for workflows
-- it loads workflow previews directly from the workflow folder
+- reads the native ComfyUI `workflows` library directly
+- does not use the asset database
+- does not build browser cache records for workflows
+- supports `Flat` and `Tree`
+- keeps its own search, sort, and preview-size state
+- searches by workflow filename only
 
 Workflow previews support:
 
-- sidecar image previews with the same filename stem
-- sidecar video previews with the same filename stem
-- `.webp` image previews
-- a clean placeholder with the workflow name when no preview file exists
+- image sidecars with the same filename stem
+- video sidecars with the same filename stem
+- `.webp` preview images
+- a clean placeholder with the workflow name when no preview exists
 
 Workflow actions:
 
-- double click a workflow card to load it into ComfyUI
-- browse workflow folders without affecting asset-folder state
-- keep workflow preview size, sort, and Flat/Tree mode independent from the Assets tab
+- double click or `L` to load the workflow into ComfyUI
+- `D` to download the workflow JSON
+- `X` to send the workflow and its preview sidecars to the system trash
 
-#### Fast cached previews
-
-The browser builds optimized previews and stores them in:
-
-- `ComfyUI/output/.ts_artius_browser/`
-
-That storage includes:
-
-- `db.sqlite`
-- `config.json`
-- cached previews
-- internal runtime files
-
-Preview types:
-
-- image thumbnails
-- video posters
-- audio waveforms
-- 3D thumbnails
-
-### Lightbox viewer
+### Lightbox
 
 #### Images
 
-- full image preview
-- mouse wheel zoom
+- zoom with the mouse wheel
 - pan with left or middle mouse button when zoomed
-- prompt display
-- `Copy Workflow` when workflow exists in PNG metadata
-- open in new tab
-- download
-- delete
+- separate `Prompt` and `Negative Prompt` fields when available
+- `Copy Workflow` button when the PNG contains workflow data
+- open in new tab, download, delete
 
 #### Videos
 
 - inline playback
-- technical metadata in the right panel
-- open in new tab
-- download
-- delete
+- current frame display
+- previous / next frame stepping
+- codec, FPS, duration, bitrate, format, and audio-track info
+- compare mode for `2` or `4` selected videos with one shared transport
 
 #### Audio
 
 - waveform preview
 - playback controls
-- technical metadata in the right panel
-- open in new tab
-- download
-- delete
+- duration, bitrate, codec, and channel layout
 
-#### 3D models
+#### 3D
 
-- native ComfyUI 3D viewer
-- technical info in the right panel
-- download
-- delete
+- native ComfyUI 3D viewer in the lightbox
+- technical model info in the sidebar
+- no fake texture-sheet viewer
 
 ### Quick card actions
 
-Each asset card can show small quick-action buttons:
+Asset cards can show compact action buttons:
 
 - `P` = copy prompt
 - `W` = copy workflow
 - `D` = download
 - `X` = delete
 
-Notes:
+Rules:
 
-- `W` appears only for PNG images that really contain workflow data
-- delete is shown only when that root allows deleting files
+- `W` appears only for PNG images that definitely contain workflow data
+- workflow cards use `L`, `D`, and `X`
+- delete is shown only where the root allows deletion
 
-### Workflow integration
+### Metadata rules
 
-The browser is designed around **drag and drop first**.
+For ComfyUI PNG files:
 
-You can drag assets from the browser directly into the ComfyUI graph.  
-Whenever possible, it uses native nodes:
+- prompt data is read only from the PNG `Prompt` field
+- workflow data is read only from the PNG `Workflow` field
+- positive and negative prompt are split before display
+- if positive and negative prompt are identical, only the positive prompt is shown
+- seed is not stored anymore
 
-- images → `LoadImage`
-- videos → `LoadVideo`
-- audio → `LoadAudio`
-- 3D → `Load 3D & Animation` / `Load3D`
+### Native ComfyUI integration
 
-For 3D assets, files are staged into ComfyUI input storage so the native 3D node can load them the same way as files selected from the node UI.
+The browser is built around native ComfyUI behavior:
 
-### PNG metadata support
+- images -> `LoadImage`
+- videos -> `LoadVideo`
+- audio -> `LoadAudio`
+- 3D -> `Load 3D & Animation` / `Load3D`
+- workflows -> native frontend workflow loading
 
-For ComfyUI PNG files, the browser extracts:
+For 3D assets, files are staged into ComfyUI input storage so native 3D nodes load them the same way as files selected from the node UI.
 
-- prompt text
-- workflow JSON
+### Performance notes
 
-Current behavior is intentionally strict:
+The project is intentionally conservative about performance:
 
-- prompt is read only from the PNG `Prompt` field
-- workflow is read only from the PNG `Workflow` field
-
-### Audio and video metadata
-
-The browser keeps only the metadata it actually needs, which helps indexing stay lighter and faster.
-
-Typical fields include:
-
-- resolution
-- duration
-- bitrate
-- format
-- FPS when available
-
-### Performance approach
-
-This project is built around three priorities:
-
-- ⚡ speed
-- 🧱 stability
-- 🧰 practical workflow integration
-
-Current design choices include:
-
-- SQLite with normalized lookup tables
-- filename-focused search
+- filename-only search
+- compact metadata storage
 - compact preview cache
-- filtered companion previews
-- ignored internal cache folders during scan
-- conservative external tool concurrency
-- virtualized frontend grid rendering
-
-### Optional external tools
-
-Best experience:
-
-- `ffmpeg`
-- `ffprobe`
-
-Used for:
-
-- video frame previews
-- audio waveforms
-- technical video/audio metadata
+- virtualized grid rendering
+- frontend-only workflow browsing
+- frontend-generated true 3D thumbnails, persisted into cache
 
 ### Installation
 
@@ -264,52 +200,25 @@ pip install -r requirements.txt
 4. Restart ComfyUI
 5. Hard refresh with `Ctrl+F5`
 
-### Configuration
+### Runtime storage
 
-Main runtime config:
+Main runtime directory:
 
-- `ComfyUI/output/.ts_artius_browser/config.json`
+- `ComfyUI/output/.ts_artius_browser/`
 
-This file stores things like:
+Important files:
 
-- enabled roots
-- custom roots
-- delete permissions
-- UI state
-- preview settings
-- worker counts
-- autoscan state
-
-### Toolbar overview
-
-The main toolbar includes:
-
-- search
-- asset type filters
-- root selector
-- sort controls
-- flat/tree switch
-- preview size slider
-- autoscan toggle
-- rescan button
-- delete selected button
-
-### Delete behavior
-
-Deleting an asset sends it to the **system trash**:
-
-- Windows → Recycle Bin
-- macOS → Trash
-- Linux → desktop trash where supported
-
-Internal cache files are still cleaned directly when needed.
+- `db.sqlite`
+- `config.json`
+- preview cache files
 
 ### Troubleshooting
 
-#### The browser opens but looks stale
+#### Some previews look stale
 
+- use `Rebuild Cache`
 - restart ComfyUI
-- press `Ctrl+F5`
+- hard refresh with `Ctrl+F5`
 
 #### Video or audio metadata is missing
 
@@ -318,240 +227,68 @@ Check:
 - `ffmpeg`
 - `ffprobe`
 
-#### You want a full reset
+#### You want a complete reset
 
 Delete:
 
 - `ComfyUI/output/.ts_artius_browser/`
 
-Then restart ComfyUI and run a new rescan.
-
-### For contributors
-
-- frontend settings: `js/ts-artius-browser-settings.js`
-- backend settings: `tsab/ts_settings.py`
-- runtime storage: `.ts_artius_browser`
-- the extension currently does **not** add custom workflow nodes
+Then restart ComfyUI and scan again.
 
 ---
 
 <a id="russian"></a>
 ## Русский
 
-### Дружелюбный браузер ассетов для ComfyUI
-
-**Timesaver Artius Browser** — это быстрый sidebar-браузер для файлов, с которыми вы реально работаете в ComfyUI каждый день.  
-Он помогает удобно просматривать, искать, открывать и повторно использовать:
-
-- 🖼️ изображения
-- 🎬 видео
-- 🎵 аудио
-- 🧊 3D-модели
-- 📁 файлы из `input`, `output` и пользовательских папок
-
-Главная идея очень простая: workflow остаётся чистым и удобным, а файлы получают нормальный и быстрый браузер прямо внутри ComfyUI.
-
-### Почему им удобно пользоваться
-
-- ⚡ Быстрый просмотр с кешированными превью
-- 🧭 Режимы `Flat` и `Tree`
-- 🔎 Поиск по имени файла
-- 🏷️ Фильтры по типам ассетов
-- ↕️ Сортировка по дате, имени и размеру
-- 🔍 Настраиваемый размер превью
-- 🖥️ Lightbox viewer для всех поддерживаемых типов
-- 🧲 Drag and drop прямо на canvas ComfyUI
-- 🧠 Извлечение prompt и workflow из PNG
-- 🧩 Нативная интеграция с 3D viewer ComfyUI и `Load 3D & Animation`
-- 🗑️ Удаление в системную корзину
-- 🔄 Переключатель `Autoscan` и ручной `Rescan`
-
-### Поддерживаемые форматы
-
-#### Изображения
-
-- `.png`
-- `.jpg`
-- `.jpeg`
-- `.webp`
-- `.avif`
-
-#### Видео
-
-- `.mp4`
-- `.mov`
-- `.webm`
-- `.prores`
-
-#### Аудио
-
-- `.mp3`
-- `.wav`
-- `.flac`
-- `.opus`
-- `.ogg`
-
-#### 3D
-
-- `.glb`
-- `.obj`
-
-### Основные возможности
-
-#### Просмотр библиотеки
-
-Можно работать с файлами из:
-
-- `ComfyUI/output`
-- `ComfyUI/input`
-- пользовательских root-папок из конфига
-
-Доступные режимы:
-
-- **Flat** — единая лента по выбранному root
-- **Tree** — навигация по дереву папок
-- **All Folders** — просмотр сразу по всем включённым root-папкам
-
-#### Быстрые кешированные превью
-
-Браузер создаёт оптимизированные превью и хранит их в:
-
-- `ComfyUI/output/.ts_artius_browser/`
-
-Там лежат:
-
-- `db.sqlite`
-- `config.json`
-- кеш превью
-- внутренние служебные файлы
-
-Типы превью:
-
-- thumbnails для изображений
-- постеры для видео
-- waveform для аудио
-- thumbnails для 3D
-
-### Просмотр в lightbox
-
-#### Изображения
-
-- полноразмерный просмотр
-- zoom колесом мыши
-- pan левой или средней кнопкой мыши при увеличении
-- показ prompt
-- `Copy Workflow`, если workflow есть в PNG
-- открытие в новой вкладке
-- скачивание
-- удаление
-
-#### Видео
-
-- встроенное воспроизведение
-- техническая метадата в правой панели
-- открытие в новой вкладке
-- скачивание
-- удаление
-
-#### Аудио
-
-- waveform-превью
-- кнопки воспроизведения
-- техническая метадата в правой панели
-- открытие в новой вкладке
-- скачивание
-- удаление
-
-#### 3D-модели
-
-- нативный 3D viewer ComfyUI
-- техническая информация в правой панели
-- скачивание
-- удаление
-
-### Быстрые кнопки на карточках
-
-На карточках ассетов могут быть маленькие action-кнопки:
-
-- `P` = копировать prompt
-- `W` = копировать workflow
-- `D` = скачать файл
-- `X` = удалить
-
-Важно:
-
-- `W` показывается только у PNG, где действительно есть workflow
-- удаление доступно только в тех root-папках, где оно разрешено
-
-### Интеграция с workflow
-
-Браузер изначально рассчитан на **drag and drop**.
-
-Можно перетаскивать ассеты прямо на canvas ComfyUI.  
-По возможности используются родные ноды:
-
-- изображения → `LoadImage`
-- видео → `LoadVideo`
-- аудио → `LoadAudio`
-- 3D → `Load 3D & Animation` / `Load3D`
-
-Для 3D файлы staging-ятся во входное хранилище ComfyUI, чтобы `Load3D` загружал их так же, как если бы вы выбрали модель через интерфейс самой ноды.
-
-### Поддержка PNG metadata
-
-Для PNG из ComfyUI браузер умеет извлекать:
-
-- prompt
-- workflow JSON
-
-Текущее поведение сделано намеренно простым и предсказуемым:
-
-- prompt читается только из поля `Prompt`
-- workflow читается только из поля `Workflow`
-
-### Метаданные видео и аудио
-
-Браузер хранит только те данные, которые реально нужны для работы.  
-Это помогает держать индексирование быстрее, а базу — компактнее.
-
-Обычно это:
-
-- разрешение
-- длительность
-- битрейт
-- формат
-- FPS, если есть
-
-### Подход к производительности
-
-Проект строится вокруг трёх приоритетов:
-
-- ⚡ скорость
-- 🧱 стабильность
-- 🧰 удобная интеграция с workflow
-
-Сейчас для этого используются:
-
-- SQLite с нормализованными lookup-таблицами
-- поиск, ориентированный на filename
-- компактный preview cache
-- фильтрация companion preview-файлов
-- игнорирование внутренних cache-папок при скане
-- аккуратная ограниченная конкуррентность внешних инструментов
-- виртуализированная сетка на фронтенде
-
-### Необязательные внешние инструменты
-
-Лучше всего браузер работает, если доступны:
-
-- `ffmpeg`
-- `ffprobe`
-
-Они используются для:
-
-- кадров-превью видео
-- waveform аудио
-- технической метадаты видео и аудио
+### Что это такое
+
+**Artius Browser** — это быстрый браузер ассетов и workflow прямо внутри sidebar ComfyUI.
+
+Он умеет:
+
+- работать с изображениями, видео, аудио и 3D
+- открывать отдельную вкладку `Workflows`
+- показывать превью и метаданные
+- поддерживать `Flat` и `Tree`
+- перетаскивать ассеты в нативные ноды ComfyUI
+
+### Главное
+
+- у вкладок `Assets` и `Workflows` независимые настройки
+- есть `Autoscan`, `Rescan` и полный `Rebuild Cache`
+- PNG-промт разбирается на `Prompt` и `Negative Prompt`
+- workflow из PNG можно копировать одной кнопкой
+- в лайтбоксе у видео есть покадровая навигация
+- для `2` или `4` выбранных видео есть синхронный режим сравнения
+- 3D открывается через нативный viewer ComfyUI
+- удаление идет в системную корзину, а не навсегда
+
+### Вкладка Assets
+
+- поиск только по имени файла
+- фильтры по типам ассетов
+- выбор root-папки
+- сортировка по дате, имени и размеру
+- переключение `Flat / Tree`
+- слайдер размера превью
+
+### Вкладка Workflows
+
+- читает нативную папку `workflows`
+- не использует asset database
+- не создает cache-записи для workflow
+- поддерживает image/video sidecar preview с тем же именем
+- если превью нет, показывает аккуратный placeholder
+- `L` загружает workflow в ComfyUI
+- `D` скачивает JSON
+- `X` отправляет workflow и его превью в корзину
+
+### Лайтбокс
+
+- изображения: zoom, pan, prompt, negative prompt, `Copy Workflow`
+- видео: плеер, кадр, FPS, кодек, аудиодорожка, compare mode
+- аудио: waveform и техинформация
+- 3D: нативный 3D viewer и информация о модели
 
 ### Установка
 
@@ -562,241 +299,161 @@ Then restart ComfyUI and run a new rescan.
 pip install -r requirements.txt
 ```
 
-3. Убедитесь, что `ffmpeg` и `ffprobe` доступны в системе
+3. Убедитесь, что доступны `ffmpeg` и `ffprobe`
 4. Перезапустите ComfyUI
-5. Сделайте `Ctrl+F5`
-
-### Конфигурация
-
-Основной runtime-конфиг находится здесь:
-
-- `ComfyUI/output/.ts_artius_browser/config.json`
-
-В нём хранятся, например:
-
-- включённые root-папки
-- custom roots
-- права на удаление
-- UI state
-- настройки превью
-- число worker-потоков
-- состояние autoscan
-
-### Что есть в верхнем меню
-
-- поиск
-- фильтры по типам ассетов
-- выбор root-папки
-- сортировка
-- переключатель `Flat / Tree`
-- слайдер размера превью
-- toggle-кнопка `Autoscan`
-- кнопка `Rescan`
-- кнопка `Delete Selected`
-
-### Поведение удаления
-
-При удалении файл отправляется в **системную корзину**:
-
-- Windows → Recycle Bin
-- macOS → Trash
-- Linux → desktop trash, если поддерживается системой
-
-Внутренний кеш браузера при необходимости очищается напрямую.
-
-### Если что-то пошло не так
-
-#### Браузер открылся, но выглядит устаревшим
-
-- перезапустите ComfyUI
-- нажмите `Ctrl+F5`
-
-#### Нет метадаты у видео или аудио
-
-Проверьте:
-
-- `ffmpeg`
-- `ffprobe`
-
-#### Нужен полный сброс
-
-Удалите:
-
-- `ComfyUI/output/.ts_artius_browser/`
-
-После этого перезапустите ComfyUI и сделайте новый `Rescan`.
-
-### Для разработчиков
-
-- frontend settings: `js/ts-artius-browser-settings.js`
-- backend settings: `tsab/ts_settings.py`
-- runtime storage: `.ts_artius_browser`
-- расширение сейчас **не добавляет собственные workflow-ноды**
 
 ---
 
 <a id="spanish"></a>
 ## Español
 
-### Un navegador de assets amable para ComfyUI
+**Artius Browser** es un navegador lateral rápido para ComfyUI con dos secciones: `Assets` y `Workflows`.
 
-**Timesaver Artius Browser** es un navegador lateral rápido para los archivos que usas todos los días en ComfyUI.  
-Te ayuda a explorar, previsualizar, inspeccionar y reutilizar:
+Puntos clave:
 
-- 🖼️ imágenes
-- 🎬 videos
-- 🎵 audio
-- 🧊 modelos 3D
-- 📁 archivos de `input`, `output` y carpetas personalizadas
+- modos `Flat` y `Tree` en ambas pestañas
+- estado guardado por pestaña: búsqueda, orden, tamaño de preview y modo de vista
+- previews cacheadas para imagen, video, audio y 3D
+- workflows leídos directamente desde la carpeta nativa de ComfyUI
+- prompts PNG separados en prompt positivo y negativo
+- lightbox con step por frame para video y comparación sincronizada de `2` o `4` videos
+- integración 3D nativa con `Load 3D & Animation`
+- borrado a la papelera del sistema
 
-La idea es muy simple: mantener el workflow limpio y hacer que los archivos sean fáciles de encontrar y reutilizar.
-
-### Lo más importante
-
-- ⚡ Navegación rápida con vistas previas en caché
-- 🧭 Modos `Flat` y `Tree`
-- 🔎 Búsqueda por nombre de archivo
-- 🏷️ Filtros por tipo de asset
-- ↕️ Orden por fecha, nombre o tamaño
-- 🔍 Tamaño de preview ajustable
-- 🖥️ Visor lightbox para todos los formatos soportados
-- 🧲 Drag and drop directo al canvas de ComfyUI
-- 🧠 Extracción de prompt y workflow desde PNG
-- 🧩 Integración 3D nativa con ComfyUI
-- 🗑️ Eliminación a la papelera del sistema
-- 🔄 `Autoscan` y `Rescan`
-
-### Formatos soportados
-
-- Imágenes: `.png`, `.jpg`, `.jpeg`, `.webp`, `.avif`
-- Video: `.mp4`, `.mov`, `.webm`, `.prores`
-- Audio: `.mp3`, `.wav`, `.flac`, `.opus`, `.ogg`
-- 3D: `.glb`, `.obj`
-
-### Qué puede hacer
-
-- Navegar por `ComfyUI/output`, `ComfyUI/input` y roots personalizados
-- Cambiar entre vista plana y árbol de carpetas
-- Mostrar previews optimizadas de imágenes, video, audio y 3D
-- Abrir assets en un lightbox
-- Copiar prompt y workflow cuando existan
-- Arrastrar archivos al grafo de ComfyUI
-- Cargar modelos 3D con `Load 3D & Animation`
-- Guardar configuración y caché en `.ts_artius_browser`
-
-### Visor lightbox
-
-- Imágenes: zoom, pan, prompt, workflow, abrir en nueva pestaña, descargar, borrar
-- Videos: reproducción, metadatos técnicos, nueva pestaña, descargar, borrar
-- Audio: waveform, controles, metadatos técnicos, nueva pestaña, descargar, borrar
-- 3D: visor 3D nativo, información técnica, descargar, borrar
-
-### Instalación
-
-1. Copia el repositorio en `ComfyUI/custom_nodes/`
-2. Instala dependencias:
+Instalación rápida:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Asegúrate de tener `ffmpeg` y `ffprobe`
-4. Reinicia ComfyUI
-5. Haz un `Ctrl+F5`
-
-### Configuración
-
-Archivo principal:
-
-- `ComfyUI/output/.ts_artius_browser/config.json`
-
-### Herramientas externas opcionales
-
-- `ffmpeg`
-- `ffprobe`
-
-Se usan para previews de video, waveforms de audio y metadatos técnicos.
+Reinicia ComfyUI y asegúrate de tener `ffmpeg` y `ffprobe`.
 
 ---
 
 <a id="chinese"></a>
 ## 中文
 
-### 一个更友好的 ComfyUI 资源浏览器
+**Artius Browser** 是一个面向 ComfyUI 的高性能侧边栏浏览器，包含 `Assets` 和 `Workflows` 两个标签页。
 
-**Timesaver Artius Browser** 是一个为 ComfyUI 工作流设计的快速侧边栏资源浏览器。  
-它可以帮助你更轻松地浏览、预览、检查和重复使用：
+主要功能：
 
-- 🖼️ 图片
-- 🎬 视频
-- 🎵 音频
-- 🧊 3D 模型
-- 📁 来自 `input`、`output` 和自定义目录的文件
+- 两个标签页都支持 `Flat` / `Tree`
+- 每个标签页分别保存搜索、排序、缩略图大小和视图模式
+- 支持图片、视频、音频和 3D 资源预览缓存
+- `Workflows` 直接读取 ComfyUI 原生工作流目录
+- PNG 元数据会区分正向提示词和负向提示词
+- 视频灯箱支持逐帧切换，以及 `2` 或 `4` 个视频同步对比
+- 3D 使用 ComfyUI 原生查看器
+- 删除会进入系统回收站
 
-它的目标很直接：让工作流保持清爽，同时让素材管理更轻松。
-
-### 核心亮点
-
-- ⚡ 快速浏览与缓存预览
-- 🧭 `Flat` 和 `Tree` 两种浏览模式
-- 🔎 按文件名搜索
-- 🏷️ 按资源类型过滤
-- ↕️ 按日期、文件名、大小排序
-- 🔍 可调节预览尺寸
-- 🖥️ 支持所有媒体类型的 lightbox 查看器
-- 🧲 可直接拖拽到 ComfyUI 画布
-- 🧠 支持从 PNG 提取 prompt 和 workflow
-- 🧩 与 ComfyUI 原生 3D 查看器和 `Load 3D & Animation` 集成
-- 🗑️ 删除时发送到系统回收站
-- 🔄 支持 `Autoscan` 和手动 `Rescan`
-
-### 支持的格式
-
-- 图片：`.png`, `.jpg`, `.jpeg`, `.webp`, `.avif`
-- 视频：`.mp4`, `.mov`, `.webm`, `.prores`
-- 音频：`.mp3`, `.wav`, `.flac`, `.opus`, `.ogg`
-- 3D：`.glb`, `.obj`
-
-### 主要功能
-
-- 浏览 `ComfyUI/output`、`ComfyUI/input` 和自定义根目录
-- 在平铺视图与树状视图之间切换
-- 查看图片缩略图、视频海报、音频波形和 3D 缩略图
-- 在 lightbox 中查看资源
-- 复制 prompt 与 workflow
-- 将资源拖拽到 ComfyUI 工作流画布
-- 使用 `Load 3D & Animation` 加载 3D 模型
-- 将缓存与配置保存到 `.ts_artius_browser`
-
-### Lightbox 查看器
-
-- 图片：缩放、拖动、查看 prompt、复制 workflow、在新标签页打开、下载、删除
-- 视频：播放、技术元数据、新标签页打开、下载、删除
-- 音频：波形、播放控件、技术元数据、新标签页打开、下载、删除
-- 3D：原生 3D 查看器、技术信息、下载、删除
-
-### 安装
-
-1. 将此仓库复制到 `ComfyUI/custom_nodes/`
-2. 安装依赖：
+安装：
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. 确保系统中可用 `ffmpeg` 和 `ffprobe`
-4. 重启 ComfyUI
-5. 执行 `Ctrl+F5`
+然后重启 ComfyUI，并确保系统中可用 `ffmpeg` 与 `ffprobe`。
 
-### 配置
+---
 
-主配置文件位于：
+<a id="german"></a>
+## Deutsch
 
-- `ComfyUI/output/.ts_artius_browser/config.json`
+**Artius Browser** ist ein schneller Sidebar-Browser für ComfyUI mit einer `Assets`- und einer `Workflows`-Ansicht.
 
-### 可选外部工具
+Wichtige Funktionen:
 
-- `ffmpeg`
-- `ffprobe`
+- `Flat`- und `Tree`-Modus in beiden Bereichen
+- getrennt gespeicherte Zustände pro Tab
+- kompakter Preview-Cache für Bild, Video, Audio und 3D
+- native Workflow-Bibliothek mit Bild-, Video- und `.webp`-Sidecars
+- getrennte Anzeige von positivem und negativem PNG-Prompt
+- Video-Frame-Stepping und synchroner Vergleich für `2` oder `4` Videos
+- native 3D-Integration mit ComfyUI
+- Löschen in den System-Papierkorb
 
-它们用于视频预览帧、音频波形和技术元数据提取。
+Installation:
+
+```bash
+pip install -r requirements.txt
+```
+
+Danach ComfyUI neu starten und `ffmpeg` sowie `ffprobe` bereitstellen.
+
+---
+
+<a id="italian"></a>
+## Italiano
+
+**Artius Browser** è un browser laterale per ComfyUI pensato per asset reali e workflow reali, senza appesantire l'interfaccia.
+
+In breve:
+
+- schede `Assets` e `Workflows`
+- modalità `Flat` e `Tree`
+- impostazioni salvate in modo indipendente per ogni scheda
+- preview cache per immagini, video, audio e 3D
+- parsing PNG con prompt positivo e negativo separati
+- lightbox video con navigazione frame-by-frame e confronto sincronizzato
+- viewer 3D nativo di ComfyUI
+- eliminazione nel cestino di sistema
+
+Installazione:
+
+```bash
+pip install -r requirements.txt
+```
+
+Riavvia ComfyUI e verifica che `ffmpeg` e `ffprobe` siano disponibili.
+
+---
+
+<a id="french"></a>
+## Français
+
+**Artius Browser** est un navigateur latéral pour ComfyUI conçu pour rester rapide, lisible et pratique même avec de grosses bibliothèques.
+
+Fonctions principales :
+
+- onglets `Assets` et `Workflows`
+- modes `Flat` et `Tree`
+- état mémorisé indépendamment pour chaque onglet
+- cache de previews pour image, vidéo, audio et 3D
+- extraction PNG avec `Prompt` et `Negative Prompt` séparés
+- navigation vidéo image par image et mode comparaison synchronisé
+- intégration 3D native avec ComfyUI
+- suppression vers la corbeille système
+
+Installation :
+
+```bash
+pip install -r requirements.txt
+```
+
+Redémarrez ensuite ComfyUI et assurez-vous que `ffmpeg` et `ffprobe` sont disponibles.
+
+---
+
+<a id="portuguese"></a>
+## Português
+
+**Artius Browser** é um navegador lateral para ComfyUI focado em velocidade, estabilidade e integração nativa com o fluxo de trabalho do Comfy.
+
+Resumo:
+
+- abas `Assets` e `Workflows`
+- modos `Flat` e `Tree`
+- estado salvo por aba
+- previews otimizadas para imagem, vídeo, áudio e 3D
+- leitura de prompt positivo e negativo em PNG
+- lightbox com avanço quadro a quadro e comparação sincronizada de vídeos
+- viewer 3D nativo do ComfyUI
+- exclusão para a lixeira do sistema
+
+Instalação:
+
+```bash
+pip install -r requirements.txt
+```
+
+Depois reinicie o ComfyUI e garanta que `ffmpeg` e `ffprobe` estejam disponíveis.

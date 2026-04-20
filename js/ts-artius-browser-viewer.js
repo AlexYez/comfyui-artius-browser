@@ -47,6 +47,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsMoreRequestPromise = null;
         this.tsStageCleanup = null;
         this.tsVideoFrameStepper = null;
+        this.tsCompareItems = [];
         this.tsDetailRequestToken = 0;
         this.tsBoundKeydown = (tsEvent) => this.tsHandleKeydown(tsEvent);
         this.attachShadow({ mode: "open" });
@@ -91,6 +92,46 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 .ts-viewer[data-open="true"] {
                     display: grid;
                     grid-template-rows: auto 1fr auto;
+                }
+                .ts-viewer[data-compare="true"] {
+                    grid-template-rows: 1fr;
+                }
+                .ts-viewer[data-compare="true"] .ts-head,
+                .ts-viewer[data-compare="true"] .ts-meta {
+                    display: none;
+                }
+                .ts-viewer[data-compare="true"] .ts-body {
+                    grid-template-columns: minmax(0, 1fr);
+                    min-height: 100dvh;
+                }
+                .ts-viewer[data-compare="true"] .ts-stage-wrap {
+                    min-height: 100dvh;
+                }
+                .ts-viewer[data-compare="true"] .ts-stage {
+                    align-items: stretch;
+                    padding: 8px 14px 10px;
+                }
+                .ts-compare-close {
+                    position: absolute;
+                    top: 14px;
+                    right: 16px;
+                    z-index: 3;
+                    display: none;
+                    align-items: center;
+                    justify-content: center;
+                    width: 46px;
+                    min-width: 46px;
+                    height: 46px;
+                    min-height: 46px;
+                    padding: 0;
+                    border-radius: 14px;
+                    font-size: 26px;
+                    line-height: 1;
+                    background: color-mix(in srgb, var(--ts-bg-0) 84%, transparent);
+                    backdrop-filter: blur(6px);
+                }
+                .ts-viewer[data-compare="true"] .ts-compare-close {
+                    display: flex;
                 }
                 .ts-head {
                     display: flex;
@@ -314,6 +355,96 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     color: var(--ts-text);
                     word-break: break-word;
                 }
+                .ts-video-compare-shell {
+                    width: min(100%, 1560px);
+                    margin: 0 auto;
+                    display: grid;
+                    gap: 8px;
+                    align-items: center;
+                    justify-self: stretch;
+                }
+                .ts-video-compare-grid {
+                    display: grid;
+                    gap: 8px;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+                .ts-video-compare-shell[data-count="2"] .ts-video-compare-grid {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+                .ts-video-compare-shell[data-count="4"] .ts-video-compare-grid {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+                .ts-video-compare-card {
+                    display: grid;
+                    gap: 4px;
+                    min-width: 0;
+                }
+                .ts-video-compare-card[data-primary="true"] .ts-video-compare-label {
+                    border-color: var(--ts-accent);
+                }
+                .ts-video-compare-label {
+                    padding: 4px 8px;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 10px;
+                    background: var(--ts-surface-ghost);
+                    color: var(--ts-text);
+                    width: fit-content;
+                    max-width: 100%;
+                    justify-self: center;
+                    font: 600 9px/1.2 inherit;
+                    text-align: center;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .ts-video-compare-video {
+                    width: 100%;
+                    max-height: min(78vh, calc(100dvh - 120px));
+                    justify-self: center;
+                }
+                .ts-video-compare-shell[data-count="2"] .ts-video-compare-video {
+                    max-height: min(78vh, calc(100dvh - 120px));
+                }
+                .ts-video-compare-shell[data-count="4"] .ts-video-compare-video {
+                    max-height: min(35vh, calc((100dvh - 160px) / 2));
+                }
+                .ts-video-compare-controls {
+                    width: min(100%, 1040px);
+                    margin: 0 auto;
+                    display: grid;
+                    gap: 6px;
+                }
+                .ts-video-transport {
+                    display: grid;
+                    grid-template-columns: auto minmax(0, 1fr) auto;
+                    gap: 6px;
+                    align-items: center;
+                }
+                .ts-video-play-toggle {
+                    min-height: 30px;
+                    min-width: 82px;
+                    padding: 5px 10px;
+                    font-size: 11px;
+                }
+                .ts-video-seek {
+                    width: 100%;
+                    margin: 0;
+                    accent-color: var(--ts-accent);
+                }
+                .ts-video-time {
+                    min-width: 96px;
+                    text-align: right;
+                    color: var(--ts-text-muted);
+                    font: 500 11px/1.3 inherit;
+                    white-space: nowrap;
+                }
+                .ts-video-stepper {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 6px;
+                    flex-wrap: wrap;
+                }
                 .ts-video-shell {
                     width: min(100%, 1180px);
                     margin: 0 auto;
@@ -411,6 +542,23 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     display: none;
                 }
                 @media (max-width: 1080px) {
+                    .ts-video-compare-grid {
+                        grid-template-columns: minmax(0, 1fr);
+                    }
+                    .ts-video-compare-video,
+                    .ts-video-compare-shell[data-count="4"] .ts-video-compare-video {
+                        max-height: min(32vh, calc(100dvh - 320px));
+                    }
+                    .ts-video-transport {
+                        grid-template-columns: minmax(0, 1fr);
+                    }
+                    .ts-video-play-toggle {
+                        justify-self: stretch;
+                    }
+                    .ts-video-time {
+                        min-width: 0;
+                        text-align: center;
+                    }
                     .ts-body {
                         grid-template-columns: 1fr;
                     }
@@ -439,6 +587,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 </div>
                 <div class="ts-body">
                     <div class="ts-stage-wrap">
+                        <button class="ts-compare-close" type="button" aria-label="Close">&times;</button>
                         <button class="ts-stage-nav ts-stage-nav-prev" type="button" aria-label="Previous">&#8249;</button>
                         <div class="ts-stage"></div>
                         <button class="ts-stage-nav ts-stage-nav-next" type="button" aria-label="Next">&#8250;</button>
@@ -457,6 +606,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsOpenInNewTabButton: this.shadowRoot.querySelector(".ts-open-new-tab"),
             tsDeleteButton: this.shadowRoot.querySelector(".ts-delete"),
             tsCloseButton: this.shadowRoot.querySelector(".ts-close"),
+            tsCompareCloseButton: this.shadowRoot.querySelector(".ts-compare-close"),
             tsPrevButton: this.shadowRoot.querySelector(".ts-stage-nav-prev"),
             tsNextButton: this.shadowRoot.querySelector(".ts-stage-nav-next"),
         };
@@ -467,6 +617,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsRefs.tsOpenInNewTabButton.addEventListener("click", () => this.tsOpenInNewTabCurrent());
         this.tsRefs.tsDeleteButton.addEventListener("click", () => void this.tsDeleteCurrent());
         this.tsRefs.tsCloseButton.addEventListener("click", () => this.tsClose());
+        this.tsRefs.tsCompareCloseButton.addEventListener("click", () => this.tsClose());
         this.tsRefs.tsPrevButton.addEventListener("click", () => void this.tsNavigate(-1));
         this.tsRefs.tsNextButton.addEventListener("click", () => void this.tsNavigate(1));
         this.tsRefs.tsRoot.addEventListener("click", (tsEvent) => {
@@ -518,6 +669,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsGetItems = typeof tsOptions?.tsGetItems === "function" ? tsOptions.tsGetItems : null;
         this.tsRequestMore = typeof tsOptions?.tsRequestMore === "function" ? tsOptions.tsRequestMore : null;
         this.tsCanLoadMore = typeof tsOptions?.tsCanLoadMore === "function" ? tsOptions.tsCanLoadMore : null;
+        this.tsCompareItems = Array.isArray(tsOptions?.tsCompareItems) ? [...tsOptions.tsCompareItems] : [];
         this.tsMoreRequestPromise = null;
         window.addEventListener("keydown", this.tsBoundKeydown);
         this.tsRender();
@@ -534,6 +686,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsRequestMore = null;
         this.tsCanLoadMore = null;
         this.tsMoreRequestPromise = null;
+        this.tsCompareItems = [];
         window.removeEventListener("keydown", this.tsBoundKeydown);
         this.tsRender();
     }
@@ -551,6 +704,15 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsDetailRequestToken = 0;
     }
 
+    tsIsVideoCompareMode() {
+        const tsAsset = this.tsIndex >= 0 ? this.tsItems[this.tsIndex] : null;
+        return Boolean(
+            tsAsset?.type === "video"
+            && Array.isArray(this.tsCompareItems)
+            && (this.tsCompareItems.length === 2 || this.tsCompareItems.length === 4),
+        );
+    }
+
     tsHandleKeydown(tsEvent) {
         if (this.tsIndex < 0) {
             return;
@@ -560,25 +722,36 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             this.tsClose();
             return;
         }
+        const tsCompareMode = this.tsIsVideoCompareMode();
         if (tsEvent.key === "ArrowLeft") {
-            tsEvent.preventDefault();
-            void this.tsNavigate(-1);
+            if (this.tsItems[this.tsIndex]?.type === "video" && tsCompareMode && typeof this.tsVideoFrameStepper === "function") {
+                tsEvent.preventDefault();
+                this.tsVideoFrameStepper(-1);
+            } else if (!tsCompareMode) {
+                tsEvent.preventDefault();
+                void this.tsNavigate(-1);
+            }
             return;
         }
         if (tsEvent.key === "ArrowRight") {
-            tsEvent.preventDefault();
-            void this.tsNavigate(1);
+            if (this.tsItems[this.tsIndex]?.type === "video" && tsCompareMode && typeof this.tsVideoFrameStepper === "function") {
+                tsEvent.preventDefault();
+                this.tsVideoFrameStepper(1);
+            } else if (!tsCompareMode) {
+                tsEvent.preventDefault();
+                void this.tsNavigate(1);
+            }
             return;
         }
         if (tsEvent.key === "ArrowUp") {
-            if (this.tsItems[this.tsIndex]?.type === "video" && typeof this.tsVideoFrameStepper === "function") {
+            if (!tsCompareMode && this.tsItems[this.tsIndex]?.type === "video" && typeof this.tsVideoFrameStepper === "function") {
                 tsEvent.preventDefault();
                 this.tsVideoFrameStepper(-1);
             }
             return;
         }
         if (tsEvent.key === "ArrowDown") {
-            if (this.tsItems[this.tsIndex]?.type === "video" && typeof this.tsVideoFrameStepper === "function") {
+            if (!tsCompareMode && this.tsItems[this.tsIndex]?.type === "video" && typeof this.tsVideoFrameStepper === "function") {
                 tsEvent.preventDefault();
                 this.tsVideoFrameStepper(1);
             }
@@ -663,7 +836,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         }
         this.tsIndex = tsNextIndex;
         if (typeof this.tsOnChange === "function") {
-            this.tsOnChange(this.tsIndex);
+            this.tsOnChange(this.tsIndex, this.tsItems[this.tsIndex] || null);
         }
         this.tsRender();
         void this.tsEnsureAssetDetail(this.tsIndex);
@@ -682,6 +855,8 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsField = tsButton.dataset.copyField;
         const tsValue = tsField === "workflow"
             ? tsAsset.workflow_text
+            : tsField === "negative_prompt"
+                ? tsAsset.negative_prompt_text
             : tsAsset.prompt_text;
         if (tsValue) {
             await tsCopyText(tsValue);
@@ -712,6 +887,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsNextIndexHint = Math.max(0, Math.min(this.tsIndex, this.tsItems.length - 2));
         await tsDeleteAssetIds([tsDeletedAssetId]);
         this.tsItems = this.tsItems.filter((tsItem) => tsItem.id !== tsDeletedAssetId);
+        this.tsCompareItems = this.tsCompareItems.filter((tsItem) => tsItem.id !== tsDeletedAssetId);
         if (typeof this.tsGetItems === "function") {
             window.setTimeout(() => {
                 const tsNextAssetId = this.tsItems[Math.max(0, Math.min(tsNextIndexHint, this.tsItems.length - 1))]?.id ?? null;
@@ -722,7 +898,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     }
                     this.tsIndex = Math.max(0, Math.min(this.tsIndex, this.tsItems.length - 1));
                     if (typeof this.tsOnChange === "function") {
-                        this.tsOnChange(this.tsIndex);
+                        this.tsOnChange(this.tsIndex, this.tsItems[this.tsIndex] || null);
                     }
                     this.tsRender();
                     void this.tsEnsureAssetDetail(this.tsIndex);
@@ -735,7 +911,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         }
         this.tsIndex = Math.max(0, Math.min(tsNextIndexHint, this.tsItems.length - 1));
         if (typeof this.tsOnChange === "function") {
-            this.tsOnChange(this.tsIndex);
+            this.tsOnChange(this.tsIndex, this.tsItems[this.tsIndex] || null);
         }
         this.tsRender();
         void this.tsEnsureAssetDetail(this.tsIndex);
@@ -754,8 +930,36 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         return this.tsBuildPromptSeedMetaMarkup(tsAsset);
     }
 
+    tsBuildPromptMetaBlock(tsTitle, tsField, tsText, tsEmptyText) {
+        const tsResolvedText = tsText || tsEmptyText;
+        return `
+            <div class="ts-meta-block">
+                <div class="ts-meta-row">
+                    <h4>${this.tsEscapeHTML(tsTitle)}</h4>
+                    <button class="ts-meta-copy" type="button" data-copy-field="${this.tsEscapeAttribute(tsField)}" ${tsText ? "" : "disabled"}>${this.tsT("button.copy", "Copy")}</button>
+                </div>
+                <div class="ts-prompt">${this.tsEscapeHTML(tsResolvedText)}</div>
+            </div>
+        `;
+    }
+
     tsBuildImageMetaMarkup(tsAsset) {
-        const tsPromptText = tsAsset.prompt_text || this.tsT("meta.noPrompt", "No prompt metadata found.");
+        const tsPromptText = tsAsset.prompt_text || "";
+        const tsNegativePromptText = tsAsset.negative_prompt_text || "";
+        const tsPositivePromptMarkup = this.tsBuildPromptMetaBlock(
+            this.tsT("meta.positivePrompt", "Positive Prompt"),
+            "prompt",
+            tsPromptText,
+            this.tsT("meta.noPrompt", "No prompt metadata found."),
+        );
+        const tsNegativePromptMarkup = tsNegativePromptText
+            ? this.tsBuildPromptMetaBlock(
+                this.tsT("meta.negativePrompt", "Negative Prompt"),
+                "negative_prompt",
+                tsNegativePromptText,
+                "",
+            )
+            : "";
         const tsWorkflowButtonMarkup = tsAsset.workflow_text
             ? `
                 <div class="ts-meta-block">
@@ -767,13 +971,8 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             `
             : "";
         return `
-            <div class="ts-meta-block">
-                <div class="ts-meta-row">
-                    <h4>${this.tsT("meta.prompt", "Prompt")}</h4>
-                    <button class="ts-meta-copy" type="button" data-copy-field="prompt" ${tsAsset.prompt_text ? "" : "disabled"}>${this.tsT("button.copy", "Copy")}</button>
-                </div>
-                <div class="ts-prompt">${this.tsEscapeHTML(tsPromptText)}</div>
-            </div>
+            ${tsPositivePromptMarkup}
+            ${tsNegativePromptMarkup}
             ${tsWorkflowButtonMarkup}
         `;
     }
@@ -912,6 +1111,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsRefs.tsNextButton.title = this.tsT("button.next", "Next");
         if (!tsIsOpen) {
             this.tsTeardownStage();
+            this.tsRefs.tsRoot.dataset.compare = "false";
             this.tsRefs.tsTitle.textContent = "";
             this.tsRefs.tsSubtitle.textContent = "";
             delete this.tsRefs.tsStage.dataset.kind;
@@ -924,14 +1124,18 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsRefs.tsTitle.textContent = tsAsset.filename || "Asset";
         this.tsRefs.tsSubtitle.textContent = `${tsAsset.root_label || tsAsset.root_id || ""}${tsAsset.folder_path ? ` / ${tsAsset.folder_path}` : ""}`;
         this.tsRefs.tsStage.dataset.kind = tsAsset.type || "";
+        const tsCompareMode = this.tsIsVideoCompareMode();
+        this.tsRefs.tsRoot.dataset.compare = String(tsCompareMode);
         this.tsRefs.tsOpenInNewTabButton.hidden = tsAsset.type === "3d";
         this.tsRefs.tsDeleteButton.disabled = !tsAsset.allow_delete;
         this.tsRefs.tsStage.innerHTML = this.tsBuildStageMarkup(tsAsset);
         this.tsRefs.tsMeta.innerHTML = this.tsBuildMetaMarkup(tsAsset);
-        this.tsRefs.tsPrevButton.disabled = this.tsIndex <= 0;
-        this.tsRefs.tsNextButton.disabled = this.tsIndex >= this.tsItems.length - 1
+        this.tsRefs.tsPrevButton.hidden = tsCompareMode;
+        this.tsRefs.tsNextButton.hidden = tsCompareMode;
+        this.tsRefs.tsPrevButton.disabled = tsCompareMode || this.tsIndex <= 0;
+        this.tsRefs.tsNextButton.disabled = tsCompareMode || (this.tsIndex >= this.tsItems.length - 1
             && !(typeof this.tsCanLoadMore === "function" && this.tsCanLoadMore())
-            && !this.tsMoreRequestPromise;
+            && !this.tsMoreRequestPromise);
         this.tsBindStageInteractions(tsAsset);
     }
 
@@ -945,7 +1149,9 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return;
         }
         if (tsAsset.type === "video") {
-            this.tsStageCleanup = this.tsSetupVideoStage(tsAsset);
+            this.tsStageCleanup = this.tsIsVideoCompareMode()
+                ? this.tsSetupVideoCompareStage(tsAsset)
+                : this.tsSetupVideoStage(tsAsset);
             return;
         }
         if (tsAsset.type === "3d") {
@@ -954,6 +1160,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         }
         this.tsStageCleanup = null;
         this.tsVideoFrameStepper = null;
+        this.tsCompareItems = [];
         this.tsDetailRequestToken = 0;
     }
 
@@ -1049,6 +1256,284 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsVideo.removeEventListener("play", tsHandlePlay);
             tsVideo.removeEventListener("ended", tsHandlePause);
             tsVideo.pause();
+        };
+    }
+
+    tsSetupVideoCompareStage(tsAsset) {
+        const tsStage = this.tsRefs.tsStage;
+        const tsVideos = Array.from(tsStage?.querySelectorAll(".ts-compare-video") || []);
+        const tsPlayToggleButton = tsStage?.querySelector(".ts-video-play-toggle");
+        const tsSeekInput = tsStage?.querySelector(".ts-video-seek");
+        const tsTimeLabel = tsStage?.querySelector(".ts-video-time");
+        const tsPrevFrameButton = tsStage?.querySelector(".ts-video-prev-frame");
+        const tsNextFrameButton = tsStage?.querySelector(".ts-video-next-frame");
+        const tsFrameLabel = tsStage?.querySelector(".ts-video-frame");
+        if (
+            !tsStage
+            || tsVideos.length < 2
+            || !tsPlayToggleButton
+            || !tsSeekInput
+            || !tsTimeLabel
+            || !tsPrevFrameButton
+            || !tsNextFrameButton
+            || !tsFrameLabel
+        ) {
+            this.tsVideoFrameStepper = null;
+            return null;
+        }
+
+        const tsPrimaryVideo = tsVideos.find((tsVideo) => tsVideo.dataset.primary === "true") || tsVideos[0];
+        const tsSyncThreshold = 0.05;
+        let tsAnimationFrameId = 0;
+        let tsSyncing = false;
+        let tsSeekDragging = false;
+        let tsResumeAfterSeek = false;
+
+        tsVideos.forEach((tsVideo) => {
+            tsVideo.controls = false;
+            tsVideo.muted = tsVideo !== tsPrimaryVideo;
+        });
+
+        const tsResolveFPS = () => {
+            const tsFPS = Number(tsAsset?.technical_info?.fps || tsAsset?.fps || 0);
+            return Number.isFinite(tsFPS) && tsFPS > 0 ? tsFPS : 30;
+        };
+        const tsFormatFrameText = (tsCurrentTime = Number(tsPrimaryVideo.currentTime || 0)) => {
+            const tsFPS = tsResolveFPS();
+            const tsFrameIndex = Math.max(0, Math.round(Math.max(0, Number(tsCurrentTime) || 0) * tsFPS));
+            return `${this.tsT("label.currentFrame", "Frame")} ${tsFrameIndex}`;
+        };
+        const tsGetDuration = () => {
+            const tsDuration = Number(tsPrimaryVideo.duration || 0);
+            return Number.isFinite(tsDuration) && tsDuration > 0 ? tsDuration : 0;
+        };
+        const tsClampVideoTime = (tsVideo, tsTargetTime, tsFrameDuration = 0) => {
+            const tsDuration = Number(tsVideo.duration || 0);
+            if (!Number.isFinite(tsDuration) || tsDuration <= 0) {
+                return Math.max(0, Number(tsTargetTime) || 0);
+            }
+            const tsMaxTime = Math.max(0, tsDuration - Math.max(0, tsFrameDuration / 2));
+            return Math.max(0, Math.min(tsMaxTime, Number(tsTargetTime) || 0));
+        };
+        const tsSetAllCurrentTimes = (tsTargetTime, tsFrameDuration = 0) => {
+            tsSyncing = true;
+            try {
+                tsVideos.forEach((tsVideo) => {
+                    try {
+                        tsVideo.currentTime = tsClampVideoTime(tsVideo, tsTargetTime, tsFrameDuration);
+                    } catch {
+                        // no-op
+                    }
+                });
+            } finally {
+                tsSyncing = false;
+            }
+        };
+        const tsSyncOtherVideos = (tsForce = false) => {
+            if (tsSyncing) {
+                return;
+            }
+            const tsCurrentTime = Math.max(0, Number(tsPrimaryVideo.currentTime || 0));
+            const tsPlaybackRate = Number(tsPrimaryVideo.playbackRate || 1) || 1;
+            tsSyncing = true;
+            try {
+                tsVideos.forEach((tsVideo) => {
+                    if (tsVideo === tsPrimaryVideo) {
+                        return;
+                    }
+                    if (Math.abs((Number(tsVideo.playbackRate || 1) || 1) - tsPlaybackRate) > 0.001) {
+                        tsVideo.playbackRate = tsPlaybackRate;
+                    }
+                    if (tsForce || Math.abs(Number(tsVideo.currentTime || 0) - tsCurrentTime) > tsSyncThreshold) {
+                        try {
+                            tsVideo.currentTime = tsClampVideoTime(tsVideo, tsCurrentTime);
+                        } catch {
+                            // no-op
+                        }
+                    }
+                });
+            } finally {
+                tsSyncing = false;
+            }
+        };
+        const tsUpdateTransport = () => {
+            const tsDuration = tsGetDuration();
+            const tsCurrentTime = Math.max(0, Number(tsPrimaryVideo.currentTime || 0));
+            tsPlayToggleButton.textContent = tsPrimaryVideo.paused ? this.tsT("button.play", "Play") : this.tsT("button.pause", "Pause");
+            tsTimeLabel.textContent = `${tsFormatTime(tsCurrentTime)} / ${tsFormatTime(tsDuration)}`;
+            tsFrameLabel.textContent = tsFormatFrameText(tsCurrentTime);
+            tsSeekInput.max = String(Math.max(0, tsDuration));
+            tsSeekInput.disabled = tsDuration <= 0;
+            if (!tsSeekDragging) {
+                tsSeekInput.value = String(tsDuration > 0 ? Math.min(tsDuration, tsCurrentTime) : 0);
+            }
+        };
+        const tsStopTicker = () => {
+            if (tsAnimationFrameId) {
+                window.cancelAnimationFrame(tsAnimationFrameId);
+                tsAnimationFrameId = 0;
+            }
+        };
+        const tsTick = () => {
+            tsSyncOtherVideos(false);
+            tsUpdateTransport();
+            if (!tsPrimaryVideo.paused && !tsPrimaryVideo.ended) {
+                tsAnimationFrameId = window.requestAnimationFrame(tsTick);
+            } else {
+                tsAnimationFrameId = 0;
+            }
+        };
+        const tsStartTicker = () => {
+            if (!tsAnimationFrameId) {
+                tsAnimationFrameId = window.requestAnimationFrame(tsTick);
+            }
+        };
+        const tsPauseAll = (tsForceSync = true) => {
+            tsVideos.forEach((tsVideo) => tsVideo.pause());
+            if (tsForceSync) {
+                tsSyncOtherVideos(true);
+            }
+            tsStopTicker();
+            tsUpdateTransport();
+        };
+        const tsPlayAll = () => {
+            tsSyncOtherVideos(true);
+            const tsPlaybackRate = Number(tsPrimaryVideo.playbackRate || 1) || 1;
+            const tsPlayPromises = tsVideos.map((tsVideo) => {
+                tsVideo.playbackRate = tsPlaybackRate;
+                const tsPlayPromise = tsVideo.play();
+                if (tsPlayPromise && typeof tsPlayPromise.catch === "function") {
+                    return tsPlayPromise.catch(() => {});
+                }
+                return Promise.resolve();
+            });
+            tsStartTicker();
+            void Promise.all(tsPlayPromises).finally(() => {
+                tsUpdateTransport();
+            });
+        };
+        const tsHandleTogglePlay = () => {
+            if (tsPrimaryVideo.paused) {
+                tsPlayAll();
+                return;
+            }
+            tsPauseAll(true);
+        };
+        const tsHandleSeekPointerDown = () => {
+            tsSeekDragging = true;
+            tsResumeAfterSeek = !tsPrimaryVideo.paused;
+            if (tsResumeAfterSeek) {
+                tsPauseAll(false);
+            }
+        };
+        const tsHandleSeekInput = () => {
+            const tsNextTime = Math.max(0, Number(tsSeekInput.value || 0));
+            tsSetAllCurrentTimes(tsNextTime);
+            tsUpdateTransport();
+        };
+        const tsHandleSeekCommit = () => {
+            tsSeekDragging = false;
+            tsSyncOtherVideos(true);
+            tsUpdateTransport();
+            if (tsResumeAfterSeek) {
+                tsResumeAfterSeek = false;
+                tsPlayAll();
+            }
+        };
+        const tsStepFrame = (tsDirection) => {
+            const tsFPS = tsResolveFPS();
+            const tsFrameDuration = 1 / tsFPS;
+            const tsTargetTime = Math.max(
+                0,
+                tsClampVideoTime(
+                    tsPrimaryVideo,
+                    Number(tsPrimaryVideo.currentTime || 0) + (tsDirection >= 0 ? tsFrameDuration : -tsFrameDuration),
+                    tsFrameDuration,
+                ),
+            );
+            tsPauseAll(false);
+            tsSetAllCurrentTimes(tsTargetTime, tsFrameDuration);
+            tsUpdateTransport();
+        };
+        const tsHandlePrimaryLoadedMetadata = () => tsUpdateTransport();
+        const tsHandlePrimaryDurationChange = () => tsUpdateTransport();
+        const tsHandlePrimaryTimeUpdate = () => {
+            if (!tsSeekDragging) {
+                tsSyncOtherVideos(false);
+            }
+            tsUpdateTransport();
+        };
+        const tsHandlePrimarySeeked = () => {
+            if (!tsSeekDragging) {
+                tsSyncOtherVideos(true);
+            }
+            tsUpdateTransport();
+        };
+        const tsHandlePrimaryPlay = () => {
+            tsStartTicker();
+            tsUpdateTransport();
+        };
+        const tsHandlePrimaryPause = () => {
+            if (!tsSeekDragging) {
+                tsSyncOtherVideos(true);
+            }
+            tsStopTicker();
+            tsUpdateTransport();
+        };
+        const tsHandlePrimaryEnded = () => {
+            tsPauseAll(true);
+        };
+        const tsHandlePrimaryRateChange = () => {
+            tsSyncOtherVideos(true);
+            tsUpdateTransport();
+        };
+        const tsHandlePrevFrame = () => tsStepFrame(-1);
+        const tsHandleNextFrame = () => tsStepFrame(1);
+
+        this.tsVideoFrameStepper = tsStepFrame;
+        tsPlayToggleButton.addEventListener("click", tsHandleTogglePlay);
+        tsSeekInput.addEventListener("pointerdown", tsHandleSeekPointerDown);
+        tsSeekInput.addEventListener("pointerup", tsHandleSeekCommit);
+        tsSeekInput.addEventListener("pointercancel", tsHandleSeekCommit);
+        tsSeekInput.addEventListener("input", tsHandleSeekInput);
+        tsSeekInput.addEventListener("change", tsHandleSeekCommit);
+        tsPrevFrameButton.addEventListener("click", tsHandlePrevFrame);
+        tsNextFrameButton.addEventListener("click", tsHandleNextFrame);
+        tsPrimaryVideo.addEventListener("loadedmetadata", tsHandlePrimaryLoadedMetadata);
+        tsPrimaryVideo.addEventListener("durationchange", tsHandlePrimaryDurationChange);
+        tsPrimaryVideo.addEventListener("timeupdate", tsHandlePrimaryTimeUpdate);
+        tsPrimaryVideo.addEventListener("seeked", tsHandlePrimarySeeked);
+        tsPrimaryVideo.addEventListener("play", tsHandlePrimaryPlay);
+        tsPrimaryVideo.addEventListener("pause", tsHandlePrimaryPause);
+        tsPrimaryVideo.addEventListener("ended", tsHandlePrimaryEnded);
+        tsPrimaryVideo.addEventListener("ratechange", tsHandlePrimaryRateChange);
+        tsUpdateTransport();
+        if (!tsPrimaryVideo.paused && !tsPrimaryVideo.ended) {
+            tsStartTicker();
+        }
+
+        return () => {
+            tsStopTicker();
+            this.tsVideoFrameStepper = null;
+            tsPlayToggleButton.removeEventListener("click", tsHandleTogglePlay);
+            tsSeekInput.removeEventListener("pointerdown", tsHandleSeekPointerDown);
+            tsSeekInput.removeEventListener("pointerup", tsHandleSeekCommit);
+            tsSeekInput.removeEventListener("pointercancel", tsHandleSeekCommit);
+            tsSeekInput.removeEventListener("input", tsHandleSeekInput);
+            tsSeekInput.removeEventListener("change", tsHandleSeekCommit);
+            tsPrevFrameButton.removeEventListener("click", tsHandlePrevFrame);
+            tsNextFrameButton.removeEventListener("click", tsHandleNextFrame);
+            tsPrimaryVideo.removeEventListener("loadedmetadata", tsHandlePrimaryLoadedMetadata);
+            tsPrimaryVideo.removeEventListener("durationchange", tsHandlePrimaryDurationChange);
+            tsPrimaryVideo.removeEventListener("timeupdate", tsHandlePrimaryTimeUpdate);
+            tsPrimaryVideo.removeEventListener("seeked", tsHandlePrimarySeeked);
+            tsPrimaryVideo.removeEventListener("play", tsHandlePrimaryPlay);
+            tsPrimaryVideo.removeEventListener("pause", tsHandlePrimaryPause);
+            tsPrimaryVideo.removeEventListener("ended", tsHandlePrimaryEnded);
+            tsPrimaryVideo.removeEventListener("ratechange", tsHandlePrimaryRateChange);
+            tsVideos.forEach((tsVideo) => {
+                tsVideo.pause();
+            });
         };
     }
 
@@ -1442,6 +1927,37 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return `<img src="${tsFileURL}" alt="${this.tsEscapeAttribute(tsAsset.filename || "asset")}">`;
         }
         if (tsAsset.type === "video") {
+            if (this.tsIsVideoCompareMode()) {
+                const tsCompareItems = this.tsCompareItems.slice(0, 4);
+                return `
+                    <div class="ts-video-compare-shell" data-count="${tsCompareItems.length}">
+                        <div class="ts-video-compare-grid">
+                            ${tsCompareItems.map((tsCompareItem) => {
+                                const tsCompareURL = tsApiURL(tsCompareItem.file_url);
+                                const tsPrimary = tsCompareItem.id === tsAsset.id;
+                                return `
+                                    <div class="ts-video-compare-card" data-primary="${String(tsPrimary)}">
+                                        <div class="ts-video-compare-label" title="${this.tsEscapeAttribute(tsCompareItem.filename || "video")}">${this.tsEscapeHTML(tsCompareItem.filename || "Video")}</div>
+                                        <video class="ts-video-compare-video ts-compare-video" data-primary="${String(tsPrimary)}" src="${tsCompareURL}" ${tsPrimary ? "" : "muted"} playsinline preload="metadata"></video>
+                                    </div>
+                                `;
+                            }).join("")}
+                        </div>
+                        <div class="ts-video-compare-controls">
+                            <div class="ts-video-transport">
+                                <button class="ts-video-play-toggle" type="button">${this.tsT("button.play", "Play")}</button>
+                                <input class="ts-video-seek" type="range" min="0" max="0" step="0.001" value="0">
+                                <div class="ts-video-time">0:00 / 0:00</div>
+                            </div>
+                            <div class="ts-video-stepper">
+                                <button class="ts-video-step ts-video-prev-frame" type="button">${this.tsT("button.prevFrame", "Previous Frame")}</button>
+                                <div class="ts-video-frame">${this.tsT("label.currentFrame", "Frame")} 0</div>
+                                <button class="ts-video-step ts-video-next-frame" type="button">${this.tsT("button.nextFrame", "Next Frame")}</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
             return `
                 <div class="ts-video-shell">
                     <video src="${tsFileURL}" controls autoplay playsinline></video>

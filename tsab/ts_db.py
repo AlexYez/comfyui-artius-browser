@@ -226,6 +226,27 @@ class TSDatabase:
             ts_connection.execute(f"PRAGMA user_version = {TS_DB_SCHEMA_VERSION}")
         TSLogVerbose("db.migrated", database=str(self.ts_database_path), schema_version=TS_DB_SCHEMA_VERSION)
 
+    def TSResetIndex(self) -> None:
+        ts_connection = self.TSGetConnection()
+        ts_connection.executescript(
+            """
+            DELETE FROM assets_fts;
+            DELETE FROM asset_metadata;
+            DELETE FROM assets;
+            DELETE FROM asset_folders;
+            DELETE FROM asset_roots;
+            DELETE FROM asset_extensions;
+            DELETE FROM asset_types;
+            DELETE FROM sqlite_sequence
+            WHERE name IN ('assets', 'asset_folders', 'asset_roots', 'asset_extensions', 'asset_types');
+            """
+        )
+        try:
+            ts_connection.execute("VACUUM")
+        except sqlite3.DatabaseError as ts_error:
+            TSLogVerbose("db.reset.vacuum_failed", database=str(self.ts_database_path), error=str(ts_error))
+        TSLogVerbose("db.reset", database=str(self.ts_database_path))
+
     def _TSComputeStatus(self, ts_is_indexed: bool, ts_has_preview: bool, ts_has_metadata: bool) -> str:
         if ts_is_indexed and ts_has_preview and ts_has_metadata:
             return "metadata_ready"

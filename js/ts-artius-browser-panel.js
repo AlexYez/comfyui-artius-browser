@@ -561,6 +561,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     --ts-progress-glow: color-mix(in srgb, var(--ts-accent) 72%, var(--ts-text));
                     --ts-card-overlay-top: color-mix(in srgb, var(--ts-bg-0) 16%, transparent);
                     --ts-card-overlay-bottom: color-mix(in srgb, var(--ts-bg-0) 88%, transparent);
+                    --ts-danger: color-mix(in srgb, #d24b4b 72%, var(--ts-text));
+                    --ts-danger-surface: color-mix(in srgb, #d24b4b 18%, var(--ts-bg-2));
+                    --ts-danger-surface-hover: color-mix(in srgb, #d24b4b 26%, var(--ts-bg-2));
                 }
 
                 .ts-shell {
@@ -711,6 +714,17 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
                 .ts-toggle-button[data-active="true"]::before {
                     background: var(--ts-accent);
+                }
+
+                .ts-rebuild-cache {
+                    border-color: color-mix(in srgb, var(--ts-danger) 52%, var(--ts-border));
+                    background: var(--ts-danger-surface);
+                    color: var(--ts-text);
+                }
+
+                .ts-rebuild-cache:hover {
+                    border-color: color-mix(in srgb, var(--ts-danger) 72%, transparent);
+                    background: var(--ts-danger-surface-hover);
                 }
 
                 .ts-search {
@@ -1121,6 +1135,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                             <span class="ts-autoscan-label"></span>
                         </button>
                         <button class="ts-rescan" type="button"></button>
+                        <button class="ts-rebuild-cache" type="button"></button>
                         <button class="ts-delete-selected" type="button"></button>
                     </div>
                     <div class="ts-progress" data-visible="false" data-indeterminate="false">
@@ -1161,6 +1176,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsAutoscan: this.shadowRoot.querySelector(".ts-autoscan"),
             tsAutoscanLabel: this.shadowRoot.querySelector(".ts-autoscan-label"),
             tsRescan: this.shadowRoot.querySelector(".ts-rescan"),
+            tsRebuildCache: this.shadowRoot.querySelector(".ts-rebuild-cache"),
             tsDeleteSelected: this.shadowRoot.querySelector(".ts-delete-selected"),
             tsProgress: this.shadowRoot.querySelector(".ts-progress"),
             tsProgressFill: this.shadowRoot.querySelector(".ts-progress-fill"),
@@ -1264,6 +1280,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             }
         });
         this.tsRefs.tsRescan.addEventListener("click", () => this.tsRequestRescan());
+        this.tsRefs.tsRebuildCache.addEventListener("click", () => this.tsRequestRebuildCache());
         this.tsRefs.tsDeleteSelected.addEventListener("click", () => this.tsDeleteSelected());
         this.tsRefs.tsGalleryScroll.addEventListener("scroll", () => this.tsHandleGalleryScroll(), { passive: true });
         this.tsRefs.tsGalleryContent.addEventListener("click", (tsEvent) => this.tsHandleGalleryClick(tsEvent));
@@ -1626,6 +1643,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsAutoscan.title = this.tsT("tooltip.autoscan", "Automatically rescan assets when the browser starts or when ComfyUI finishes execution.");
         this.tsRefs.tsRescan.textContent = this.tsT("button.rescan", "Rescan");
         this.tsRefs.tsRescan.title = this.tsT("tooltip.rescan", "Scan configured asset roots now.");
+        this.tsRefs.tsRebuildCache.textContent = this.tsT("button.rebuildCache", "Rebuild Cache");
+        this.tsRefs.tsRebuildCache.title = this.tsT("tooltip.rebuildCache", "Delete the current browser cache and rebuild it from scratch.");
         this.tsRefs.tsDeleteSelected.textContent = this.tsT("button.deleteSelected", "Delete Selected");
         this.tsRefs.tsDeleteSelected.title = this.tsT("tooltip.deleteSelected", "Delete selected assets from allowed roots.");
         this.tsRenderSectionButtons();
@@ -1658,12 +1677,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRootSelect.hidden = tsWorkflowSection;
         this.tsRefs.tsAutoscan.hidden = tsWorkflowSection;
         this.tsRefs.tsRescan.hidden = tsWorkflowSection;
+        this.tsRefs.tsRebuildCache.hidden = tsWorkflowSection;
         this.tsRefs.tsDeleteSelected.hidden = tsWorkflowSection;
         this.tsRefs.tsTypeCluster.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRootGroup.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRootSelect.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsAutoscan.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRescan.style.display = tsWorkflowHiddenDisplay;
+        this.tsRefs.tsRebuildCache.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsDeleteSelected.style.display = tsWorkflowHiddenDisplay;
     }
 
@@ -1793,6 +1814,55 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             await tsPostJSON(`${tsRouteBase}/rescan`, tsPayload);
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser rescan failed", tsError);
+        } finally {
+            this.tsRenderSelectionButtons();
+        }
+    }
+
+    async tsRequestRebuildCache() {
+        if (this.tsIsWorkflowSection()) {
+            return;
+        }
+        if (this.tsState.tsScanStatus?.running) {
+            return;
+        }
+        this.tsState.tsScanStatus = {
+            running: true,
+            phase: "count",
+            scanned: 0,
+            changed: 0,
+            total_candidates: 0,
+            processed_candidates: 0,
+            total_files: 0,
+            deleted: 0,
+            progress_percent: 0,
+            progress_message: this.tsT("status.requestingRebuild", "Rebuilding cache..."),
+            started_at: Date.now() / 1000,
+            completed_at: null,
+            error: null,
+        };
+        this.tsState.tsItems = [];
+        this.tsState.tsSelection.clear();
+        this.tsState.tsLastSelectedIndex = -1;
+        this.tsState.tsHasMore = false;
+        this.tsState.tsFolders = [];
+        this.ts3DThumbnailPending.clear();
+        this.ts3DThumbnailInFlight.clear();
+        this.ts3DThumbnailFailed.clear();
+        this.ts3DThumbnailCache.clear();
+        this.ts3DThumbnailPersisting.clear();
+        this.tsRefs.tsGalleryScroll.scrollTop = 0;
+        this.tsItemsRevision += 1;
+        this.tsFoldersRevision += 1;
+        this.tsInvalidateGridMetrics();
+        this.tsRebuildItemIndex();
+        this.tsRenderAll();
+        try {
+            this.tsRefs.tsRebuildCache.disabled = true;
+            await tsPostJSON(`${tsRouteBase}/rebuild_cache`, {});
+            await this.tsFetchAssets(true);
+        } catch (tsError) {
+            tsConsoleWarn("Timesaver Artius Browser rebuild cache failed", tsError);
         } finally {
             this.tsRenderSelectionButtons();
         }
@@ -2335,6 +2405,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsWorkflowSection = this.tsIsWorkflowSection();
         const tsHasDeletable = !tsWorkflowSection && tsSelectedItems.some((tsItem) => tsItem.allow_delete);
         this.tsRefs.tsRescan.disabled = tsWorkflowSection || Boolean(this.tsState.tsScanStatus?.running);
+        this.tsRefs.tsRebuildCache.disabled = tsWorkflowSection || Boolean(this.tsState.tsScanStatus?.running);
         this.tsRefs.tsDeleteSelected.disabled = !tsHasDeletable;
     }
 
@@ -2577,17 +2648,30 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (tsIndex === undefined || tsIndex < 0) {
             return;
         }
-        this.tsViewer?.tsOpen(this.tsState.tsItems, tsIndex, (tsNextIndex) => {
-            const tsItem = this.tsState.tsItems[tsNextIndex];
-            if (!tsItem) {
+        const tsSelectedVideos = this.tsState.tsItems.filter((tsItem) => this.tsState.tsSelection.has(tsItem.id) && tsItem?.type === "video");
+        const tsCompareCount = tsSelectedVideos.length >= 4 ? 4 : (tsSelectedVideos.length === 2 ? 2 : 0);
+        const tsCompareItems = tsCompareCount > 0 && tsSelectedVideos.some((tsItem) => tsItem.id === tsAssetId)
+            ? tsSelectedVideos.slice(0, tsCompareCount)
+            : [];
+        const tsCompareIndex = tsCompareItems.length > 0
+            ? Math.max(0, tsCompareItems.findIndex((tsItem) => tsItem.id === tsAssetId))
+            : -1;
+        const tsViewerItems = tsCompareItems.length > 0 ? tsCompareItems : this.tsState.tsItems;
+        const tsViewerIndex = tsCompareItems.length > 0 ? (tsCompareIndex >= 0 ? tsCompareIndex : 0) : tsIndex;
+        this.tsViewer?.tsOpen(tsViewerItems, tsViewerIndex, (tsNextIndex, tsNextItem = null) => {
+            const tsItem = tsNextItem || tsViewerItems[tsNextIndex];
+            const tsGlobalIndex = tsItem ? this.tsItemIndexById.get(tsItem.id) : undefined;
+            if (!tsItem || tsGlobalIndex === undefined || tsGlobalIndex < 0) {
                 return;
             }
             this.tsState.tsSelection.clear();
             this.tsState.tsSelection.add(tsItem.id);
-            this.tsState.tsLastSelectedIndex = tsNextIndex;
+            this.tsState.tsLastSelectedIndex = tsGlobalIndex;
             this.tsRenderSelectionButtons();
             this.tsRefreshCardSelection();
-        }, {
+        }, tsCompareItems.length > 0 ? {
+            tsCompareItems,
+        } : {
             tsGetItems: () => this.tsState.tsItems,
             tsCanLoadMore: () => Boolean(this.tsState.tsHasMore || this.tsState.tsLoading || this.tsState.tsQueuedFetchAppend),
             tsRequestMore: async () => {
