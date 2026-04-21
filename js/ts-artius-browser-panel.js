@@ -47,11 +47,6 @@ function tsFormatCardFPS(tsFPS) {
     return `${Number.isInteger(tsRounded) ? tsRounded.toFixed(0) : tsRounded.toFixed(tsRounded < 10 ? 2 : 1).replace(/\.0$/, "")}` + " FPS";
 }
 
-function tsBuildAudioChannelBadge(tsChannelLayout) {
-    const tsValue = String(tsChannelLayout || "").trim();
-    return tsValue || "";
-}
-
 function tsFormatCardDuration(tsSeconds) {
     const tsValue = Number(tsSeconds || 0);
     if (!Number.isFinite(tsValue) || tsValue <= 0) {
@@ -1135,8 +1130,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                             <span class="ts-autoscan-label"></span>
                         </button>
                         <button class="ts-rescan" type="button"></button>
-                        <button class="ts-rebuild-cache" type="button"></button>
                         <button class="ts-delete-selected" type="button"></button>
+                        <button class="ts-rebuild-cache" type="button"></button>
                     </div>
                     <div class="ts-progress" data-visible="false" data-indeterminate="false">
                         <div class="ts-progress-track"><div class="ts-progress-fill"></div></div>
@@ -1824,6 +1819,15 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return;
         }
         if (this.tsState.tsScanStatus?.running) {
+            return;
+        }
+        const tsConfirmed = window.confirm(
+            this.tsT(
+                "confirm.rebuildCache",
+                "Rebuild the browser cache from scratch? This will clear the current cache and start a full rescan.",
+            ),
+        );
+        if (!tsConfirmed) {
             return;
         }
         this.tsState.tsScanStatus = {

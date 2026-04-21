@@ -252,55 +252,6 @@ def TSExtractFFProbePayload(ts_value: Any) -> dict[str, Any]:
     if isinstance(ts_value.get("format"), dict) or isinstance(ts_value.get("streams"), list):
         return ts_value
     return {}
-
-
-def TSExtractTechnicalInfo(
-    ts_value: Any,
-    ts_kind: str = "",
-    ts_width: Any = None,
-    ts_height: Any = None,
-    ts_duration: Any = None,
-) -> dict[str, Any]:
-    ts_probe = TSExtractFFProbePayload(ts_value)
-    ts_format = ts_probe.get("format", {}) if isinstance(ts_probe, dict) else {}
-    ts_streams = ts_probe.get("streams", []) if isinstance(ts_probe, dict) else []
-    ts_video_stream = next(
-        (ts_stream for ts_stream in ts_streams if isinstance(ts_stream, dict) and ts_stream.get("codec_type") == "video"),
-        {},
-    )
-    ts_audio_stream = next(
-        (ts_stream for ts_stream in ts_streams if isinstance(ts_stream, dict) and ts_stream.get("codec_type") == "audio"),
-        {},
-    )
-    ts_width_value = TSParseMaybeInt(ts_width)
-    if ts_width_value is None:
-        ts_width_value = TSParseMaybeInt(ts_video_stream.get("width"))
-    ts_height_value = TSParseMaybeInt(ts_height)
-    if ts_height_value is None:
-        ts_height_value = TSParseMaybeInt(ts_video_stream.get("height"))
-    ts_duration_value = TSParseMaybeFloat(ts_duration)
-    if ts_duration_value is None:
-        ts_duration_value = TSParseMaybeFloat(
-            ts_format.get("duration")
-            or ts_video_stream.get("duration")
-            or ts_audio_stream.get("duration")
-        )
-    ts_bit_rate = TSParseMaybeInt(
-        ts_format.get("bit_rate")
-        or ts_video_stream.get("bit_rate")
-        or ts_audio_stream.get("bit_rate")
-    )
-    ts_format_name = str(ts_format.get("format_long_name") or ts_format.get("format_name") or "").strip()
-    return {
-        "kind": ts_kind,
-        "format_name": ts_format_name,
-        "bit_rate": ts_bit_rate,
-        "duration": ts_duration_value,
-        "width": ts_width_value,
-        "height": ts_height_value,
-    }
-
-
 def TSParseMaybeFloat(ts_value: Any) -> float | None:
     if ts_value is None or ts_value == "":
         return None

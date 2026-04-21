@@ -587,10 +587,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 </div>
                 <div class="ts-body">
                     <div class="ts-stage-wrap">
-                        <button class="ts-compare-close" type="button" aria-label="Close">&times;</button>
-                        <button class="ts-stage-nav ts-stage-nav-prev" type="button" aria-label="Previous">&#8249;</button>
+                        <button class="ts-compare-close" type="button" aria-label="${this.tsEscapeAttribute(this.tsT("button.close", "Close"))}">&times;</button>
+                        <button class="ts-stage-nav ts-stage-nav-prev" type="button" aria-label="${this.tsEscapeAttribute(this.tsT("button.prev", "Previous"))}">&#8249;</button>
                         <div class="ts-stage"></div>
-                        <button class="ts-stage-nav ts-stage-nav-next" type="button" aria-label="Next">&#8250;</button>
+                        <button class="ts-stage-nav ts-stage-nav-next" type="button" aria-label="${this.tsEscapeAttribute(this.tsT("button.next", "Next"))}">&#8250;</button>
                     </div>
                     <div class="ts-meta"></div>
                 </div>
@@ -635,6 +635,20 @@ export class TSArtiusBrowserViewer extends HTMLElement {
 
     tsT(tsKey, tsFallback) {
         return this.tsLocale?.[tsKey] || tsFallback;
+    }
+
+    tsResolveChannelLayoutLabel(tsChannelCount) {
+        const tsChannels = Number(tsChannelCount) || 0;
+        if (tsChannels === 1) {
+            return this.tsT("label.mono", "Mono");
+        }
+        if (tsChannels === 2) {
+            return this.tsT("label.stereo", "Stereo");
+        }
+        if (tsChannels > 2) {
+            return `${tsChannels}ch`;
+        }
+        return "";
     }
 
     async tsEnsureAssetDetail(tsItemIndex = this.tsIndex) {
@@ -1049,14 +1063,14 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         }
         if (tsAsset?.type === "video" && (tsTechnical.audio_codec_name || tsAsset.audio_codec_name || tsTechnical.audio_channels || tsAsset.audio_channel_layout)) {
             const tsAudioCodec = String(tsTechnical.audio_codec_name || tsAsset.audio_codec_name || "").toUpperCase();
-            const tsAudioChannels = String(tsAsset.audio_channel_layout || (Number(tsTechnical.audio_channels) === 1 ? "Mono" : (Number(tsTechnical.audio_channels) === 2 ? "Stereo" : (Number(tsTechnical.audio_channels) > 2 ? `${Number(tsTechnical.audio_channels)}ch` : ""))) || "");
+            const tsAudioChannels = String(tsAsset.audio_channel_layout || this.tsResolveChannelLayoutLabel(tsTechnical.audio_channels) || "");
             const tsAudioParts = [tsAudioCodec, tsAudioChannels].filter(Boolean);
             if (tsAudioParts.length > 0) {
                 tsRows.push({ tsLabel: this.tsT("meta.audioTrack", "Audio Track"), tsValue: tsAudioParts.join(" / ") });
             }
         }
         if (tsAsset?.type === "audio" && (tsTechnical.channels || tsAsset.channel_layout)) {
-            const tsChannelLayout = String(tsAsset.channel_layout || (Number(tsTechnical.channels) === 1 ? "Mono" : (Number(tsTechnical.channels) === 2 ? "Stereo" : (Number(tsTechnical.channels) > 2 ? `${Number(tsTechnical.channels)}ch` : ""))) || "");
+            const tsChannelLayout = String(tsAsset.channel_layout || this.tsResolveChannelLayoutLabel(tsTechnical.channels) || "");
             if (tsChannelLayout) {
                 tsRows.push({ tsLabel: this.tsT("meta.channels", "Channels"), tsValue: tsChannelLayout });
             }
@@ -1103,12 +1117,19 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsIsOpen = Boolean(tsAsset);
         this.tsRefs.tsRoot.dataset.open = String(tsIsOpen);
         this.style.pointerEvents = tsIsOpen ? "auto" : "none";
+        const tsCloseLabel = this.tsT("button.close", "Close");
+        const tsPrevLabel = this.tsT("button.prev", "Previous");
+        const tsNextLabel = this.tsT("button.next", "Next");
         this.tsRefs.tsDownloadButton.textContent = this.tsT("button.download", "Download");
         this.tsRefs.tsOpenInNewTabButton.textContent = this.tsT("button.openInNewTab", "Open In New Tab");
         this.tsRefs.tsDeleteButton.textContent = this.tsT("button.delete", "Delete");
-        this.tsRefs.tsCloseButton.textContent = this.tsT("button.close", "Close");
-        this.tsRefs.tsPrevButton.title = this.tsT("button.prev", "Previous");
-        this.tsRefs.tsNextButton.title = this.tsT("button.next", "Next");
+        this.tsRefs.tsCloseButton.textContent = tsCloseLabel;
+        this.tsRefs.tsCompareCloseButton.title = tsCloseLabel;
+        this.tsRefs.tsCompareCloseButton.setAttribute("aria-label", tsCloseLabel);
+        this.tsRefs.tsPrevButton.title = tsPrevLabel;
+        this.tsRefs.tsPrevButton.setAttribute("aria-label", tsPrevLabel);
+        this.tsRefs.tsNextButton.title = tsNextLabel;
+        this.tsRefs.tsNextButton.setAttribute("aria-label", tsNextLabel);
         if (!tsIsOpen) {
             this.tsTeardownStage();
             this.tsRefs.tsRoot.dataset.compare = "false";
@@ -1121,7 +1142,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         }
 
         this.tsTeardownStage();
-        this.tsRefs.tsTitle.textContent = tsAsset.filename || "Asset";
+        this.tsRefs.tsTitle.textContent = tsAsset.filename || this.tsT("label.asset", "Asset");
         this.tsRefs.tsSubtitle.textContent = `${tsAsset.root_label || tsAsset.root_id || ""}${tsAsset.folder_path ? ` / ${tsAsset.folder_path}` : ""}`;
         this.tsRefs.tsStage.dataset.kind = tsAsset.type || "";
         const tsCompareMode = this.tsIsVideoCompareMode();
@@ -1923,12 +1944,14 @@ export class TSArtiusBrowserViewer extends HTMLElement {
     tsBuildStageMarkup(tsAsset) {
         const tsFileURL = tsApiURL(tsAsset.file_url);
         const tsPreviewURL = tsApiURL(tsAsset.preview_url);
+        const tsAssetLabel = this.tsT("label.asset", "Asset");
         if (tsAsset.type === "image") {
-            return `<img src="${tsFileURL}" alt="${this.tsEscapeAttribute(tsAsset.filename || "asset")}">`;
+            return `<img src="${tsFileURL}" alt="${this.tsEscapeAttribute(tsAsset.filename || tsAssetLabel)}">`;
         }
         if (tsAsset.type === "video") {
             if (this.tsIsVideoCompareMode()) {
                 const tsCompareItems = this.tsCompareItems.slice(0, 4);
+                const tsVideoLabel = this.tsT("type.video", "Video");
                 return `
                     <div class="ts-video-compare-shell" data-count="${tsCompareItems.length}">
                         <div class="ts-video-compare-grid">
@@ -1937,7 +1960,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                                 const tsPrimary = tsCompareItem.id === tsAsset.id;
                                 return `
                                     <div class="ts-video-compare-card" data-primary="${String(tsPrimary)}">
-                                        <div class="ts-video-compare-label" title="${this.tsEscapeAttribute(tsCompareItem.filename || "video")}">${this.tsEscapeHTML(tsCompareItem.filename || "Video")}</div>
+                                        <div class="ts-video-compare-label" title="${this.tsEscapeAttribute(tsCompareItem.filename || tsVideoLabel)}">${this.tsEscapeHTML(tsCompareItem.filename || tsVideoLabel)}</div>
                                         <video class="ts-video-compare-video ts-compare-video" data-primary="${String(tsPrimary)}" src="${tsCompareURL}" ${tsPrimary ? "" : "muted"} playsinline preload="metadata"></video>
                                     </div>
                                 `;
@@ -1973,7 +1996,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return `
                 <div class="ts-audio-shell">
                     <div class="ts-audio-waveform-shell" data-audio-seek="true">
-                        <div class="ts-audio-waveform-image" style="background-image:url('${this.tsEscapeAttribute(tsPreviewURL)}')" aria-label="${this.tsEscapeAttribute(tsAsset.filename || "audio waveform")}"></div>
+                        <div class="ts-audio-waveform-image" style="background-image:url('${this.tsEscapeAttribute(tsPreviewURL)}')" aria-label="${this.tsEscapeAttribute(tsAsset.filename || this.tsT("label.audioWaveform", "Audio waveform"))}"></div>
                         <div class="ts-audio-progress"></div>
                         <div class="ts-audio-playhead"></div>
                     </div>
@@ -1990,12 +2013,12 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return `
                 <div class="ts-3d-shell" data-ready="false">
                     <div class="ts-3d-viewer-host"></div>
-                    <img class="ts-3d-fallback" src="${tsPreviewURL}" alt="${this.tsEscapeAttribute(tsAsset.filename || "3d asset")}">
+                    <img class="ts-3d-fallback" src="${tsPreviewURL}" alt="${this.tsEscapeAttribute(tsAsset.filename || this.tsT("label.asset3d", "3D asset"))}">
                     <div class="ts-3d-status">${this.tsT("status.loading3dViewer", "Loading 3D viewer...")}</div>
                 </div>
             `;
         }
-        return `<img src="${tsPreviewURL}" alt="${this.tsEscapeAttribute(tsAsset.filename || "asset")}">`;
+        return `<img src="${tsPreviewURL}" alt="${this.tsEscapeAttribute(tsAsset.filename || tsAssetLabel)}">`;
     }
 
     tsEscapeHTML(tsText) {

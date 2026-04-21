@@ -8,7 +8,6 @@ from .ts_settings import (
     TS_3D_EXTENSIONS,
     TS_AUDIO_EXTENSIONS,
     TS_IMAGE_EXTENSIONS,
-    TS_SUPPORTED_EXTENSIONS,
     TS_VIDEO_EXTENSIONS,
 )
 
@@ -48,12 +47,6 @@ def TSGuessTypeByExtension(ts_extension: str) -> Literal["image", "video", "audi
     if ts_extension in TS_3D_EXTENSIONS:
         return "3d"
     return None
-
-
-def TSIsSupportedExtension(ts_extension: str) -> bool:
-    return ts_extension.lower() in TS_SUPPORTED_EXTENSIONS
-
-
 def TSDetectSupportedType(ts_path: Path) -> Literal["image", "video", "audio", "3d"] | None:
     ts_extension = ts_path.suffix.lower()
     ts_type_by_extension = TSGuessTypeByExtension(ts_extension)

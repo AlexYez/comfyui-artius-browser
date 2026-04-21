@@ -126,7 +126,6 @@ def _TSStage3DAsset(ts_runtime, ts_row) -> str:
 
     return (ts_stage_root / ts_source_path.name).relative_to(ts_runtime.ts_storage_paths.ts_input_directory).as_posix()
 
-
 def TSPrepare3DAssetForLoad3D(ts_runtime, ts_asset_id: int) -> dict[str, Any]:
     ts_row = ts_runtime.ts_database.TSGetAssetById(ts_asset_id)
     if ts_row is None or str(ts_row["type"] or "") != "3d":

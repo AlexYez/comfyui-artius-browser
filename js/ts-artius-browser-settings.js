@@ -20,16 +20,11 @@ export const tsApiSettings = Object.freeze({
     assetDragMime: "application/x-timesaver-artius-asset",
     nativeWorkflowTargets: {
         image: { tsNodeType: "LoadImage", tsWidgetNames: ["image"] },
-        video: { tsNodeType: "LoadVideo", tsWidgetNames: ["file"] },
+        video: { tsNodeType: "LoadVideo", tsWidgetNames: ["file", "video"] },
         audio: { tsNodeType: "LoadAudio", tsWidgetNames: ["audio"] },
         "3d": { tsNodeType: "Load3D", tsWidgetNames: ["model_file"] },
     },
     fallbackWorkflowTargets: {},
-    annotationSuffixByRootId: {
-        output: "[output]",
-        input: "[input]",
-        temp: "[temp]",
-    },
 });
 
 export const tsPanelSettings = Object.freeze({
