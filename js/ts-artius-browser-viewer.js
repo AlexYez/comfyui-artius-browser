@@ -115,7 +115,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     position: absolute;
                     top: 14px;
                     right: 16px;
-                    z-index: 3;
+                    z-index: 20;
                     display: none;
                     align-items: center;
                     justify-content: center;
@@ -356,11 +356,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     word-break: break-word;
                 }
                 .ts-image-compare-shell {
-                    width: min(100%, 1560px);
-                    height: min(88vh, calc(100dvh - 42px));
-                    margin: 0 auto;
-                    justify-self: stretch;
-                    align-self: stretch;
+                    position: absolute;
+                    inset: 0;
+                    width: 100%;
+                    height: 100%;
                     display: grid;
                     min-width: 0;
                     min-height: 0;
@@ -637,9 +636,6 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     display: none;
                 }
                 @media (max-width: 1080px) {
-                    .ts-image-compare-shell {
-                        height: min(86vh, calc(100dvh - 40px));
-                    }
                     .ts-video-compare-grid {
                         grid-template-columns: minmax(0, 1fr);
                     }
