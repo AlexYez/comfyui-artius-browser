@@ -8,10 +8,10 @@ from typing import Any
 from urllib.parse import quote
 
 from aiohttp import web as TSWeb
-from send2trash import send2trash as TSSendToTrash
 
 from .ts_config import TSConfigStore
 from .ts_db import TSDatabase
+from .ts_delete import TSDeleteService
 from .ts_handlers import TSHandlerRegistry
 from .ts_hashing import TSComputeFileHash, TSDetectSupportedType
 from .ts_indexer import TSIndexer
@@ -25,8 +25,6 @@ from .ts_types import TSAssetStat
 from .ts_ui_settings import TSApplyUISettingsUpdates, TSNormalizeUISettings
 from .ts_utils import TSExtractPromptText, TSExtractWorkflowText, TSJsonDumps, TSJsonLoads, TSNormalizePathString, TSRelativePosixPath
 
-TS_WORKFLOW_PREVIEW_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".avif", ".gif", ".mp4", ".webm", ".mov", ".m4v"}
-
 TSLogger = logging.getLogger("TSArtiusBrowser")
 TSRuntimeSingleton = None
 
@@ -39,6 +37,12 @@ class TSAssetBrowserRuntime:
         self.ts_tools = TSToolLocator(self.ts_config_store)
         self.ts_preview_cache = TSPreviewCache(self.ts_storage_paths, self.ts_config_store)
         self.ts_handler_registry = TSHandlerRegistry(self.ts_preview_cache, self.ts_tools)
+        self.ts_delete_service = TSDeleteService(
+            ts_database=self.ts_database,
+            ts_preview_cache=self.ts_preview_cache,
+            ts_get_roots=self.TSGetRoots,
+            ts_emit_event=self.TSEmitEvent,
+        )
         self.ts_indexer = TSIndexer(
             ts_database=self.ts_database,
             ts_storage_paths=self.ts_storage_paths,
@@ -580,70 +584,10 @@ class TSAssetBrowserRuntime:
         return self._TSApplyNoStoreHeaders(TSWeb.FileResponse(ts_file_path))
 
     def TSDeleteAssets(self, ts_asset_ids: list[int]) -> dict[str, Any]:
-        TSLogVerbose("runtime.assets.delete.request", asset_ids=ts_asset_ids)
-        ts_deleted_ids: list[int] = []
-        ts_skipped_ids: list[int] = []
-        ts_roots = {ts_root["root_id"]: ts_root for ts_root in self.TSGetRoots()}
-        for ts_asset_id in ts_asset_ids:
-            ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
-            if ts_row is None:
-                ts_skipped_ids.append(ts_asset_id)
-                TSLogVerbose("runtime.asset.delete.skipped", asset_id=ts_asset_id, reason="missing_row")
-                continue
-            ts_root = ts_roots.get(str(ts_row["root_id"]))
-            if not ts_root or not ts_root.get("allow_delete"):
-                ts_skipped_ids.append(ts_asset_id)
-                TSLogVerbose("runtime.asset.delete.skipped", asset_id=ts_asset_id, reason="delete_not_allowed")
-                continue
-            ts_file_path = Path(str(ts_row["path"]))
-            ts_root_path = Path(str(ts_root["path"])).resolve()
-            try:
-                try:
-                    ts_file_path.resolve().relative_to(ts_root_path)
-                except ValueError:
-                    ts_skipped_ids.append(ts_asset_id)
-                    TSLogVerbose("runtime.asset.delete.skipped", asset_id=ts_asset_id, reason="outside_root")
-                    continue
-                if ts_file_path.exists():
-                    TSSendToTrash(str(ts_file_path))
-            except (OSError, PermissionError) as ts_error:
-                ts_skipped_ids.append(ts_asset_id)
-                TSLogVerbose("runtime.asset.delete.skipped", asset_id=ts_asset_id, reason=str(ts_error))
-                continue
-            ts_preview_path = str(ts_row["preview_path"] or "")
-            if ts_preview_path and self.ts_database.TSCountPreviewReferences(ts_preview_path, ts_asset_id) == 0:
-                self.ts_preview_cache.TSPurgePreview(ts_preview_path)
-            self.ts_database.TSDeleteAssetIds([ts_asset_id])
-            ts_deleted_ids.append(ts_asset_id)
-            TSLogVerbose("runtime.asset.deleted", asset_id=ts_asset_id, path=str(ts_row["path"]))
-            self.TSEmitEvent("tsab:asset-remove", {"id": ts_asset_id, "path": ts_row["path"]})
-        return {"deleted": ts_deleted_ids, "skipped": ts_skipped_ids}
-
-    def _TSFindWorkflowPreviewSidecars(self, ts_workflow_path: Path) -> list[Path]:
-        ts_sidecars: list[Path] = []
-        if not ts_workflow_path.exists():
-            return ts_sidecars
-        ts_workflow_stem = ts_workflow_path.stem.lower()
-        for ts_candidate in ts_workflow_path.parent.iterdir():
-            if not ts_candidate.is_file() or ts_candidate == ts_workflow_path:
-                continue
-            if ts_candidate.stem.lower() != ts_workflow_stem:
-                continue
-            if ts_candidate.suffix.lower() not in TS_WORKFLOW_PREVIEW_EXTENSIONS:
-                continue
-            ts_sidecars.append(ts_candidate)
-        return sorted(ts_sidecars, key=lambda ts_path: ts_path.name.lower())
+        return self.ts_delete_service.TSDeleteAssets(ts_asset_ids)
 
     def TSDeleteWorkflowFile(self, ts_workflow_path: Path) -> dict[str, Any]:
-        if not ts_workflow_path.exists():
-            raise TSWeb.HTTPNotFound()
-        ts_deleted_paths: list[str] = []
-        for ts_target_path in [ts_workflow_path, *self._TSFindWorkflowPreviewSidecars(ts_workflow_path)]:
-            if not ts_target_path.exists():
-                continue
-            TSSendToTrash(str(ts_target_path))
-            ts_deleted_paths.append(ts_target_path.name)
-        return {"deleted": ts_deleted_paths}
+        return self.ts_delete_service.TSDeleteWorkflowFile(ts_workflow_path)
 
     def TSSave3DThumbnail(self, ts_asset_id: int, ts_image_data_url: str) -> dict[str, Any]:
         ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
