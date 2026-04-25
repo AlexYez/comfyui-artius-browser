@@ -24,6 +24,7 @@
     "label.audioWaveform": "Audio waveform",
     "label.asset3d": "3D asset",
     "label.currentFrame": "Frame",
+    "label.imageCompareWipe": "Image comparison slider",
     "label.mono": "Mono",
     "label.stereo": "Stereo",
     "sort.created_at": "Date",

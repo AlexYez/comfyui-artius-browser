@@ -49,6 +49,8 @@ It is designed to stay fast on large libraries, keep previews compact, and use n
 - PNG workflow extraction with one-click copy
 - lightbox viewer for every supported asset type
 - frame stepping for videos in the lightbox
+- wipe compare mode for `2` selected images
+- grid compare mode for `4` selected images
 - synchronized compare mode for `2` or `4` selected videos
 - native ComfyUI 3D viewer integration
 - drag-and-drop into native ComfyUI nodes
@@ -115,6 +117,8 @@ Workflow actions:
 
 - zoom with the mouse wheel
 - pan with left or middle mouse button when zoomed
+- compare `2` selected images with a left-to-right wipe slider
+- compare `4` selected images in a clean 2x2 grid
 - separate `Prompt` and `Negative Prompt` fields when available
 - `Copy Workflow` button when the PNG contains workflow data
 - open in new tab, download, delete
@@ -259,6 +263,8 @@ Then restart ComfyUI and scan again.
 - PNG-промт разбирается на `Prompt` и `Negative Prompt`
 - workflow из PNG можно копировать одной кнопкой
 - в лайтбоксе у видео есть покадровая навигация
+- для `2` выбранных изображений есть wipe-сравнение с полоской слева направо
+- для `4` выбранных изображений есть режим сравнения в сетке 2x2
 - для `2` или `4` выбранных видео есть синхронный режим сравнения
 - 3D открывается через нативный viewer ComfyUI
 - удаление идет в системную корзину, а не навсегда
@@ -285,7 +291,7 @@ Then restart ComfyUI and scan again.
 
 ### Лайтбокс
 
-- изображения: zoom, pan, prompt, negative prompt, `Copy Workflow`
+- изображения: zoom, pan, prompt, negative prompt, `Copy Workflow`, compare mode для `2` или `4` выбранных изображений
 - видео: плеер, кадр, FPS, кодек, аудиодорожка, compare mode
 - аудио: waveform и техинформация
 - 3D: нативный 3D viewer и информация о модели
@@ -316,7 +322,7 @@ Puntos clave:
 - previews cacheadas para imagen, video, audio y 3D
 - workflows leídos directamente desde la carpeta nativa de ComfyUI
 - prompts PNG separados en prompt positivo y negativo
-- lightbox con step por frame para video y comparación sincronizada de `2` o `4` videos
+- lightbox con comparación de `2` o `4` imágenes y comparación sincronizada de `2` o `4` videos
 - integración 3D nativa con `Load 3D & Animation`
 - borrado a la papelera del sistema
 
@@ -342,6 +348,7 @@ Reinicia ComfyUI y asegúrate de tener `ffmpeg` y `ffprobe`.
 - 支持图片、视频、音频和 3D 资源预览缓存
 - `Workflows` 直接读取 ComfyUI 原生工作流目录
 - PNG 元数据会区分正向提示词和负向提示词
+- 图片灯箱支持 `2` 张图片的 wipe 对比和 `4` 张图片的网格对比
 - 视频灯箱支持逐帧切换，以及 `2` 或 `4` 个视频同步对比
 - 3D 使用 ComfyUI 原生查看器
 - 删除会进入系统回收站
@@ -368,6 +375,7 @@ Wichtige Funktionen:
 - kompakter Preview-Cache für Bild, Video, Audio und 3D
 - native Workflow-Bibliothek mit Bild-, Video- und `.webp`-Sidecars
 - getrennte Anzeige von positivem und negativem PNG-Prompt
+- Bildvergleich für `2` Bilder per Wipe-Slider und für `4` Bilder im Raster
 - Video-Frame-Stepping und synchroner Vergleich für `2` oder `4` Videos
 - native 3D-Integration mit ComfyUI
 - Löschen in den System-Papierkorb
@@ -394,6 +402,7 @@ In breve:
 - impostazioni salvate in modo indipendente per ogni scheda
 - preview cache per immagini, video, audio e 3D
 - parsing PNG con prompt positivo e negativo separati
+- confronto immagini per `2` foto con slider wipe o `4` foto in griglia
 - lightbox video con navigazione frame-by-frame e confronto sincronizzato
 - viewer 3D nativo di ComfyUI
 - eliminazione nel cestino di sistema
@@ -420,6 +429,7 @@ Fonctions principales :
 - état mémorisé indépendamment pour chaque onglet
 - cache de previews pour image, vidéo, audio et 3D
 - extraction PNG avec `Prompt` et `Negative Prompt` séparés
+- comparaison d'images pour `2` images avec un curseur wipe ou `4` images en grille
 - navigation vidéo image par image et mode comparaison synchronisé
 - intégration 3D native avec ComfyUI
 - suppression vers la corbeille système
@@ -446,6 +456,7 @@ Resumo:
 - estado salvo por aba
 - previews otimizadas para imagem, vídeo, áudio e 3D
 - leitura de prompt positivo e negativo em PNG
+- comparação de imagens para `2` fotos com slider wipe ou `4` fotos em grade
 - lightbox com avanço quadro a quadro e comparação sincronizada de vídeos
 - viewer 3D nativo do ComfyUI
 - exclusão para a lixeira do sistema

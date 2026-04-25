@@ -2652,10 +2652,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (tsIndex === undefined || tsIndex < 0) {
             return;
         }
-        const tsSelectedVideos = this.tsState.tsItems.filter((tsItem) => this.tsState.tsSelection.has(tsItem.id) && tsItem?.type === "video");
-        const tsCompareCount = tsSelectedVideos.length >= 4 ? 4 : (tsSelectedVideos.length === 2 ? 2 : 0);
-        const tsCompareItems = tsCompareCount > 0 && tsSelectedVideos.some((tsItem) => tsItem.id === tsAssetId)
-            ? tsSelectedVideos.slice(0, tsCompareCount)
+        const tsAsset = this.tsState.tsItems[tsIndex];
+        const tsCompareTypes = new Set(["image", "video"]);
+        const tsSelectedCompareItems = tsCompareTypes.has(tsAsset?.type)
+            ? this.tsState.tsItems.filter((tsItem) => this.tsState.tsSelection.has(tsItem.id) && tsItem?.type === tsAsset.type)
+            : [];
+        const tsCompareCount = tsSelectedCompareItems.length >= 4 ? 4 : (tsSelectedCompareItems.length === 2 ? 2 : 0);
+        const tsCompareItems = tsCompareCount > 0 && tsSelectedCompareItems.some((tsItem) => tsItem.id === tsAssetId)
+            ? tsSelectedCompareItems.slice(0, tsCompareCount)
             : [];
         const tsCompareIndex = tsCompareItems.length > 0
             ? Math.max(0, tsCompareItems.findIndex((tsItem) => tsItem.id === tsAssetId))

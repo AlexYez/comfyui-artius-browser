@@ -355,6 +355,101 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     color: var(--ts-text);
                     word-break: break-word;
                 }
+                .ts-image-compare-shell {
+                    width: min(100%, 1560px);
+                    height: min(88vh, calc(100dvh - 42px));
+                    margin: 0 auto;
+                    justify-self: stretch;
+                    align-self: stretch;
+                    display: grid;
+                    min-width: 0;
+                    min-height: 0;
+                    --ts-wipe: 50%;
+                }
+                .ts-image-compare-shell img {
+                    width: 100%;
+                    height: 100%;
+                    max-width: none;
+                    max-height: none;
+                    border-radius: 0;
+                    background: transparent;
+                    object-fit: contain;
+                    user-select: none;
+                    -webkit-user-drag: none;
+                }
+                .ts-image-compare-wipe {
+                    position: relative;
+                    min-width: 0;
+                    min-height: 0;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 12px;
+                    overflow: hidden;
+                    background: var(--ts-bg-2);
+                    cursor: ew-resize;
+                }
+                .ts-image-compare-wipe img {
+                    position: absolute;
+                    inset: 0;
+                }
+                .ts-image-compare-after {
+                    clip-path: inset(0 calc(100% - var(--ts-wipe)) 0 0);
+                    z-index: 1;
+                }
+                .ts-image-compare-divider {
+                    position: absolute;
+                    top: 0;
+                    bottom: 0;
+                    left: var(--ts-wipe);
+                    z-index: 2;
+                    width: 2px;
+                    transform: translateX(-50%);
+                    background: var(--ts-accent);
+                    box-shadow: 0 0 0 1px var(--ts-playhead-shadow);
+                    pointer-events: none;
+                }
+                .ts-image-compare-divider::after {
+                    content: "";
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    width: 28px;
+                    height: 28px;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 999px;
+                    transform: translate(-50%, -50%);
+                    background: var(--ts-nav-surface);
+                    backdrop-filter: blur(8px);
+                    box-shadow: 0 8px 24px var(--ts-playhead-shadow);
+                }
+                .ts-image-compare-range {
+                    position: absolute;
+                    inset: 0;
+                    z-index: 3;
+                    width: 100%;
+                    height: 100%;
+                    margin: 0;
+                    opacity: 0;
+                    cursor: ew-resize;
+                    touch-action: none;
+                }
+                .ts-image-compare-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 8px;
+                    min-width: 0;
+                    min-height: 0;
+                }
+                .ts-image-compare-card {
+                    min-width: 0;
+                    min-height: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 12px;
+                    overflow: hidden;
+                    background: var(--ts-bg-2);
+                }
                 .ts-video-compare-shell {
                     width: min(100%, 1560px);
                     margin: 0 auto;
@@ -542,6 +637,9 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     display: none;
                 }
                 @media (max-width: 1080px) {
+                    .ts-image-compare-shell {
+                        height: min(86vh, calc(100dvh - 40px));
+                    }
                     .ts-video-compare-grid {
                         grid-template-columns: minmax(0, 1fr);
                     }
@@ -727,6 +825,19 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         );
     }
 
+    tsIsImageCompareMode() {
+        const tsAsset = this.tsIndex >= 0 ? this.tsItems[this.tsIndex] : null;
+        return Boolean(
+            tsAsset?.type === "image"
+            && Array.isArray(this.tsCompareItems)
+            && (this.tsCompareItems.length === 2 || this.tsCompareItems.length === 4),
+        );
+    }
+
+    tsIsCompareMode() {
+        return this.tsIsVideoCompareMode() || this.tsIsImageCompareMode();
+    }
+
     tsHandleKeydown(tsEvent) {
         if (this.tsIndex < 0) {
             return;
@@ -736,9 +847,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             this.tsClose();
             return;
         }
-        const tsCompareMode = this.tsIsVideoCompareMode();
+        const tsCompareMode = this.tsIsCompareMode();
+        const tsVideoCompareMode = this.tsIsVideoCompareMode();
         if (tsEvent.key === "ArrowLeft") {
-            if (this.tsItems[this.tsIndex]?.type === "video" && tsCompareMode && typeof this.tsVideoFrameStepper === "function") {
+            if (this.tsItems[this.tsIndex]?.type === "video" && tsVideoCompareMode && typeof this.tsVideoFrameStepper === "function") {
                 tsEvent.preventDefault();
                 this.tsVideoFrameStepper(-1);
             } else if (!tsCompareMode) {
@@ -748,7 +860,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return;
         }
         if (tsEvent.key === "ArrowRight") {
-            if (this.tsItems[this.tsIndex]?.type === "video" && tsCompareMode && typeof this.tsVideoFrameStepper === "function") {
+            if (this.tsItems[this.tsIndex]?.type === "video" && tsVideoCompareMode && typeof this.tsVideoFrameStepper === "function") {
                 tsEvent.preventDefault();
                 this.tsVideoFrameStepper(1);
             } else if (!tsCompareMode) {
@@ -1145,7 +1257,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsRefs.tsTitle.textContent = tsAsset.filename || this.tsT("label.asset", "Asset");
         this.tsRefs.tsSubtitle.textContent = `${tsAsset.root_label || tsAsset.root_id || ""}${tsAsset.folder_path ? ` / ${tsAsset.folder_path}` : ""}`;
         this.tsRefs.tsStage.dataset.kind = tsAsset.type || "";
-        const tsCompareMode = this.tsIsVideoCompareMode();
+        const tsCompareMode = this.tsIsCompareMode();
         this.tsRefs.tsRoot.dataset.compare = String(tsCompareMode);
         this.tsRefs.tsOpenInNewTabButton.hidden = tsAsset.type === "3d";
         this.tsRefs.tsDeleteButton.disabled = !tsAsset.allow_delete;
@@ -1162,7 +1274,9 @@ export class TSArtiusBrowserViewer extends HTMLElement {
 
     tsBindStageInteractions(tsAsset) {
         if (tsAsset.type === "image") {
-            this.tsStageCleanup = this.tsSetupImageStage(tsAsset);
+            this.tsStageCleanup = this.tsIsImageCompareMode()
+                ? this.tsSetupImageCompareStage()
+                : this.tsSetupImageStage(tsAsset);
             return;
         }
         if (tsAsset.type === "audio") {
@@ -1558,6 +1672,25 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         };
     }
 
+    tsSetupImageCompareStage() {
+        const tsShell = this.tsRefs.tsStage?.querySelector(".ts-image-compare-shell");
+        const tsRange = tsShell?.querySelector(".ts-image-compare-range");
+        if (!tsShell || !tsRange) {
+            return null;
+        }
+        const tsApplyWipe = () => {
+            const tsValue = Math.max(0, Math.min(100, Number(tsRange.value || 50)));
+            tsShell.style.setProperty("--ts-wipe", `${tsValue}%`);
+        };
+        tsRange.addEventListener("input", tsApplyWipe);
+        tsRange.addEventListener("change", tsApplyWipe);
+        tsApplyWipe();
+        return () => {
+            tsRange.removeEventListener("input", tsApplyWipe);
+            tsRange.removeEventListener("change", tsApplyWipe);
+        };
+    }
+
     tsSetup3DStage(tsAsset) {
         const tsStage = this.tsRefs.tsStage;
         const tsShell = tsStage?.querySelector(".ts-3d-shell");
@@ -1946,6 +2079,32 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsPreviewURL = tsApiURL(tsAsset.preview_url);
         const tsAssetLabel = this.tsT("label.asset", "Asset");
         if (tsAsset.type === "image") {
+            if (this.tsIsImageCompareMode()) {
+                const tsCompareItems = this.tsCompareItems.slice(0, 4);
+                const tsImageLabel = this.tsT("type.image", "Image");
+                if (tsCompareItems.length === 2) {
+                    const [tsBeforeItem, tsAfterItem] = tsCompareItems;
+                    return `
+                        <div class="ts-image-compare-shell" data-count="2">
+                            <div class="ts-image-compare-wipe">
+                                <img class="ts-image-compare-before" src="${tsApiURL(tsBeforeItem.file_url)}" alt="${this.tsEscapeAttribute(tsBeforeItem.filename || tsImageLabel)}">
+                                <img class="ts-image-compare-after" src="${tsApiURL(tsAfterItem.file_url)}" alt="${this.tsEscapeAttribute(tsAfterItem.filename || tsImageLabel)}">
+                                <div class="ts-image-compare-divider"></div>
+                                <input class="ts-image-compare-range" type="range" min="0" max="100" value="50" aria-label="${this.tsEscapeAttribute(this.tsT("label.imageCompareWipe", "Image comparison slider"))}">
+                            </div>
+                        </div>
+                    `;
+                }
+                return `
+                    <div class="ts-image-compare-shell ts-image-compare-grid" data-count="${tsCompareItems.length}">
+                        ${tsCompareItems.map((tsCompareItem) => `
+                            <div class="ts-image-compare-card">
+                                <img src="${tsApiURL(tsCompareItem.file_url)}" alt="${this.tsEscapeAttribute(tsCompareItem.filename || tsImageLabel)}">
+                            </div>
+                        `).join("")}
+                    </div>
+                `;
+            }
             return `<img src="${tsFileURL}" alt="${this.tsEscapeAttribute(tsAsset.filename || tsAssetLabel)}">`;
         }
         if (tsAsset.type === "video") {
