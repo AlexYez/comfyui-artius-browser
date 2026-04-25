@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from .common import TSBuildDiscoveredPayload, TSBuildIndexedPayload
+from .probe import TSBuildAudioTechnicalInfo
 from ..ts_types import TSAssetPayload, TSAssetStat
-from ..ts_utils import TSJsonDumps, TSParseMaybeFloat, TSParseMaybeInt
+from ..ts_utils import TSJsonDumps
 
 
 class TSAudioHandler:
@@ -22,30 +23,14 @@ class TSAudioHandler:
 
     def TSBuildIndexedPayload(self, ts_asset_stat: TSAssetStat, ts_asset_hash: str) -> TSAssetPayload:
         ts_probe = self.ts_tools.TSRunFFProbe(ts_asset_stat.ts_path)
-        ts_streams = ts_probe.get("streams", []) if isinstance(ts_probe, dict) else []
-        ts_audio_stream = next(
-            (ts_stream for ts_stream in ts_streams if isinstance(ts_stream, dict) and ts_stream.get("codec_type") == "audio"),
-            {},
-        )
-        ts_format = ts_probe.get("format", {}) if isinstance(ts_probe, dict) else {}
-        ts_duration = TSParseMaybeFloat(ts_format.get("duration") or ts_audio_stream.get("duration"))
-        ts_codec_name = str(ts_audio_stream.get("codec_name") or ts_audio_stream.get("codec_tag_string") or "").strip()
-        ts_technical = {
-            "kind": self.ts_kind,
-            "format_name": str(ts_format.get("format_long_name") or ts_format.get("format_name") or ts_asset_stat.ts_extension.lstrip(".").upper()),
-            "codec_name": ts_codec_name,
-            "bit_rate": TSParseMaybeInt(ts_format.get("bit_rate") or ts_audio_stream.get("bit_rate")),
-            "duration": ts_duration,
-            "sample_rate": TSParseMaybeInt(ts_audio_stream.get("sample_rate")),
-            "channels": TSParseMaybeInt(ts_audio_stream.get("channels")),
-        }
+        ts_technical = TSBuildAudioTechnicalInfo(ts_probe, ts_asset_stat.ts_extension)
         return TSBuildIndexedPayload(
             ts_asset_stat,
             self.ts_kind,
             self.ts_preview_cache.TSGetTypePlaceholderPreview(self.ts_kind),
             ts_asset_hash,
             ts_technical_json=TSJsonDumps(ts_technical),
-            ts_duration=ts_duration,
+            ts_duration=ts_technical.get("duration"),
             ts_has_preview=False,
             ts_has_metadata=True,
         )

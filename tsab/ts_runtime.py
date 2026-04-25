@@ -16,12 +16,13 @@ from .ts_handlers import TSHandlerRegistry
 from .ts_hashing import TSComputeFileHash, TSDetectSupportedType
 from .ts_indexer import TSIndexer
 from .ts_logging import TSLogInfoIfVerbose, TSLogVerbose
+from .media.probe import TSMergeMissingAudioTechnicalInfo, TSMergeMissingVideoTechnicalInfo
 from .ts_preview import TSPreviewCache
 from .ts_routes import TSRegisterRoutes
 from .ts_storage import TSStoragePaths
 from .ts_tools import TSToolLocator
 from .ts_types import TSAssetStat
-from .ts_utils import TSExtractPromptText, TSExtractWorkflowText, TSJsonDumps, TSJsonLoads, TSNormalizePathString, TSParseMaybeFloat, TSRelativePosixPath
+from .ts_utils import TSExtractPromptText, TSExtractWorkflowText, TSJsonDumps, TSJsonLoads, TSNormalizePathString, TSRelativePosixPath
 
 TS_WORKFLOW_PREVIEW_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".avif", ".gif", ".mp4", ".webm", ".mov", ".m4v"}
 
@@ -403,32 +404,11 @@ class TSAssetBrowserRuntime:
         if not ts_source_path.exists():
             return ts_row, ts_technical_info
         ts_probe = self.ts_tools.TSRunFFProbe(ts_source_path)
-        ts_streams = ts_probe.get("streams", []) if isinstance(ts_probe, dict) else []
-        ts_video_stream = next(
-            (ts_stream for ts_stream in ts_streams if isinstance(ts_stream, dict) and ts_stream.get("codec_type") == "video"),
-            {},
+        ts_technical_info, ts_changed = TSMergeMissingVideoTechnicalInfo(
+            ts_technical_info,
+            ts_probe,
+            str(ts_row["extension"] or ""),
         )
-        ts_codec_name = str(ts_video_stream.get("codec_name") or ts_video_stream.get("codec_tag_string") or "").strip()
-        ts_audio_stream = next(
-            (ts_stream for ts_stream in ts_streams if isinstance(ts_stream, dict) and ts_stream.get("codec_type") == "audio"),
-            {},
-        )
-        ts_audio_codec_name = str(ts_audio_stream.get("codec_name") or ts_audio_stream.get("codec_tag_string") or "").strip()
-        ts_audio_channels = TSParseMaybeFloat(ts_audio_stream.get("channels"))
-        ts_fps = TSParseMaybeFloat(ts_video_stream.get("avg_frame_rate") or ts_video_stream.get("r_frame_rate"))
-        ts_changed = False
-        if ts_codec_name and not ts_technical_info.get("codec_name"):
-            ts_technical_info["codec_name"] = ts_codec_name
-            ts_changed = True
-        if ts_audio_codec_name and not ts_technical_info.get("audio_codec_name"):
-            ts_technical_info["audio_codec_name"] = ts_audio_codec_name
-            ts_changed = True
-        if ts_audio_channels and not ts_technical_info.get("audio_channels"):
-            ts_technical_info["audio_channels"] = int(ts_audio_channels)
-            ts_changed = True
-        if ts_fps and not ts_technical_info.get("fps"):
-            ts_technical_info["fps"] = ts_fps
-            ts_changed = True
         if not ts_changed:
             return ts_row, ts_technical_info
         ts_updated_row = self.ts_database.TSUpsertAsset(self.ts_database.TSBuildUpdatedPayload(
@@ -448,20 +428,11 @@ class TSAssetBrowserRuntime:
         if not ts_source_path.exists():
             return ts_row, ts_technical_info
         ts_probe = self.ts_tools.TSRunFFProbe(ts_source_path)
-        ts_streams = ts_probe.get("streams", []) if isinstance(ts_probe, dict) else []
-        ts_audio_stream = next(
-            (ts_stream for ts_stream in ts_streams if isinstance(ts_stream, dict) and ts_stream.get("codec_type") == "audio"),
-            {},
+        ts_technical_info, ts_changed = TSMergeMissingAudioTechnicalInfo(
+            ts_technical_info,
+            ts_probe,
+            str(ts_row["extension"] or ""),
         )
-        ts_codec_name = str(ts_audio_stream.get("codec_name") or ts_audio_stream.get("codec_tag_string") or "").strip()
-        ts_channels = TSParseMaybeFloat(ts_audio_stream.get("channels"))
-        ts_changed = False
-        if ts_codec_name and not ts_technical_info.get("codec_name"):
-            ts_technical_info["codec_name"] = ts_codec_name
-            ts_changed = True
-        if ts_channels and not ts_technical_info.get("channels"):
-            ts_technical_info["channels"] = int(ts_channels)
-            ts_changed = True
         if not ts_changed:
             return ts_row, ts_technical_info
         ts_updated_row = self.ts_database.TSUpsertAsset(self.ts_database.TSBuildUpdatedPayload(
