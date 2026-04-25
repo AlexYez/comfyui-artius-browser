@@ -216,7 +216,14 @@ class TSImageHandler:
             for ts_text_value in ts_fallback_candidates
             if TSNormalizePromptKey(ts_text_value) not in ts_negative_keys
         ]
-        ts_positive_prompt = "\n\n".join(ts_positive_candidates or ts_positive_fallback_candidates or ts_fallback_candidates)[:16_000]
+        if ts_positive_candidates:
+            ts_positive_prompt = "\n\n".join(ts_positive_candidates)[:16_000]
+        elif ts_positive_fallback_candidates:
+            ts_positive_prompt = "\n\n".join(ts_positive_fallback_candidates)[:16_000]
+        elif not ts_negative_candidates:
+            ts_positive_prompt = "\n\n".join(ts_fallback_candidates)[:16_000]
+        else:
+            ts_positive_prompt = ""
         ts_negative_prompt = "\n\n".join(ts_negative_candidates)[:16_000]
         if ts_positive_prompt and TSNormalizePromptKey(ts_positive_prompt) == TSNormalizePromptKey(ts_negative_prompt):
             ts_negative_prompt = ""

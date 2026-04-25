@@ -9,6 +9,8 @@
   <a href="#russian">Русский</a> |
   <a href="#spanish">Español</a> |
   <a href="#chinese">中文</a> |
+  <a href="#japanese">日本語</a> |
+  <a href="#korean">한국어</a> |
   <a href="#german">Deutsch</a> |
   <a href="#italian">Italiano</a> |
   <a href="#french">Français</a> |
@@ -203,6 +205,16 @@ pip install -r requirements.txt
 3. Make sure `ffmpeg` and `ffprobe` are available
 4. Restart ComfyUI
 5. Hard refresh with `Ctrl+F5`
+
+### Release checks
+
+Before publishing a new version, run:
+
+```bash
+python scripts/check_release.py
+```
+
+It validates Python syntax, JavaScript syntax, JSON files, localization keys, obvious dead top-level helpers, unit tests, and Git whitespace issues.
 
 ### Runtime storage
 
@@ -468,3 +480,59 @@ pip install -r requirements.txt
 ```
 
 Depois reinicie o ComfyUI e garanta que `ffmpeg` e `ffprobe` estejam disponíveis.
+
+---
+
+<a id="japanese"></a>
+## 日本語
+
+**Artius Browser** は、ComfyUI の中でアセットと workflow を素早く扱うためのサイドバーブラウザです。大きなライブラリでも軽く動き、プレビューとメタデータを見やすく整理します。
+
+主な機能:
+
+- `Assets` と `Workflows` の2つのタブ
+- 両方のタブで `Flat` / `Tree` 表示
+- タブごとに検索、ソート、プレビューサイズ、表示モードを保存
+- 画像、動画、音声、3D の軽量プレビューキャッシュ
+- ComfyUI 標準の workflow フォルダを直接表示
+- PNG の positive prompt と negative prompt を分けて表示
+- `2` 枚の画像は wipe スライダーで比較、`4` 枚の画像はグリッドで比較
+- 動画はフレーム単位の移動と `2` または `4` 本の同期比較に対応
+- ComfyUI ネイティブの 3D viewer と連携
+- 削除は完全削除ではなくシステムのゴミ箱へ移動
+
+インストール:
+
+```bash
+pip install -r requirements.txt
+```
+
+ComfyUI を再起動し、`ffmpeg` と `ffprobe` が利用できることを確認してください。
+
+---
+
+<a id="korean"></a>
+## 한국어
+
+**Artius Browser**는 ComfyUI 안에서 에셋과 workflow를 빠르게 탐색하기 위한 사이드바 브라우저입니다. 큰 라이브러리에서도 가볍게 동작하고, 프리뷰와 메타데이터를 깔끔하게 보여줍니다.
+
+주요 기능:
+
+- `Assets`와 `Workflows` 탭
+- 두 탭 모두 `Flat` / `Tree` 보기 지원
+- 탭별 검색, 정렬, 프리뷰 크기, 보기 모드 저장
+- 이미지, 비디오, 오디오, 3D 에셋의 최적화된 프리뷰 캐시
+- ComfyUI 기본 workflow 폴더를 직접 탐색
+- PNG positive prompt와 negative prompt를 분리해서 표시
+- 이미지 `2`장은 wipe 슬라이더로 비교, 이미지 `4`장은 그리드로 비교
+- 비디오는 프레임 단위 이동과 `2`개 또는 `4`개 동기 비교 지원
+- ComfyUI 네이티브 3D viewer 통합
+- 삭제 시 영구 삭제가 아니라 시스템 휴지통으로 이동
+
+설치:
+
+```bash
+pip install -r requirements.txt
+```
+
+ComfyUI를 다시 시작하고 `ffmpeg`와 `ffprobe`를 사용할 수 있는지 확인하세요.
