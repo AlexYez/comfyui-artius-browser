@@ -7,16 +7,13 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from tsab.media.image import TSImageHandler
+from tsab.media.prompt_metadata import TSExtractPromptPartsFromPromptField
 
 
 class TSImagePromptMetadataTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.ts_handler = object.__new__(TSImageHandler)
-
     def TSParsePromptField(self, ts_payload) -> tuple[str, str]:
         ts_text = ts_payload if isinstance(ts_payload, str) else json.dumps(ts_payload)
-        return self.ts_handler._TSExtractPromptPartsFromPromptField(ts_text)
+        return TSExtractPromptPartsFromPromptField(ts_text)
 
     def test_plain_prompt_is_positive_only(self) -> None:
         ts_positive, ts_negative = self.TSParsePromptField("cinematic portrait, sunset")
