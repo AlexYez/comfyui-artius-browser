@@ -142,7 +142,12 @@ class TSAssetProcessingService:
             ts_metadata_json = str(ts_metadata_payload.get("metadata") or "{}")
             ts_prompt_text = str(ts_metadata_payload.get("prompt_text") or "")
             ts_workflow_text = str(ts_metadata_payload.get("workflow_text") or "")
-            ts_has_metadata = bool(ts_metadata_json and ts_metadata_json != "{}") or bool(ts_prompt_text) or bool(ts_workflow_text)
+            ts_has_metadata = bool(
+                ts_metadata_payload.get("has_metadata")
+                or (ts_metadata_json and ts_metadata_json != "{}")
+                or ts_prompt_text
+                or ts_workflow_text
+            )
             ts_payload = self.ts_database.TSBuildUpdatedPayload(
                 ts_fresh_row,
                 ts_metadata=ts_metadata_json,

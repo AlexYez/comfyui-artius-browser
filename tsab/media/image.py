@@ -95,5 +95,5 @@ class TSImageHandler:
             "metadata": TSJsonDumps(ts_metadata_payload) if ts_metadata_payload else "{}",
             "prompt_text": ts_prompt_text,
             "workflow_text": ts_workflow_text,
-            "has_metadata": bool(ts_prompt_text or ts_negative_prompt_text or ts_workflow_text),
+            "has_metadata": True,
         }
