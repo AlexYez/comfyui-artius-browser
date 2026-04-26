@@ -12,6 +12,7 @@ from typing import Any, Iterable
 
 from .ts_hashing import TSComputeFileHash, TSDetectSupportedType
 from .ts_indexer_discovery import TSFilterCompanionEntries
+from .ts_indexer_progress import TSBuildConsoleProgressBar, TSBuildProgressMessage, TSComputeProgressPercent
 from .ts_logging import TSLogInfoIfVerbose, TSLogProgress, TSLogVerbose
 from .ts_settings import (
     TS_LEGACY_STORAGE_DIRECTORY_NAMES,
@@ -327,46 +328,9 @@ class TSIndexer:
         if ts_batch:
             yield ts_batch
 
-    def _TSComputeProgressPercent(self) -> float:
-        if self.ts_status.ts_phase == "count":
-            return 0.0
-        if self.ts_status.ts_phase == "walk":
-            if self.ts_status.ts_total_files <= 0:
-                return 0.0
-            return min(55.0, 55.0 * (self.ts_status.ts_scanned / max(1, self.ts_status.ts_total_files)))
-        if self.ts_status.ts_phase == "hash":
-            if self.ts_status.ts_total_candidates <= 0:
-                return 100.0
-            return min(100.0, 55.0 + (45.0 * (self.ts_status.ts_processed_candidates / max(1, self.ts_status.ts_total_candidates))))
-        if self.ts_status.ts_phase == "idle" and self.ts_status.ts_completed_at is not None and not self.ts_status.ts_error:
-            return 100.0
-        return max(0.0, min(100.0, self.ts_status.ts_progress_percent))
-
-    def _TSBuildProgressMessage(self) -> str:
-        if self.ts_status.ts_phase == "count":
-            return "Counting supported files"
-        if self.ts_status.ts_phase == "walk":
-            if self.ts_status.ts_total_files > 0:
-                return f"Scanning files {self.ts_status.ts_scanned}/{self.ts_status.ts_total_files}"
-            return f"Scanning files {self.ts_status.ts_scanned}"
-        if self.ts_status.ts_phase == "hash":
-            if self.ts_status.ts_total_candidates > 0:
-                return f"Indexing changed assets {self.ts_status.ts_processed_candidates}/{self.ts_status.ts_total_candidates}"
-            return "Finalizing index"
-        if self.ts_status.ts_phase == "error":
-            return self.ts_status.ts_error or "Scan failed"
-        if self.ts_status.ts_phase == "idle" and self.ts_status.ts_completed_at is not None:
-            return "Scan complete"
-        return "Idle"
-
-    def _TSBuildConsoleProgressBar(self, ts_percent: float, ts_width: int = 24) -> str:
-        ts_clamped = max(0.0, min(100.0, ts_percent))
-        ts_filled = int(round((ts_clamped / 100.0) * ts_width))
-        return f"{'#' * ts_filled}{'-' * max(0, ts_width - ts_filled)}"
-
     def _TSEmitScanProgress(self, *, force_event: bool = False, force_log: bool = False) -> None:
-        self.ts_status.ts_progress_percent = self._TSComputeProgressPercent()
-        self.ts_status.ts_progress_message = self._TSBuildProgressMessage()
+        self.ts_status.ts_progress_percent = TSComputeProgressPercent(self.ts_status)
+        self.ts_status.ts_progress_message = TSBuildProgressMessage(self.ts_status)
         if force_event or self.ts_status.ts_running:
             self.ts_emit_callback(
                 TS_EVENT_INDEX_PROGRESS,
@@ -381,7 +345,7 @@ class TSIndexer:
             self.ts_last_progress_bucket = ts_bucket
             TSLogProgress(
                 "TS asset scan progress: [%s] %3d%% | %s",
-                self._TSBuildConsoleProgressBar(self.ts_status.ts_progress_percent),
+                TSBuildConsoleProgressBar(self.ts_status.ts_progress_percent),
                 round(self.ts_status.ts_progress_percent),
                 self.ts_status.ts_progress_message,
             )
