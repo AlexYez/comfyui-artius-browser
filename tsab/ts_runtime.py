@@ -18,9 +18,10 @@ from .ts_db import TSDatabase
 from .ts_delete import TSDeleteService
 from .ts_handlers import TSHandlerRegistry
 from .ts_indexer import TSIndexer
-from .ts_logging import TSLogInfoIfVerbose, TSLogVerbose
+from .ts_logging import TSLogVerbose
 from .ts_preview import TSPreviewCache
 from .ts_routes import TSRegisterRoutes
+from .ts_scan_service import TSScanService
 from .ts_storage import TSStoragePaths
 from .ts_tools import TSToolLocator
 from .ts_types import TSAssetStat
@@ -64,8 +65,15 @@ class TSAssetBrowserRuntime:
             ts_tools=self.ts_tools,
             ts_emit_callback=self.TSEmitEvent,
         )
+        self.ts_scan_service = TSScanService(
+            ts_indexer=self.ts_indexer,
+            ts_database=self.ts_database,
+            ts_preview_cache=self.ts_preview_cache,
+            ts_output_directory=self.ts_storage_paths.ts_output_directory,
+            ts_is_autoscan_enabled=self.TSIsAutoscanEnabled,
+            ts_register_routes=lambda: TSRegisterRoutes(self),
+        )
         self.ts_bootstrapped = False
-        self.ts_start_scan_scheduled = False
         self.ts_asset_locks: dict[int, threading.Lock] = {}
         self.ts_asset_locks_guard = threading.Lock()
         self.ts_3d_viewer_module_urls: dict[str, str | None] = {}
@@ -95,30 +103,7 @@ class TSAssetBrowserRuntime:
         self.TSStart()
 
     def TSStart(self) -> None:
-        try:
-            if not self.TSIsAutoscanEnabled():
-                TSLogVerbose("runtime.scan.schedule.skipped", reason="autoscan_disabled")
-                return
-            from server import PromptServer
-
-            ts_server = getattr(PromptServer, "instance", None)
-            if ts_server is None or getattr(ts_server, "loop", None) is None:
-                TSLogVerbose("runtime.start.skipped", reason="prompt_server_loop_unavailable")
-                return
-            TSRegisterRoutes(self)
-            ts_loop = ts_server.loop
-            if self.ts_start_scan_scheduled:
-                TSLogVerbose("runtime.scan.schedule.skipped", reason="already_scheduled")
-                return
-            self.ts_start_scan_scheduled = True
-            TSLogInfoIfVerbose(
-                "Scheduling Timesaver Artius Browser scan for %s",
-                self.ts_storage_paths.ts_output_directory,
-            )
-            TSLogVerbose("runtime.scan.scheduled", output_directory=str(self.ts_storage_paths.ts_output_directory))
-            ts_loop.call_soon_threadsafe(lambda: ts_loop.create_task(self.ts_indexer.TSStartBackgroundScan()))
-        except Exception:
-            TSLogger.exception("Failed to start Timesaver Artius Browser background scan")
+        self.ts_scan_service.TSStart()
 
     def TSEmitEvent(self, ts_event_name: str, ts_payload: dict[str, Any]) -> None:
         try:
@@ -134,21 +119,13 @@ class TSAssetBrowserRuntime:
             TSLogger.debug("Failed to emit event %s", ts_event_name, exc_info=True)
 
     async def TSRequestScan(self, ts_scope: str | None = None, ts_root_id: str | None = None) -> bool:
-        TSLogVerbose("runtime.scan.requested", scope=ts_scope, root_id=ts_root_id)
-        return await self.ts_indexer.TSStartBackgroundScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
+        return await self.ts_scan_service.TSRequestScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
 
     async def TSRequestCacheRebuild(self) -> dict[str, Any]:
-        TSLogVerbose("runtime.rebuild.requested")
-        if bool(self.TSGetScanStatus().get("running")):
-            TSLogVerbose("runtime.rebuild.skipped", reason="scan_running")
-            return {"started": False, "status": self.TSGetScanStatus()}
-        self.ts_database.TSResetIndex()
-        self.ts_preview_cache.TSClearGeneratedCache()
-        ts_started = await self.ts_indexer.TSStartBackgroundScan()
-        return {"started": ts_started, "status": self.TSGetScanStatus()}
+        return await self.ts_scan_service.TSRequestCacheRebuild()
 
     def TSGetScanStatus(self) -> dict[str, Any]:
-        return self.ts_indexer.TSGetStatus()
+        return self.ts_scan_service.TSGetScanStatus()
 
     def TSIsAutoscanEnabled(self) -> bool:
         return self.ts_browser_settings.TSIsAutoscanEnabled()
@@ -277,9 +254,7 @@ class TSAssetBrowserRuntime:
         ts_view: str = "flat",
     ) -> dict[str, Any]:
         TSLogVerbose("runtime.assets.query", search_text=ts_search_text, filters=ts_filters, offset=ts_offset, limit=ts_limit, view=ts_view)
-        ts_scan_status = self.TSGetScanStatus()
-        if self.TSIsAutoscanEnabled() and not ts_scan_status.get("running") and ts_scan_status.get("started_at") is None:
-            self.TSStart()
+        self.ts_scan_service.TSMaybeStartInitialAutoscan()
         ts_rows, ts_has_more = self.ts_database.TSQueryAssetsPage(
             ts_search_text=ts_search_text,
             ts_filters=ts_filters,
