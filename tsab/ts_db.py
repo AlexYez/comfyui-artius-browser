@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from .ts_db_payload import TSBuildUpdatedAssetPayload, TSComputeAssetStatus, TSPayloadFromAssetRow
 from .ts_db_query import TSBuildAssetQueryParts
 from .ts_logging import TSLogVerbose
 from .ts_types import TSAssetPayload
@@ -201,15 +201,6 @@ class TSDatabase:
             TSLogVerbose("db.reset.vacuum_failed", database=str(self.ts_database_path), error=str(ts_error))
         TSLogVerbose("db.reset", database=str(self.ts_database_path))
 
-    def _TSComputeStatus(self, ts_is_indexed: bool, ts_has_preview: bool, ts_has_metadata: bool) -> str:
-        if ts_is_indexed and ts_has_preview and ts_has_metadata:
-            return "metadata_ready"
-        if ts_is_indexed and ts_has_preview:
-            return "previewed"
-        if ts_is_indexed:
-            return "indexed"
-        return "discovered"
-
     def _TSEnsureLookupId(self, ts_table_name: str, ts_key_column: str, ts_value: str) -> int:
         ts_connection = self.TSGetConnection()
         ts_connection.execute(
@@ -257,33 +248,7 @@ class TSDatabase:
         return int(ts_row["id"])
 
     def TSPayloadFromRow(self, ts_row: sqlite3.Row) -> TSAssetPayload:
-        return TSAssetPayload(
-            ts_path=str(ts_row["path"]),
-            ts_type=str(ts_row["type"]),
-            ts_preview_path=str(ts_row["preview_path"] or ""),
-            ts_metadata=str(ts_row["metadata"] or "{}"),
-            ts_technical_json=str(ts_row["technical_json"] or "{}"),
-            ts_mtime_ns=int(ts_row["mtime_ns"] or 0),
-            ts_hash=str(ts_row["hash"] or ""),
-            ts_folder_path=str(ts_row["folder_path"] or ""),
-            ts_duration=ts_row["duration"],
-            ts_width=ts_row["width"],
-            ts_height=ts_row["height"],
-            ts_fps=ts_row["fps"],
-            ts_size_bytes=int(ts_row["size_bytes"] or 0),
-            ts_filename=str(ts_row["filename"] or ""),
-            ts_extension=str(ts_row["extension"] or ""),
-            ts_scope=str(ts_row["scope"] or "output"),
-            ts_root_id=str(ts_row["root_id"] or "output"),
-            ts_prompt_text=str(ts_row["prompt_text"] or ""),
-            ts_workflow_text=str(ts_row["workflow_text"] or ""),
-            ts_created_at=int(ts_row["created_at"] or 0),
-            ts_is_indexed=bool(ts_row["is_indexed"]),
-            ts_has_preview=bool(ts_row["has_preview"]),
-            ts_has_metadata=bool(ts_row["has_metadata"]),
-            ts_tags=str(ts_row["tags"] or ""),
-            ts_rating=int(ts_row["rating"] or 0),
-        )
+        return TSPayloadFromAssetRow(ts_row)
 
     def TSGetSnapshot(self, ts_root_ids: list[str] | None = None) -> dict[str, sqlite3.Row]:
         ts_connection = self.TSGetConnection()
@@ -343,7 +308,7 @@ class TSDatabase:
         ts_type_lookup_id = self._TSEnsureLookupId("asset_types", "type_key", ts_payload.ts_type)
         ts_extension_lookup_id = self._TSEnsureLookupId("asset_extensions", "extension_key", ts_payload.ts_extension)
         ts_folder_lookup_id = self._TSEnsureFolderLookupId(ts_root_lookup_id, ts_payload.ts_folder_path)
-        ts_status = self._TSComputeStatus(
+        ts_status = TSComputeAssetStatus(
             bool(ts_payload.ts_is_indexed),
             bool(ts_payload.ts_has_preview),
             bool(ts_payload.ts_has_metadata),
@@ -463,8 +428,7 @@ class TSDatabase:
         return ts_rows
 
     def TSBuildUpdatedPayload(self, ts_row: sqlite3.Row, **ts_overrides: Any) -> TSAssetPayload:
-        ts_payload = self.TSPayloadFromRow(ts_row)
-        return replace(ts_payload, **ts_overrides)
+        return TSBuildUpdatedAssetPayload(ts_row, **ts_overrides)
 
     def _TSSyncFTSRow(self, ts_asset_id: int, ts_filename: str) -> None:
         ts_connection = self.TSGetConnection()
