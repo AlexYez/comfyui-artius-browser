@@ -12,6 +12,7 @@ from .ts_asset_metadata import TSResolveAssetNegativePromptText, TSResolveAssetP
 from .ts_asset_payload import TSBuildAssetCard, TSResolveTechnicalInfo
 from .ts_asset_processing import TSAssetProcessingService
 from .ts_asset_technical import TSEnrichAudioTechnicalInfo, TSEnrichVideoTechnicalInfo
+from .ts_browser_settings import TSBrowserSettingsService
 from .ts_config import TSConfigStore
 from .ts_db import TSDatabase
 from .ts_delete import TSDeleteService
@@ -23,7 +24,6 @@ from .ts_routes import TSRegisterRoutes
 from .ts_storage import TSStoragePaths
 from .ts_tools import TSToolLocator
 from .ts_types import TSAssetStat
-from .ts_ui_settings import TSApplyUISettingsUpdates, TSNormalizeUISettings
 from .ts_utils import TSJsonLoads, TSNormalizePathString, TSRelativePosixPath
 from .ts_workflows import TSWorkflowService
 
@@ -35,6 +35,7 @@ class TSAssetBrowserRuntime:
     def __init__(self) -> None:
         self.ts_storage_paths = TSStoragePaths()
         self.ts_config_store = TSConfigStore(self.ts_storage_paths.ts_config_path)
+        self.ts_browser_settings = TSBrowserSettingsService(self.ts_config_store)
         self.ts_database = TSDatabase(self.ts_storage_paths.ts_database_path)
         self.ts_tools = TSToolLocator(self.ts_config_store)
         self.ts_preview_cache = TSPreviewCache(self.ts_storage_paths, self.ts_config_store)
@@ -150,18 +151,13 @@ class TSAssetBrowserRuntime:
         return self.ts_indexer.TSGetStatus()
 
     def TSIsAutoscanEnabled(self) -> bool:
-        return bool(self.ts_config_store.TSLoadConfig().get("ui", {}).get("autoscan", True))
+        return self.ts_browser_settings.TSIsAutoscanEnabled()
 
     def TSGetUISettings(self) -> dict[str, Any]:
-        ts_ui = self.ts_config_store.TSLoadConfig().get("ui", {})
-        return TSNormalizeUISettings(ts_ui)
+        return self.ts_browser_settings.TSGetUISettings()
 
     def TSSaveUISettings(self, ts_ui_updates: dict[str, Any] | None) -> dict[str, Any]:
-        ts_config = self.ts_config_store.TSLoadConfig()
-        ts_ui = ts_config.setdefault("ui", {})
-        TSApplyUISettingsUpdates(ts_ui, ts_ui_updates)
-        self.ts_config_store.TSSaveConfig(ts_config)
-        return self.TSGetUISettings()
+        return self.ts_browser_settings.TSSaveUISettings(ts_ui_updates)
 
     def TSGetRoots(self) -> list[dict[str, Any]]:
         ts_config = self.ts_config_store.TSLoadConfig()
