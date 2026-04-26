@@ -5,12 +5,11 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
 from typing import Any, Iterable
 
-from .ts_hashing import TSComputeFileHash, TSDetectSupportedType
 from .ts_indexer_discovery import TSIterAssetStats
 from .ts_indexer_payload import TSCarryExistingRowValues
+from .ts_indexer_processing import TSProcessCandidateTuple
 from .ts_indexer_progress import TSBuildConsoleProgressBar, TSBuildProgressMessage, TSComputeProgressPercent
 from .ts_logging import TSLogInfoIfVerbose, TSLogProgress, TSLogVerbose
 from .ts_settings import (
@@ -321,46 +320,7 @@ class TSIndexer:
         self,
         ts_candidate_tuple: tuple[TSAssetStat, Any | None],
     ) -> tuple[TSAssetPayload | None, Any | None]:
-        ts_asset_stat, ts_existing_row = ts_candidate_tuple
-        ts_kind = TSDetectSupportedType(ts_asset_stat.ts_path)
-        if ts_kind is None:
-            return None, ts_existing_row
-        ts_handler = self.ts_handler_registry.TSResolveHandler(ts_asset_stat.ts_extension, ts_kind)
-        if ts_handler is None:
-            return None, ts_existing_row
-        ts_hash = TSComputeFileHash(ts_asset_stat.ts_path)
-        ts_payload = ts_handler.TSBuildIndexedPayload(ts_asset_stat, ts_hash)
-        ts_processing_row = {
-            "path": ts_payload.ts_path,
-            "hash": ts_payload.ts_hash,
-            "type": ts_payload.ts_type,
-            "extension": ts_payload.ts_extension,
-            "filename": ts_payload.ts_filename,
-        }
-        ts_preview_path = ts_handler.TSGeneratePreview(ts_processing_row)
-        ts_has_preview = bool(ts_preview_path) and not self.ts_preview_cache.TSIsPlaceholderPreview(ts_preview_path)
-        ts_metadata_payload = ts_handler.TSExtractMetadata(ts_processing_row)
-        ts_metadata_json = str(ts_metadata_payload.get("metadata") or "{}")
-        ts_prompt_text = str(ts_metadata_payload.get("prompt_text") or "")
-        ts_workflow_text = str(ts_metadata_payload.get("workflow_text") or "")
-        ts_has_metadata = bool(
-            ts_metadata_payload.get("has_metadata")
-            or (ts_metadata_json and ts_metadata_json != "{}")
-            or ts_prompt_text
-            or ts_workflow_text
-            or ts_payload.ts_has_metadata
-        )
-        ts_payload = replace(
-            ts_payload,
-            ts_preview_path=ts_preview_path or ts_payload.ts_preview_path,
-            ts_metadata=ts_metadata_json,
-            ts_prompt_text=ts_prompt_text,
-            ts_workflow_text=ts_workflow_text,
-            ts_has_preview=ts_has_preview,
-            ts_has_metadata=ts_has_metadata,
-        )
-        ts_payload = TSCarryExistingRowValues(ts_payload, ts_existing_row, ts_reset_processing=False)
-        return ts_payload, ts_existing_row
+        return TSProcessCandidateTuple(ts_candidate_tuple, self.ts_handler_registry, self.ts_preview_cache)
 
 
 
