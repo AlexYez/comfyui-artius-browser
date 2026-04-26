@@ -7,6 +7,7 @@ from typing import Any
 
 from aiohttp import web as TSWeb
 
+from .ts_3d_thumbnail import TSSave3DThumbnail
 from .ts_asset_metadata import TSResolveAssetNegativePromptText, TSResolveAssetPromptText, TSResolveAssetWorkflowText
 from .ts_asset_payload import TSBuildAssetCard, TSResolveTechnicalInfo
 from .ts_asset_processing import TSAssetProcessingService
@@ -376,24 +377,14 @@ class TSAssetBrowserRuntime:
         return self.ts_delete_service.TSDeleteWorkflowFile(ts_workflow_path)
 
     def TSSave3DThumbnail(self, ts_asset_id: int, ts_image_data_url: str) -> dict[str, Any]:
-        ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
-        if ts_row is None:
-            raise TSWeb.HTTPNotFound()
-        if str(ts_row["type"] or "") != "3d":
-            raise TSWeb.HTTPBadRequest(reason="Asset is not a 3D model")
-        ts_preview_key = self.ts_preview_cache.TSBuildAssetPreviewKey(str(ts_row["hash"] or ""), Path(str(ts_row["path"])))
-        ts_preview_path = self.ts_preview_cache.TSPersist3DCapturePreview(ts_preview_key, ts_image_data_url)
-        if not ts_preview_path:
-            raise TSWeb.HTTPBadRequest(reason="Invalid 3D thumbnail payload")
-        ts_payload = self.ts_database.TSBuildUpdatedPayload(
-            ts_row,
-            ts_preview_path=ts_preview_path,
-            ts_has_preview=True,
+        return TSSave3DThumbnail(
+            ts_asset_id=ts_asset_id,
+            ts_image_data_url=ts_image_data_url,
+            ts_database=self.ts_database,
+            ts_preview_cache=self.ts_preview_cache,
+            ts_get_roots=self.TSGetRoots,
+            ts_emit_asset_upsert=self._TSEmitAssetUpsert,
         )
-        ts_updated_row = self.ts_database.TSUpsertAsset(ts_payload)
-        self._TSEmitAssetUpsert(ts_updated_row)
-        ts_roots = {ts_root["root_id"]: ts_root for ts_root in self.TSGetRoots()}
-        return TSBuildAssetCard(ts_updated_row, ts_roots, self.ts_preview_cache)
 
 
 def TSGetRuntime() -> TSAssetBrowserRuntime:
