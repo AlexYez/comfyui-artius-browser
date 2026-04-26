@@ -72,6 +72,7 @@ class TSDatabaseQueryTests(unittest.TestCase):
             TSAsset("alpha cat.png", "image", "images/cats", ts_created_at=10, ts_size_bytes=100, ts_width=512, ts_height=512, ts_rating=2),
             TSAsset("beta dog.png", "image", "images/dogs", ts_created_at=20, ts_size_bytes=300, ts_width=768, ts_height=512, ts_rating=4),
             TSAsset("cat movie.mp4", "video", "video/cats", ts_created_at=30, ts_size_bytes=900, ts_mtime_ns=3000),
+            TSAsset("cat movie.png", "image", "video/cats", ts_created_at=31, ts_size_bytes=90, ts_mtime_ns=3100),
             TSAsset("ambient loop.wav", "audio", "audio/music", ts_created_at=40, ts_size_bytes=500, ts_mtime_ns=4000),
             TSAsset("robot model.glb", "3d", "3d/models", ts_created_at=50, ts_size_bytes=700, ts_mtime_ns=5000),
             TSAsset("input sketch.png", "image", "sketches", ts_root_id="input", ts_scope="input", ts_created_at=60, ts_size_bytes=50),
@@ -149,13 +150,43 @@ class TSDatabaseQueryTests(unittest.TestCase):
                 ("audio/music", 1),
                 ("images/cats", 1),
                 ("images/dogs", 1),
-                ("video/cats", 1),
+                ("video/cats", 2),
             ],
         )
         self.assertEqual(
             [(ts_folder["folder_path"], ts_folder["asset_count"]) for ts_folder in ts_input_folders],
             [("sketches", 1)],
         )
+
+    def test_image_companion_files_are_hidden_when_media_with_same_stem_exists(self) -> None:
+        ts_database = self.TSBuildDatabase()
+
+        ts_rows, ts_has_more = ts_database.TSQueryAssetsPage(
+            ts_filters={
+                "types": ["image"],
+                "folder": "video/cats",
+                "sort_key": "filename",
+                "sort_direction": "asc",
+            },
+            ts_offset=0,
+            ts_limit=10,
+        )
+
+        self.assertFalse(ts_has_more)
+        self.assertEqual([ts_row["filename"] for ts_row in ts_rows], [])
+
+        ts_rows, _ts_has_more = ts_database.TSQueryAssetsPage(
+            ts_filters={
+                "types": ["video"],
+                "folder": "video/cats",
+                "sort_key": "filename",
+                "sort_direction": "asc",
+            },
+            ts_offset=0,
+            ts_limit=10,
+        )
+
+        self.assertEqual([ts_row["filename"] for ts_row in ts_rows], ["cat movie.mp4"])
 
 
 if __name__ == "__main__":
