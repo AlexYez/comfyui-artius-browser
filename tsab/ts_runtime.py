@@ -10,6 +10,7 @@ from aiohttp import web as TSWeb
 
 from .ts_asset_metadata import TSResolveAssetNegativePromptText, TSResolveAssetPromptText, TSResolveAssetWorkflowText
 from .ts_asset_payload import TSBuildAssetCard, TSResolveTechnicalInfo
+from .ts_asset_technical import TSEnrichAudioTechnicalInfo, TSEnrichVideoTechnicalInfo
 from .ts_config import TSConfigStore
 from .ts_db import TSDatabase
 from .ts_delete import TSDeleteService
@@ -17,14 +18,13 @@ from .ts_handlers import TSHandlerRegistry
 from .ts_hashing import TSComputeFileHash, TSDetectSupportedType
 from .ts_indexer import TSIndexer
 from .ts_logging import TSLogInfoIfVerbose, TSLogVerbose
-from .media.probe import TSMergeMissingAudioTechnicalInfo, TSMergeMissingVideoTechnicalInfo
 from .ts_preview import TSPreviewCache
 from .ts_routes import TSRegisterRoutes
 from .ts_storage import TSStoragePaths
 from .ts_tools import TSToolLocator
 from .ts_types import TSAssetStat
 from .ts_ui_settings import TSApplyUISettingsUpdates, TSNormalizeUISettings
-from .ts_utils import TSJsonDumps, TSJsonLoads, TSNormalizePathString, TSRelativePosixPath
+from .ts_utils import TSJsonLoads, TSNormalizePathString, TSRelativePosixPath
 
 TSLogger = logging.getLogger("TSArtiusBrowser")
 TSRuntimeSingleton = None
@@ -259,53 +259,6 @@ class TSAssetBrowserRuntime:
             return {"queued": False, "reason": "ready"}
         return {"queued": False, "reason": "disabled"}
 
-    def _TSEnrichVideoTechnicalInfo(self, ts_row, ts_technical: dict[str, Any] | None = None):
-        if str(ts_row["type"] or "") != "video":
-            return ts_row, (ts_technical or TSResolveTechnicalInfo(ts_row))
-        ts_technical_info = dict(ts_technical or TSResolveTechnicalInfo(ts_row))
-        if ts_technical_info.get("codec_name") and ts_technical_info.get("fps"):
-            return ts_row, ts_technical_info
-        ts_source_path = Path(str(ts_row["path"] or ""))
-        if not ts_source_path.exists():
-            return ts_row, ts_technical_info
-        ts_probe = self.ts_tools.TSRunFFProbe(ts_source_path)
-        ts_technical_info, ts_changed = TSMergeMissingVideoTechnicalInfo(
-            ts_technical_info,
-            ts_probe,
-            str(ts_row["extension"] or ""),
-        )
-        if not ts_changed:
-            return ts_row, ts_technical_info
-        ts_updated_row = self.ts_database.TSUpsertAsset(self.ts_database.TSBuildUpdatedPayload(
-            ts_row,
-            ts_technical_json=TSJsonDumps(ts_technical_info),
-            ts_fps=ts_technical_info.get("fps"),
-        ))
-        return ts_updated_row, ts_technical_info
-
-    def _TSEnrichAudioTechnicalInfo(self, ts_row, ts_technical: dict[str, Any] | None = None):
-        if str(ts_row["type"] or "") != "audio":
-            return ts_row, (ts_technical or TSResolveTechnicalInfo(ts_row))
-        ts_technical_info = dict(ts_technical or TSResolveTechnicalInfo(ts_row))
-        if ts_technical_info.get("codec_name") and ts_technical_info.get("channels"):
-            return ts_row, ts_technical_info
-        ts_source_path = Path(str(ts_row["path"] or ""))
-        if not ts_source_path.exists():
-            return ts_row, ts_technical_info
-        ts_probe = self.ts_tools.TSRunFFProbe(ts_source_path)
-        ts_technical_info, ts_changed = TSMergeMissingAudioTechnicalInfo(
-            ts_technical_info,
-            ts_probe,
-            str(ts_row["extension"] or ""),
-        )
-        if not ts_changed:
-            return ts_row, ts_technical_info
-        ts_updated_row = self.ts_database.TSUpsertAsset(self.ts_database.TSBuildUpdatedPayload(
-            ts_row,
-            ts_technical_json=TSJsonDumps(ts_technical_info),
-        ))
-        return ts_updated_row, ts_technical_info
-
     def _TSEnsureIndexed(self, ts_row):
         if ts_row is None:
             return None
@@ -470,9 +423,9 @@ class TSAssetBrowserRuntime:
         ts_roots = {ts_root["root_id"]: ts_root for ts_root in self.TSGetRoots()}
         ts_technical_info = TSResolveTechnicalInfo(ts_row)
         if str(ts_row["type"] or "") == "video":
-            ts_row, ts_technical_info = self._TSEnrichVideoTechnicalInfo(ts_row, ts_technical_info)
+            ts_row, ts_technical_info = TSEnrichVideoTechnicalInfo(ts_row, self.ts_database, self.ts_tools, ts_technical_info)
         elif str(ts_row["type"] or "") == "audio":
-            ts_row, ts_technical_info = self._TSEnrichAudioTechnicalInfo(ts_row, ts_technical_info)
+            ts_row, ts_technical_info = TSEnrichAudioTechnicalInfo(ts_row, self.ts_database, self.ts_tools, ts_technical_info)
         ts_payload = TSBuildAssetCard(ts_row, ts_roots, self.ts_preview_cache)
         ts_payload["detail_loaded"] = True
         ts_payload["metadata"] = TSJsonLoads(ts_row["metadata"], {})
