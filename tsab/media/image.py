@@ -4,8 +4,9 @@ from PIL import Image
 
 from .common import TSBuildDiscoveredPayload, TSBuildIndexedPayload
 from .prompt_metadata import TSExtractPromptPartsFromPromptField
+from ..ts_metadata_extract import TSExtractWorkflowText
 from ..ts_types import TSAssetPayload, TSAssetStat
-from ..ts_utils import TSExtractWorkflowText, TSJsonDumps
+from ..ts_utils import TSJsonDumps
 
 
 class TSImageHandler:
