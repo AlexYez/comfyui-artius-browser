@@ -8,6 +8,7 @@ from typing import Any
 
 from aiohttp import web as TSWeb
 
+from .ts_asset_metadata import TSResolveAssetNegativePromptText, TSResolveAssetPromptText, TSResolveAssetWorkflowText
 from .ts_asset_payload import TSBuildAssetCard, TSResolveTechnicalInfo
 from .ts_config import TSConfigStore
 from .ts_db import TSDatabase
@@ -23,7 +24,7 @@ from .ts_storage import TSStoragePaths
 from .ts_tools import TSToolLocator
 from .ts_types import TSAssetStat
 from .ts_ui_settings import TSApplyUISettingsUpdates, TSNormalizeUISettings
-from .ts_utils import TSExtractPromptText, TSExtractWorkflowText, TSJsonDumps, TSJsonLoads, TSNormalizePathString, TSRelativePosixPath
+from .ts_utils import TSJsonDumps, TSJsonLoads, TSNormalizePathString, TSRelativePosixPath
 
 TSLogger = logging.getLogger("TSArtiusBrowser")
 TSRuntimeSingleton = None
@@ -258,34 +259,6 @@ class TSAssetBrowserRuntime:
             return {"queued": False, "reason": "ready"}
         return {"queued": False, "reason": "disabled"}
 
-    def _TSResolvePromptText(self, ts_row) -> str:
-        ts_metadata = TSJsonLoads(ts_row["metadata"], {})
-        if isinstance(ts_metadata, dict):
-            ts_positive_prompt_text = str(ts_metadata.get("positive_prompt_text") or "")
-            if ts_positive_prompt_text:
-                return ts_positive_prompt_text
-        ts_prompt_text = str(ts_row["prompt_text"] or "")
-        if ts_prompt_text:
-            return ts_prompt_text
-        if ts_metadata:
-            return TSExtractPromptText(ts_metadata)
-        return ""
-
-    def _TSResolveNegativePromptText(self, ts_row) -> str:
-        ts_metadata = TSJsonLoads(ts_row["metadata"], {})
-        if not isinstance(ts_metadata, dict):
-            return ""
-        return str(ts_metadata.get("negative_prompt_text") or "")
-
-    def _TSResolveWorkflowText(self, ts_row) -> str:
-        ts_workflow_text = str(ts_row["workflow_text"] or "")
-        if ts_workflow_text:
-            return ts_workflow_text
-        ts_metadata = TSJsonLoads(ts_row["metadata"], {})
-        if ts_metadata:
-            return TSExtractWorkflowText(ts_metadata)
-        return ""
-
     def _TSEnrichVideoTechnicalInfo(self, ts_row, ts_technical: dict[str, Any] | None = None):
         if str(ts_row["type"] or "") != "video":
             return ts_row, (ts_technical or TSResolveTechnicalInfo(ts_row))
@@ -504,9 +477,9 @@ class TSAssetBrowserRuntime:
         ts_payload["detail_loaded"] = True
         ts_payload["metadata"] = TSJsonLoads(ts_row["metadata"], {})
         ts_payload["metadata_json"] = ts_row["metadata"]
-        ts_payload["prompt_text"] = self._TSResolvePromptText(ts_row)
-        ts_payload["negative_prompt_text"] = self._TSResolveNegativePromptText(ts_row)
-        ts_payload["workflow_text"] = self._TSResolveWorkflowText(ts_row)
+        ts_payload["prompt_text"] = TSResolveAssetPromptText(ts_row)
+        ts_payload["negative_prompt_text"] = TSResolveAssetNegativePromptText(ts_row)
+        ts_payload["workflow_text"] = TSResolveAssetWorkflowText(ts_row)
         ts_payload["technical_info"] = ts_technical_info
         return ts_payload
 
