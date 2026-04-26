@@ -8,10 +8,8 @@ from typing import Any
 from aiohttp import web as TSWeb
 
 from .ts_3d_thumbnail import TSSave3DThumbnail
-from .ts_asset_metadata import TSResolveAssetNegativePromptText, TSResolveAssetPromptText, TSResolveAssetWorkflowText
-from .ts_asset_payload import TSBuildAssetCard, TSResolveTechnicalInfo
+from .ts_asset_catalog import TSAssetCatalogService
 from .ts_asset_processing import TSAssetProcessingService
-from .ts_asset_technical import TSEnrichAudioTechnicalInfo, TSEnrichVideoTechnicalInfo
 from .ts_browser_settings import TSBrowserSettingsService
 from .ts_config import TSConfigStore
 from .ts_db import TSDatabase
@@ -25,7 +23,7 @@ from .ts_scan_service import TSScanService
 from .ts_storage import TSStoragePaths
 from .ts_tools import TSToolLocator
 from .ts_types import TSAssetStat
-from .ts_utils import TSJsonLoads, TSNormalizePathString, TSRelativePosixPath
+from .ts_utils import TSNormalizePathString, TSRelativePosixPath
 from .ts_workflows import TSWorkflowService
 
 TSLogger = logging.getLogger("TSArtiusBrowser")
@@ -73,14 +71,19 @@ class TSAssetBrowserRuntime:
             ts_is_autoscan_enabled=self.TSIsAutoscanEnabled,
             ts_register_routes=lambda: TSRegisterRoutes(self),
         )
+        self.ts_asset_catalog = TSAssetCatalogService(
+            ts_database=self.ts_database,
+            ts_preview_cache=self.ts_preview_cache,
+            ts_tools=self.ts_tools,
+            ts_scan_service=self.ts_scan_service,
+            ts_get_roots=self.TSGetRoots,
+            ts_ensure_metadata=self._TSEnsureMetadata,
+        )
         self.ts_bootstrapped = False
         self.ts_asset_locks: dict[int, threading.Lock] = {}
         self.ts_asset_locks_guard = threading.Lock()
         self.ts_3d_viewer_module_urls: dict[str, str | None] = {}
         TSLogVerbose("runtime.initialized")
-
-    def _TSHealthPayload(self) -> list[dict[str, Any]]:
-        return [ts_issue.TSAsDict() for ts_issue in self.ts_tools.TSGetHealth()]
 
     def _TSGetAssetLock(self, ts_asset_id: int) -> threading.Lock:
         with self.ts_asset_locks_guard:
@@ -179,8 +182,7 @@ class TSAssetBrowserRuntime:
     def _TSEmitAssetUpsert(self, ts_row) -> None:
         if self.ts_indexer.TSGetStatus().get("running"):
             return
-        ts_roots = {ts_root["root_id"]: ts_root for ts_root in self.TSGetRoots()}
-        ts_asset_payload = TSBuildAssetCard(ts_row, ts_roots, self.ts_preview_cache)
+        ts_asset_payload = self.ts_asset_catalog.TSBuildAssetCard(ts_row)
         self.TSEmitEvent(
             "tsab:asset-upsert",
             {
@@ -253,57 +255,16 @@ class TSAssetBrowserRuntime:
         ts_limit: int,
         ts_view: str = "flat",
     ) -> dict[str, Any]:
-        TSLogVerbose("runtime.assets.query", search_text=ts_search_text, filters=ts_filters, offset=ts_offset, limit=ts_limit, view=ts_view)
-        self.ts_scan_service.TSMaybeStartInitialAutoscan()
-        ts_rows, ts_has_more = self.ts_database.TSQueryAssetsPage(
+        return self.ts_asset_catalog.TSQueryAssets(
             ts_search_text=ts_search_text,
             ts_filters=ts_filters,
             ts_offset=ts_offset,
             ts_limit=ts_limit,
+            ts_view=ts_view,
         )
-        ts_roots = {ts_root["root_id"]: ts_root for ts_root in self.TSGetRoots()}
-        ts_items = [TSBuildAssetCard(ts_row, ts_roots, self.ts_preview_cache) for ts_row in ts_rows]
-        ts_scope_for_tree = None
-        ts_root_id_for_tree = None
-        if ts_filters.get("scopes") and len(ts_filters["scopes"]) == 1:
-            ts_scope_for_tree = ts_filters["scopes"][0]
-        if ts_filters.get("root_ids") and len(ts_filters["root_ids"]) == 1:
-            ts_root_id_for_tree = ts_filters["root_ids"][0]
-        ts_response = {
-            "items": ts_items,
-            "offset": ts_offset,
-            "limit": ts_limit,
-            "has_more": ts_has_more,
-            "view": ts_view,
-            "scan_status": self.TSGetScanStatus(),
-            "health": self._TSHealthPayload(),
-            "roots": list(ts_roots.values()),
-            "folders": self.ts_database.TSListFolders(ts_scope_for_tree, ts_root_id_for_tree) if ts_view == "tree" else [],
-        }
-        TSLogVerbose("runtime.assets.response", returned=len(ts_items), has_more=ts_response["has_more"])
-        return ts_response
 
     def TSGetAssetDetail(self, ts_asset_id: int) -> dict[str, Any] | None:
-        TSLogVerbose("runtime.asset.detail", asset_id=ts_asset_id)
-        ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
-        if ts_row is None:
-            return None
-        ts_row = self._TSEnsureMetadata(ts_row) or ts_row
-        ts_roots = {ts_root["root_id"]: ts_root for ts_root in self.TSGetRoots()}
-        ts_technical_info = TSResolveTechnicalInfo(ts_row)
-        if str(ts_row["type"] or "") == "video":
-            ts_row, ts_technical_info = TSEnrichVideoTechnicalInfo(ts_row, self.ts_database, self.ts_tools, ts_technical_info)
-        elif str(ts_row["type"] or "") == "audio":
-            ts_row, ts_technical_info = TSEnrichAudioTechnicalInfo(ts_row, self.ts_database, self.ts_tools, ts_technical_info)
-        ts_payload = TSBuildAssetCard(ts_row, ts_roots, self.ts_preview_cache)
-        ts_payload["detail_loaded"] = True
-        ts_payload["metadata"] = TSJsonLoads(ts_row["metadata"], {})
-        ts_payload["metadata_json"] = ts_row["metadata"]
-        ts_payload["prompt_text"] = TSResolveAssetPromptText(ts_row)
-        ts_payload["negative_prompt_text"] = TSResolveAssetNegativePromptText(ts_row)
-        ts_payload["workflow_text"] = TSResolveAssetWorkflowText(ts_row)
-        ts_payload["technical_info"] = ts_technical_info
-        return ts_payload
+        return self.ts_asset_catalog.TSGetAssetDetail(ts_asset_id)
 
     def _TSApplyNoStoreHeaders(self, ts_response: TSWeb.StreamResponse) -> TSWeb.StreamResponse:
         ts_response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
