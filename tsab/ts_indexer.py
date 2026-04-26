@@ -10,6 +10,7 @@ from typing import Any, Iterable
 
 from .ts_hashing import TSComputeFileHash, TSDetectSupportedType
 from .ts_indexer_discovery import TSIterAssetStats
+from .ts_indexer_payload import TSCarryExistingRowValues
 from .ts_indexer_progress import TSBuildConsoleProgressBar, TSBuildProgressMessage, TSComputeProgressPercent
 from .ts_logging import TSLogInfoIfVerbose, TSLogProgress, TSLogVerbose
 from .ts_settings import (
@@ -177,7 +178,7 @@ class TSIndexer:
                             )
                             if ts_stat_changed:
                                 ts_discovered_payload = ts_handler.TSBuildDiscoveredPayload(ts_asset_stat)
-                                ts_discovered_payload = self._TSCarryRowValues(ts_discovered_payload, ts_existing_row, ts_reset_processing=True)
+                                ts_discovered_payload = TSCarryExistingRowValues(ts_discovered_payload, ts_existing_row, ts_reset_processing=True)
                                 if ts_existing_row is not None:
                                     ts_existing_preview_path = str(ts_existing_row["preview_path"] or "")
                                     if ts_existing_preview_path and self.ts_database.TSCountPreviewReferences(ts_existing_preview_path, int(ts_existing_row["id"])) == 0:
@@ -280,38 +281,6 @@ class TSIndexer:
                 self.ts_status.ts_progress_message = str(ts_exception)
                 self.ts_emit_callback(TS_EVENT_INDEX_COMPLETE, {"status": self.TSGetStatus()})
 
-    def _TSCarryRowValues(
-        self,
-        ts_payload: TSAssetPayload,
-        ts_existing_row: Any | None,
-        *,
-        ts_reset_processing: bool,
-    ) -> TSAssetPayload:
-        if ts_existing_row is None:
-            return ts_payload
-        ts_created_at = int(ts_existing_row["created_at"] or 0) or ts_payload.ts_created_at
-        ts_tags = str(ts_existing_row["tags"] or "")
-        ts_rating = int(ts_existing_row["rating"] or 0)
-        ts_updates = {
-            "ts_created_at": ts_created_at,
-            "ts_tags": ts_tags,
-            "ts_rating": ts_rating,
-        }
-        if ts_reset_processing:
-            ts_updates.update(
-                {
-                    "ts_hash": "",
-                    "ts_metadata": "{}",
-                    "ts_technical_json": "{}",
-                    "ts_prompt_text": "",
-                    "ts_workflow_text": "",
-                    "ts_is_indexed": False,
-                    "ts_has_preview": False,
-                    "ts_has_metadata": False,
-                }
-            )
-        return replace(ts_payload, **ts_updates)
-
     def _TSIterAssetStatBatches(self, ts_root: TSRootDefinition, ts_batch_size: int) -> Iterable[list[TSAssetStat]]:
         ts_batch: list[TSAssetStat] = []
         for ts_asset_stat in self._TSIterAssetStats(ts_root):
@@ -390,7 +359,7 @@ class TSIndexer:
             ts_has_preview=ts_has_preview,
             ts_has_metadata=ts_has_metadata,
         )
-        ts_payload = self._TSCarryRowValues(ts_payload, ts_existing_row, ts_reset_processing=False)
+        ts_payload = TSCarryExistingRowValues(ts_payload, ts_existing_row, ts_reset_processing=False)
         return ts_payload, ts_existing_row
 
 
