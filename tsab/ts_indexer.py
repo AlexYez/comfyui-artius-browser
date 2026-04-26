@@ -17,6 +17,7 @@ from .ts_settings import (
     TS_AUDIO_EXTENSIONS,
     TS_COMPANION_SUFFIXES,
     TS_IMAGE_EXTENSIONS,
+    TS_LEGACY_STORAGE_DIRECTORY_NAMES,
     TS_DEFAULT_HASH_WORKERS,
     TS_DEFAULT_SCAN_BATCH,
     TS_EVENT_HEALTH,
@@ -26,6 +27,7 @@ from .ts_settings import (
     TS_PROGRESS_EVENT_CANDIDATE_STEP,
     TS_PROGRESS_EVENT_FILE_STEP,
     TS_PROGRESS_LOG_PERCENT_STEP,
+    TS_STORAGE_DIRECTORY_NAME,
     TS_SUPPORTED_EXTENSIONS,
     TS_VIDEO_EXTENSIONS,
 )
@@ -33,6 +35,7 @@ from .ts_types import TSAssetPayload, TSAssetStat, TSRootDefinition, TSScanStatu
 from .ts_utils import TSFolderPosixPath, TSNormalizePathString, TSRelativePosixPath
 
 TSLogger = logging.getLogger("TSArtiusBrowser")
+TS_IGNORED_DIRECTORY_NAMES = {TS_STORAGE_DIRECTORY_NAME.lower(), *(ts_name.lower() for ts_name in TS_LEGACY_STORAGE_DIRECTORY_NAMES)}
 
 
 class TSIndexer:
@@ -424,6 +427,9 @@ class TSIndexer:
                         try:
                             ts_resolved_path = ts_entry_path.resolve()
                         except OSError:
+                            continue
+                        if ts_entry_path.name.lower() in TS_IGNORED_DIRECTORY_NAMES:
+                            TSLogVerbose("indexer.path.ignored", path=str(ts_entry_path), reason="technical_directory")
                             continue
                         if ts_resolved_path in ts_ignored_paths:
                             TSLogVerbose("indexer.path.ignored", path=str(ts_entry_path))
