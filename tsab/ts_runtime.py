@@ -25,6 +25,7 @@ from .ts_tools import TSToolLocator
 from .ts_types import TSAssetStat
 from .ts_ui_settings import TSApplyUISettingsUpdates, TSNormalizeUISettings
 from .ts_utils import TSJsonLoads, TSNormalizePathString, TSRelativePosixPath
+from .ts_workflows import TSWorkflowService
 
 TSLogger = logging.getLogger("TSArtiusBrowser")
 TSRuntimeSingleton = None
@@ -44,6 +45,7 @@ class TSAssetBrowserRuntime:
             ts_get_roots=self.TSGetRoots,
             ts_emit_event=self.TSEmitEvent,
         )
+        self.ts_workflow_service = TSWorkflowService()
         self.ts_asset_processing = TSAssetProcessingService(
             ts_database=self.ts_database,
             ts_preview_cache=self.ts_preview_cache,
@@ -374,7 +376,10 @@ class TSAssetBrowserRuntime:
         return self.ts_delete_service.TSDeleteAssets(ts_asset_ids)
 
     def TSDeleteWorkflowFile(self, ts_workflow_path: Path) -> dict[str, Any]:
-        return self.ts_delete_service.TSDeleteWorkflowFile(ts_workflow_path)
+        return self.ts_workflow_service.TSDeleteWorkflowFile(ts_workflow_path)
+
+    def TSDeleteRequestWorkflowFile(self, ts_request, ts_relative_path: str) -> dict[str, Any]:
+        return self.ts_workflow_service.TSDeleteRequestWorkflowFile(ts_request, ts_relative_path)
 
     def TSSave3DThumbnail(self, ts_asset_id: int, ts_image_data_url: str) -> dict[str, Any]:
         return TSSave3DThumbnail(

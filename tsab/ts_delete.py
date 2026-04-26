@@ -3,12 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-from aiohttp import web as TSWeb
 from send2trash import send2trash as TSSendToTrash
 
 from .ts_logging import TSLogVerbose
-
-TS_WORKFLOW_PREVIEW_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".avif", ".gif", ".mp4", ".webm", ".mov", ".m4v"}
 
 
 class TSDeleteService:
@@ -68,29 +65,3 @@ class TSDeleteService:
             TSLogVerbose("runtime.asset.deleted", asset_id=ts_asset_id, path=str(ts_row["path"]))
             self.ts_emit_event("tsab:asset-remove", {"id": ts_asset_id, "path": ts_row["path"]})
         return {"deleted": ts_deleted_ids, "skipped": ts_skipped_ids}
-
-    def _TSFindWorkflowPreviewSidecars(self, ts_workflow_path: Path) -> list[Path]:
-        ts_sidecars: list[Path] = []
-        if not ts_workflow_path.exists():
-            return ts_sidecars
-        ts_workflow_stem = ts_workflow_path.stem.lower()
-        for ts_candidate in ts_workflow_path.parent.iterdir():
-            if not ts_candidate.is_file() or ts_candidate == ts_workflow_path:
-                continue
-            if ts_candidate.stem.lower() != ts_workflow_stem:
-                continue
-            if ts_candidate.suffix.lower() not in TS_WORKFLOW_PREVIEW_EXTENSIONS:
-                continue
-            ts_sidecars.append(ts_candidate)
-        return sorted(ts_sidecars, key=lambda ts_path: ts_path.name.lower())
-
-    def TSDeleteWorkflowFile(self, ts_workflow_path: Path) -> dict[str, Any]:
-        if not ts_workflow_path.exists():
-            raise TSWeb.HTTPNotFound()
-        ts_deleted_paths: list[str] = []
-        for ts_target_path in [ts_workflow_path, *self._TSFindWorkflowPreviewSidecars(ts_workflow_path)]:
-            if not ts_target_path.exists():
-                continue
-            self.ts_send_to_trash(str(ts_target_path))
-            ts_deleted_paths.append(ts_target_path.name)
-        return {"deleted": ts_deleted_paths}
