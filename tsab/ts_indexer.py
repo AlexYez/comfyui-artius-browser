@@ -2,20 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
-from pathlib import Path
 from typing import Any, Iterable
 
 from .ts_hashing import TSComputeFileHash, TSDetectSupportedType
-from .ts_indexer_discovery import TSFilterCompanionEntries
+from .ts_indexer_discovery import TSIterAssetStats
 from .ts_indexer_progress import TSBuildConsoleProgressBar, TSBuildProgressMessage, TSComputeProgressPercent
 from .ts_logging import TSLogInfoIfVerbose, TSLogProgress, TSLogVerbose
 from .ts_settings import (
-    TS_LEGACY_STORAGE_DIRECTORY_NAMES,
     TS_DEFAULT_HASH_WORKERS,
     TS_DEFAULT_SCAN_BATCH,
     TS_EVENT_HEALTH,
@@ -25,14 +22,11 @@ from .ts_settings import (
     TS_PROGRESS_EVENT_CANDIDATE_STEP,
     TS_PROGRESS_EVENT_FILE_STEP,
     TS_PROGRESS_LOG_PERCENT_STEP,
-    TS_STORAGE_DIRECTORY_NAME,
-    TS_SUPPORTED_EXTENSIONS,
 )
 from .ts_types import TSAssetPayload, TSAssetStat, TSRootDefinition, TSScanStatus
-from .ts_utils import TSFolderPosixPath, TSNormalizePathString, TSRelativePosixPath
+from .ts_utils import TSNormalizePathString
 
 TSLogger = logging.getLogger("TSArtiusBrowser")
-TS_IGNORED_DIRECTORY_NAMES = {TS_STORAGE_DIRECTORY_NAME.lower(), *(ts_name.lower() for ts_name in TS_LEGACY_STORAGE_DIRECTORY_NAMES)}
 
 
 class TSIndexer:
@@ -352,56 +346,7 @@ class TSIndexer:
 
     def _TSIterAssetStats(self, ts_root: TSRootDefinition) -> Iterable[TSAssetStat]:
         ts_ignored_paths = {ts_path.resolve() for ts_path in self.ts_storage_paths.TSIgnorePathsForRoot(ts_root)}
-        ts_directory_stack = [ts_root.ts_path]
-        while ts_directory_stack:
-            ts_directory = ts_directory_stack.pop()
-            ts_subdirectories, ts_file_entries = self._TSScanDirectory(ts_directory, ts_ignored_paths)
-            ts_directory_stack.extend(ts_subdirectories)
-            for ts_entry in ts_file_entries:
-                try:
-                    ts_entry_path = Path(ts_entry.path).resolve()
-                    ts_stat = ts_entry.stat(follow_symlinks=False)
-                    ts_relative_path = TSRelativePosixPath(ts_entry_path, ts_root.ts_path.resolve())
-                    yield TSAssetStat(
-                        ts_path=ts_entry_path,
-                        ts_root=ts_root,
-                        ts_relative_path=ts_relative_path,
-                        ts_folder_path=TSFolderPosixPath(ts_relative_path),
-                        ts_filename=ts_entry_path.name,
-                        ts_extension=ts_entry_path.suffix.lower(),
-                        ts_size_bytes=int(ts_stat.st_size),
-                        ts_mtime_ns=int(getattr(ts_stat, "st_mtime_ns", int(ts_stat.st_mtime * 1000000000))),
-                        ts_ctime_ns=int(getattr(ts_stat, "st_ctime_ns", int(ts_stat.st_ctime * 1000000000))),
-                    )
-                except OSError as ts_error:
-                    TSLogVerbose("indexer.file.stat_failed", path=str(getattr(ts_entry, 'path', '')), error=str(ts_error))
-
-    def _TSScanDirectory(self, ts_directory: Path, ts_ignored_paths: set[Path]) -> tuple[list[Path], list[os.DirEntry[str]]]:
-        ts_subdirectories: list[Path] = []
-        ts_file_entries: list[os.DirEntry[str]] = []
-        try:
-            with os.scandir(ts_directory) as ts_entries:
-                for ts_entry in ts_entries:
-                    ts_entry_path = Path(ts_entry.path)
-                    if ts_entry.is_dir(follow_symlinks=False):
-                        try:
-                            ts_resolved_path = ts_entry_path.resolve()
-                        except OSError:
-                            continue
-                        if ts_entry_path.name.lower() in TS_IGNORED_DIRECTORY_NAMES:
-                            TSLogVerbose("indexer.path.ignored", path=str(ts_entry_path), reason="technical_directory")
-                            continue
-                        if ts_resolved_path in ts_ignored_paths:
-                            TSLogVerbose("indexer.path.ignored", path=str(ts_entry_path))
-                            continue
-                        ts_subdirectories.append(ts_resolved_path)
-                        continue
-                    if ts_entry_path.suffix.lower() in TS_SUPPORTED_EXTENSIONS:
-                        ts_file_entries.append(ts_entry)
-        except OSError as ts_error:
-            TSLogVerbose("indexer.directory.scan_failed", directory=str(ts_directory), error=str(ts_error))
-            return [], []
-        return ts_subdirectories, TSFilterCompanionEntries(ts_file_entries)
+        return TSIterAssetStats(ts_root, ts_ignored_paths)
 
     def _TSProcessCandidateTuple(
         self,
