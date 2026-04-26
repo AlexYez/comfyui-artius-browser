@@ -11,12 +11,9 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .ts_hashing import TSComputeFileHash, TSDetectSupportedType
+from .ts_indexer_discovery import TSFilterCompanionEntries
 from .ts_logging import TSLogInfoIfVerbose, TSLogProgress, TSLogVerbose
 from .ts_settings import (
-    TS_3D_EXTENSIONS,
-    TS_AUDIO_EXTENSIONS,
-    TS_COMPANION_SUFFIXES,
-    TS_IMAGE_EXTENSIONS,
     TS_LEGACY_STORAGE_DIRECTORY_NAMES,
     TS_DEFAULT_HASH_WORKERS,
     TS_DEFAULT_SCAN_BATCH,
@@ -29,7 +26,6 @@ from .ts_settings import (
     TS_PROGRESS_LOG_PERCENT_STEP,
     TS_STORAGE_DIRECTORY_NAME,
     TS_SUPPORTED_EXTENSIONS,
-    TS_VIDEO_EXTENSIONS,
 )
 from .ts_types import TSAssetPayload, TSAssetStat, TSRootDefinition, TSScanStatus
 from .ts_utils import TSFolderPosixPath, TSNormalizePathString, TSRelativePosixPath
@@ -441,40 +437,7 @@ class TSIndexer:
         except OSError as ts_error:
             TSLogVerbose("indexer.directory.scan_failed", directory=str(ts_directory), error=str(ts_error))
             return [], []
-        return ts_subdirectories, self._TSFilterCompanionEntries(ts_file_entries)
-
-    def _TSNormalizeCompanionStem(self, ts_stem: str) -> str:
-        ts_normalized = str(ts_stem or "").lower()
-        ts_changed = True
-        while ts_changed and ts_normalized:
-            ts_changed = False
-            for ts_suffix in TS_COMPANION_SUFFIXES:
-                if ts_normalized.endswith(ts_suffix):
-                    ts_normalized = ts_normalized[: -len(ts_suffix)].rstrip("._- ")
-                    ts_changed = True
-                    break
-        return ts_normalized
-
-    def _TSFilterCompanionEntries(self, ts_file_entries: list[os.DirEntry[str]]) -> list[os.DirEntry[str]]:
-        ts_media_stems = {
-            Path(ts_entry.path).stem.lower()
-            for ts_entry in ts_file_entries
-            if Path(ts_entry.path).suffix.lower() in (TS_VIDEO_EXTENSIONS | TS_AUDIO_EXTENSIONS | TS_3D_EXTENSIONS)
-        }
-        ts_result: list[os.DirEntry[str]] = []
-        for ts_entry in ts_file_entries:
-            ts_entry_path = Path(ts_entry.path)
-            ts_extension = ts_entry_path.suffix.lower()
-            if ts_extension not in TS_SUPPORTED_EXTENSIONS:
-                continue
-            if ts_extension in TS_IMAGE_EXTENSIONS:
-                ts_stem = ts_entry_path.stem.lower()
-                ts_base_stem = self._TSNormalizeCompanionStem(ts_stem)
-                if ts_stem in ts_media_stems or (ts_base_stem and ts_base_stem in ts_media_stems):
-                    TSLogVerbose("indexer.companion.skipped", path=str(ts_entry_path), related_stem=ts_base_stem or ts_stem)
-                    continue
-            ts_result.append(ts_entry)
-        return ts_result
+        return ts_subdirectories, TSFilterCompanionEntries(ts_file_entries)
 
     def _TSProcessCandidateTuple(
         self,
