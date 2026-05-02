@@ -8,6 +8,11 @@ import {
 } from "./ts-artius-browser-settings.js";
 import { tsBuildFolderTree as tsBuildFolderTreeImpl } from "./ts-artius-browser-api-tree.js";
 import {
+    tsClamp as tsClampImpl,
+    tsDebounce as tsDebounceImpl,
+    tsFormatBytes as tsFormatBytesImpl,
+} from "./ts-artius-browser-api-utils.js";
+import {
     tsBuildUserdataFilePath,
     tsBuildUserdataFileURL as tsBuildUserdataFileURLBase,
     tsBuildWorkflowBrowserLibraryItems,
@@ -166,29 +171,15 @@ export async function tsLoadLocale(tsLocaleCode = tsProjectSettings.defaultLocal
 }
 
 export function tsDebounce(tsFunction, tsWaitMs = 250) {
-    let tsTimeoutId = 0;
-    return (...tsArgs) => {
-        window.clearTimeout(tsTimeoutId);
-        tsTimeoutId = window.setTimeout(() => tsFunction(...tsArgs), tsWaitMs);
-    };
+    return tsDebounceImpl(tsFunction, tsWaitMs, window);
 }
 
 export function tsClamp(tsValue, tsMin, tsMax) {
-    return Math.max(tsMin, Math.min(tsMax, tsValue));
+    return tsClampImpl(tsValue, tsMin, tsMax);
 }
 
 export function tsFormatBytes(tsBytes) {
-    if (!Number.isFinite(tsBytes) || tsBytes <= 0) {
-        return "0 B";
-    }
-    const tsUnits = ["B", "KB", "MB", "GB", "TB"];
-    let tsValue = tsBytes;
-    let tsUnitIndex = 0;
-    while (tsValue >= 1024 && tsUnitIndex < tsUnits.length - 1) {
-        tsValue /= 1024;
-        tsUnitIndex += 1;
-    }
-    return `${tsValue.toFixed(tsUnitIndex === 0 ? 0 : 1)} ${tsUnits[tsUnitIndex]}`;
+    return tsFormatBytesImpl(tsBytes);
 }
 
 export async function tsCopyText(tsText) {
