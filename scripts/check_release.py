@@ -69,6 +69,7 @@ def TSCheckFrontendCharacterization() -> None:
         print("frontend characterization: skipped (node not found)")
         return
     TSRunCommand([ts_node, "scripts/check_frontend_panel_characterization.mjs"])
+    TSRunCommand([ts_node, "scripts/check_frontend_viewer_characterization.mjs"])
 
 
 def TSCheckJsonFiles() -> None:
