@@ -27,6 +27,11 @@ import {
     tsFormatCardFPS,
     tsLerp,
 } from "./ts-artius-browser-panel-format.js";
+import {
+    tsBuildWorkflowFolders,
+    tsBuildWorkflowQueryResult,
+    tsBuildWorkflowRootNodes,
+} from "./ts-artius-browser-panel-workflows.js";
 import { tsEnsureViewerElement, tsGetViewerSingleton } from "./ts-artius-browser-viewer.js";
 import { tsPanelSettings, tsProjectSettings } from "./ts-artius-browser-settings.js";
 
@@ -435,10 +440,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsGetWorkflowRootNodes() {
-        return [{
-            root_id: "workflows",
-            label: this.tsT("section.workflows", "Workflows"),
-        }];
+        return tsBuildWorkflowRootNodes(this.tsT("section.workflows", "Workflows"));
     }
 
     async tsEnsureWorkflowLibrary(tsForce = false) {
@@ -454,49 +456,18 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsBuildWorkflowFolders(tsItems) {
-        const tsFolderCounts = new Map();
-        (tsItems || []).forEach((tsItem) => {
-            const tsFolderPath = String(tsItem?.folder_path || "");
-            tsFolderCounts.set(tsFolderPath, Number(tsFolderCounts.get(tsFolderPath) || 0) + 1);
-        });
-        return [...tsFolderCounts.entries()].map(([tsFolderPath, tsAssetCount]) => ({
-            root_id: "workflows",
-            folder_path: tsFolderPath,
-            asset_count: tsAssetCount,
-        }));
+        return tsBuildWorkflowFolders(tsItems);
     }
 
     tsBuildWorkflowQueryResult() {
-        const tsSearchNeedle = String(this.tsState.tsSearch || "").trim().toLowerCase();
-        const tsSelectedFolder = this.tsState.tsMode === "tree" ? String(this.tsState.tsFolder || "") : "";
-        const tsFilteredForTree = this.tsWorkflowLibrary.filter((tsItem) => {
-            if (tsSearchNeedle && !String(tsItem?.filename || "").toLowerCase().includes(tsSearchNeedle)) {
-                return false;
-            }
-            return true;
-        });
-        const tsVisibleItems = tsFilteredForTree.filter((tsItem) => {
-            if (!tsSelectedFolder) {
-                return true;
-            }
-            const tsItemFolder = String(tsItem?.folder_path || "");
-            return tsItemFolder === tsSelectedFolder || tsItemFolder.startsWith(`${tsSelectedFolder}/`);
-        });
-        const tsSortDirectionFactor = this.tsState.tsSortDirection === "asc" ? 1 : -1;
-        const tsSortedItems = [...tsVisibleItems].sort((tsLeft, tsRight) => {
-            if (this.tsState.tsSortKey === "filename") {
-                return tsSortDirectionFactor * String(tsLeft?.filename || "").localeCompare(String(tsRight?.filename || ""), undefined, { sensitivity: "base" });
-            }
-            if (this.tsState.tsSortKey === "size_bytes") {
-                return tsSortDirectionFactor * (Number(tsLeft?.size_bytes || 0) - Number(tsRight?.size_bytes || 0));
-            }
-            return tsSortDirectionFactor * (Number(tsLeft?.modified_at || tsLeft?.created_at || 0) - Number(tsRight?.modified_at || tsRight?.created_at || 0));
-        });
-        return {
-            items: tsSortedItems,
-            folders: this.tsBuildWorkflowFolders(tsFilteredForTree),
+        return tsBuildWorkflowQueryResult(this.tsWorkflowLibrary, {
+            search: this.tsState.tsSearch,
+            mode: this.tsState.tsMode,
+            folder: this.tsState.tsFolder,
+            sortKey: this.tsState.tsSortKey,
+            sortDirection: this.tsState.tsSortDirection,
             roots: this.tsGetWorkflowRootNodes(),
-        };
+        });
     }
 
     tsBuildShell() {
