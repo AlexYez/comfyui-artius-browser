@@ -37,6 +37,7 @@ async function tsLoadHelperExports() {
         tsLoadOptionalModule("js/ts-artius-browser-viewer-format.js"),
         tsLoadOptionalModule("js/ts-artius-browser-viewer-meta.js"),
         tsLoadOptionalModule("js/ts-artius-browser-viewer-state.js"),
+        tsLoadOptionalModule("js/ts-artius-browser-viewer-stage.js"),
     ]);
     return Object.assign({}, ...tsModules);
 }
