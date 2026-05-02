@@ -198,8 +198,12 @@ function tsBuildApiHarness(tsOptions = {}, tsHelperExports = {}) {
             tsBuildFolderTree,
             tsSplitRelativePath,
             tsBuildAssetFetchPath: (tsAsset) => tsBuildAssetFetchPath(tsAsset, tsRouteBase),
+            tsEnsureWidgetOptionValue,
+            tsFindWidget,
+            tsGetSelectedNodes,
             tsGetRelativeAssetPath,
             tsResolveNodeComfyClass,
+            tsSetWidgetValue,
             tsIsGraphPointInsideNode,
         };`,
         tsContext,
@@ -361,6 +365,49 @@ function tsRunAssetPathTests(tsApiExports) {
     tsEqual(tsApiExports.tsIsGraphPointInsideNode({ pos: [10, 20], size: [100, 50] }, 200, 30), false, "bounds check rejects point outside node");
 }
 
+function tsRunWidgetHelperTests(tsHelperExports) {
+    const tsGraphDirtyCalls = [];
+    const tsCanvasDirtyCalls = [];
+    const tsSelectedA = { id: "a" };
+    const tsSelectedB = { id: "b" };
+    const tsApiExports = tsBuildApiHarness({
+        canvas: {
+            selected_nodes: { a: tsSelectedA, b: tsSelectedB },
+            setDirty: (...tsArgs) => {
+                tsCanvasDirtyCalls.push(tsArgs);
+            },
+        },
+        graph: {
+            setDirtyCanvas: (...tsArgs) => {
+                tsGraphDirtyCalls.push(tsArgs);
+            },
+        },
+    }, tsHelperExports);
+    const tsImageWidget = { name: "Image", options: { values: ["old.png"] } };
+    const tsNode = {
+        widgets: [
+            tsImageWidget,
+            { name: "path", value: "" },
+        ],
+    };
+    const tsCallbackCalls = [];
+    tsImageWidget.callback = (...tsArgs) => {
+        tsCallbackCalls.push([tsArgs[0], tsArgs[2] === tsNode]);
+    };
+    tsEqual(tsApiExports.tsGetSelectedNodes().map((tsNodeItem) => tsNodeItem.id), ["a", "b"], "selected nodes normalize object maps to node arrays");
+    tsEqual(tsApiExports.tsFindWidget(tsNode, ["image"])?.name, "Image", "find widget matches names case-insensitively");
+    tsEqual(tsApiExports.tsFindWidget(tsNode, ["missing"]), null, "find widget returns null for missing widgets");
+    tsApiExports.tsEnsureWidgetOptionValue(tsImageWidget, "new.png");
+    tsApiExports.tsEnsureWidgetOptionValue(tsImageWidget, "new.png");
+    tsEqual(tsImageWidget.options.values, ["old.png", "new.png"], "ensure widget option appends missing values once");
+    tsEqual(tsApiExports.tsSetWidgetValue(tsNode, tsImageWidget, "new.png"), true, "set widget value reports success");
+    tsEqual(tsImageWidget.value, "new.png", "set widget value writes the widget value");
+    tsEqual(tsCallbackCalls, [["new.png", true]], "set widget value calls widget callback with value and node");
+    tsEqual(tsGraphDirtyCalls, [[true, true]], "set widget value marks graph canvas dirty");
+    tsEqual(tsCanvasDirtyCalls, [[true, true]], "set widget value marks app canvas dirty");
+    tsEqual(tsApiExports.tsSetWidgetValue(tsNode, null, "x"), false, "set widget value rejects missing widget");
+}
+
 const tsHelperExports = await tsLoadHelperExports();
 const tsApiExports = tsBuildApiHarness({}, tsHelperExports);
 tsRunPathTests(tsApiExports);
@@ -371,5 +418,6 @@ await tsRunWorkflowLoadTests(tsHelperExports);
 tsRunFolderTreeTests(tsApiExports);
 tsRunOpenableUrlTests();
 tsRunAssetPathTests(tsApiExports);
+tsRunWidgetHelperTests(tsHelperExports);
 
 console.log(`frontend api characterization: ${tsAssertions} assertions OK`);
