@@ -15,6 +15,10 @@ from .ts_settings import (
     TS_DEFAULT_PREVIEW_FORMAT,
     TS_DEFAULT_PREVIEW_QUALITY,
     TS_DEFAULT_THUMBNAIL_SIZE,
+    TS_ALLOWED_3D_CAPTURE_MIME_TYPES,
+    TS_MAX_3D_CAPTURE_DATA_URL_LENGTH,
+    TS_MAX_3D_CAPTURE_DECODED_BYTES,
+    TS_MAX_3D_CAPTURE_PIXELS,
     TS_DEFAULT_WAVEFORM_HEIGHT,
     TS_DEFAULT_WAVEFORM_WIDTH,
 )
@@ -142,12 +146,26 @@ class TSPreviewCache:
     def TSPersist3DCapturePreview(self, ts_preview_key: str, ts_image_data_url: str) -> str:
         if not isinstance(ts_image_data_url, str) or "," not in ts_image_data_url:
             return ""
+        if len(ts_image_data_url) > TS_MAX_3D_CAPTURE_DATA_URL_LENGTH:
+            TSLogVerbose("preview.3d_capture.rejected", preview_key=ts_preview_key, reason="data_url_too_large")
+            return ""
         ts_header, ts_encoded_data = ts_image_data_url.split(",", 1)
-        if not ts_header.startswith("data:image/"):
+        ts_mime_type = ts_header.removeprefix("data:").split(";", 1)[0].lower()
+        if ts_mime_type not in TS_ALLOWED_3D_CAPTURE_MIME_TYPES or ";base64" not in ts_header.lower():
+            TSLogVerbose("preview.3d_capture.rejected", preview_key=ts_preview_key, reason="invalid_mime")
+            return ""
+        if len(ts_encoded_data) > ((TS_MAX_3D_CAPTURE_DECODED_BYTES + 2) // 3) * 4:
+            TSLogVerbose("preview.3d_capture.rejected", preview_key=ts_preview_key, reason="encoded_payload_too_large")
             return ""
         try:
-            ts_image_bytes = base64.b64decode(ts_encoded_data)
+            ts_image_bytes = base64.b64decode(ts_encoded_data, validate=True)
+            if len(ts_image_bytes) > TS_MAX_3D_CAPTURE_DECODED_BYTES:
+                TSLogVerbose("preview.3d_capture.rejected", preview_key=ts_preview_key, reason="decoded_payload_too_large")
+                return ""
             with Image.open(io.BytesIO(ts_image_bytes)) as ts_image:
+                if ts_image.width * ts_image.height > TS_MAX_3D_CAPTURE_PIXELS:
+                    TSLogVerbose("preview.3d_capture.rejected", preview_key=ts_preview_key, reason="image_too_large")
+                    return ""
                 self._TSPrepareSourceImageForThumbnail(ts_image, self._TSThumbnailSize())
                 ts_image = ImageOps.exif_transpose(ts_image)
                 self._TSApplyThumbnailResize(ts_image)

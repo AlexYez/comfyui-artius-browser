@@ -50,6 +50,10 @@ TS_BACKEND_SETTINGS = {
     "preview": {
         "thumbnail_size": 104,
         "default_preview_size": 120,
+        "max_3d_capture_data_url_length": 8 * 1024 * 1024,
+        "max_3d_capture_decoded_bytes": 6 * 1024 * 1024,
+        "max_3d_capture_pixels": 4096 * 4096,
+        "allowed_3d_capture_mime_types": {"image/png", "image/jpeg", "image/webp"},
         "video_frame_time": 0.5,
         "waveform_width": 384,
         "waveform_height": 200,
@@ -87,6 +91,10 @@ TS_DEFAULT_FFPROBE_WORKERS = TS_BACKEND_SETTINGS["tools"]["ffprobe_workers"]
 TS_DEFAULT_FFMPEG_WORKERS = TS_BACKEND_SETTINGS["tools"]["ffmpeg_workers"]
 TS_DEFAULT_THUMBNAIL_SIZE = TS_BACKEND_SETTINGS["preview"]["thumbnail_size"]
 TS_DEFAULT_PREVIEW_SIZE = TS_BACKEND_SETTINGS["preview"]["default_preview_size"]
+TS_MAX_3D_CAPTURE_DATA_URL_LENGTH = TS_BACKEND_SETTINGS["preview"]["max_3d_capture_data_url_length"]
+TS_MAX_3D_CAPTURE_DECODED_BYTES = TS_BACKEND_SETTINGS["preview"]["max_3d_capture_decoded_bytes"]
+TS_MAX_3D_CAPTURE_PIXELS = TS_BACKEND_SETTINGS["preview"]["max_3d_capture_pixels"]
+TS_ALLOWED_3D_CAPTURE_MIME_TYPES = TS_BACKEND_SETTINGS["preview"]["allowed_3d_capture_mime_types"]
 TS_DEFAULT_VIDEO_FRAME_TIME = TS_BACKEND_SETTINGS["preview"]["video_frame_time"]
 TS_DEFAULT_WAVEFORM_WIDTH = TS_BACKEND_SETTINGS["preview"]["waveform_width"]
 TS_DEFAULT_WAVEFORM_HEIGHT = TS_BACKEND_SETTINGS["preview"]["waveform_height"]

@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Iterable
 
@@ -47,6 +48,11 @@ class TSStoragePaths:
         if ts_path.is_absolute():
             return ts_path.resolve()
         return (ts_base_directory / ts_path).resolve()
+
+    @staticmethod
+    def _TSStableCustomRootId(ts_custom_path: Path) -> str:
+        ts_path_key = TSNormalizePathString(ts_custom_path).encode("utf-8")
+        return f"custom_{hashlib.blake2b(ts_path_key, digest_size=8).hexdigest()}"
 
     def TSEnsureDirectories(self) -> None:
         self.ts_asset_browser_directory.mkdir(parents=True, exist_ok=True)
@@ -99,7 +105,14 @@ class TSStoragePaths:
                 )
             )
 
-        for ts_custom_root in ts_config.get("custom_roots", []):
+        ts_custom_roots = ts_config.get("custom_roots", []) if isinstance(ts_config, dict) else []
+        if not isinstance(ts_custom_roots, list):
+            TSLogVerbose("storage.root.custom.skipped", reason="invalid_custom_roots")
+            ts_custom_roots = []
+        for ts_custom_root in ts_custom_roots:
+            if not isinstance(ts_custom_root, dict):
+                TSLogVerbose("storage.root.custom.skipped", reason="invalid_custom_root")
+                continue
             if not ts_custom_root.get("enabled", True):
                 continue
             ts_custom_raw_path = str(ts_custom_root.get("path", "")).strip()
@@ -118,7 +131,7 @@ class TSStoragePaths:
                     path=str(ts_custom_path),
                 )
                 continue
-            ts_root_id = str(ts_custom_root.get("id") or f"custom_{abs(hash(TSNormalizePathString(ts_custom_path)))}")
+            ts_root_id = str(ts_custom_root.get("id") or self._TSStableCustomRootId(ts_custom_path))
             ts_roots.append(
                 TSRootDefinition(
                     ts_root_id=ts_root_id,

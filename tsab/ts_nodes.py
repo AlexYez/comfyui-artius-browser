@@ -1,6 +1,9 @@
 ﻿from __future__ import annotations
 
-from typing_extensions import override
+try:
+    from typing import override
+except ImportError:
+    from typing_extensions import override
 
 from comfy_api.latest import ComfyExtension as TSComfyExtension, IO as TSIO
 

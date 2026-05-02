@@ -26,6 +26,7 @@ def _TSUniquePaths(ts_paths: list[Path]) -> list[Path]:
 
 
 def _TSResolveReferenceCandidates(ts_base_directory: Path, ts_reference_text: str) -> list[Path]:
+    ts_base_directory = ts_base_directory.resolve()
     ts_reference_text = str(ts_reference_text or "").strip().strip('"').strip("'").replace("\\", "/")
     if not ts_reference_text:
         return []
@@ -38,6 +39,16 @@ def _TSResolveReferenceCandidates(ts_base_directory: Path, ts_reference_text: st
     ts_resolved_paths: list[Path] = []
     for ts_candidate in ts_candidates:
         ts_candidate_path = (ts_base_directory / ts_candidate).resolve()
+        try:
+            ts_candidate_path.relative_to(ts_base_directory)
+        except ValueError:
+            TSLogVerbose(
+                "load3d_stage.reference.skipped",
+                base_directory=str(ts_base_directory),
+                reference=ts_candidate,
+                reason="outside_base_directory",
+            )
+            continue
         if ts_candidate_path.exists():
             ts_resolved_paths.append(ts_candidate_path)
     return _TSUniquePaths(ts_resolved_paths)

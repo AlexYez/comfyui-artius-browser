@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 from aiohttp import web as TSWeb
-from .ts_settings import TS_DEFAULT_PAGE_SIZE
+from .ts_settings import TS_DEFAULT_PAGE_SIZE, TS_MAX_3D_CAPTURE_DATA_URL_LENGTH
 from .ts_logging import TSLogVerbose
 from .ts_load3d_stage import TSPrepare3DAssetForLoad3D
 from .ts_utils import TSParseDateToEpoch, TSParseMaybeInt, TSParseQueryList
@@ -11,6 +11,55 @@ TSRoutesRegistered = False
 
 def TSBuildRouteVariants(ts_path: str) -> tuple[str, str]:
     return ts_path, f"/api{ts_path}"
+
+
+def TSParsePositiveAssetId(ts_value) -> int | None:
+    if isinstance(ts_value, bool):
+        return None
+    if isinstance(ts_value, int):
+        return ts_value if ts_value > 0 else None
+    ts_text = str(ts_value or "").strip()
+    if not ts_text.isdigit():
+        return None
+    ts_asset_id = int(ts_text)
+    return ts_asset_id if ts_asset_id > 0 else None
+
+
+def TSParseRouteAssetId(ts_request) -> int:
+    ts_asset_id = TSParsePositiveAssetId(ts_request.match_info.get("id"))
+    if ts_asset_id is None:
+        raise TSWeb.HTTPBadRequest(reason="Invalid asset id")
+    return ts_asset_id
+
+
+async def TSReadJsonObject(ts_request, *, ts_required: bool = False) -> dict:
+    if not getattr(ts_request, "can_read_body", False):
+        if ts_required:
+            raise TSWeb.HTTPBadRequest(reason="Expected JSON object")
+        return {}
+    ts_payload = await ts_request.json()
+    if not isinstance(ts_payload, dict):
+        raise TSWeb.HTTPBadRequest(reason="Expected JSON object")
+    return ts_payload
+
+
+def TSParseAssetIdList(ts_value) -> list[int]:
+    if not isinstance(ts_value, list):
+        raise TSWeb.HTTPBadRequest(reason="Expected ids list")
+    ts_asset_ids: list[int] = []
+    for ts_asset_id_value in ts_value:
+        ts_asset_id = TSParsePositiveAssetId(ts_asset_id_value)
+        if ts_asset_id is None:
+            raise TSWeb.HTTPBadRequest(reason="Invalid asset id")
+        ts_asset_ids.append(ts_asset_id)
+    return ts_asset_ids
+
+
+def TSEnforceRequestContentLength(ts_request, ts_max_bytes: int) -> None:
+    ts_headers = getattr(ts_request, "headers", {}) or {}
+    ts_content_length = TSParsePositiveAssetId(ts_headers.get("Content-Length") or ts_headers.get("content-length"))
+    if ts_content_length is not None and ts_content_length > ts_max_bytes:
+        raise TSWeb.HTTPRequestEntityTooLarge(max_size=ts_max_bytes, actual_size=ts_content_length)
 
 
 def TSRegisterRoutes(ts_runtime) -> None:
@@ -120,7 +169,7 @@ async def TSHandleAssets(ts_runtime, ts_request):
 
 
 async def TSHandleAsset(ts_runtime, ts_request):
-    ts_asset_id = int(ts_request.match_info["id"])
+    ts_asset_id = TSParseRouteAssetId(ts_request)
     TSLogVerbose("route.asset.request", asset_id=ts_asset_id, path=ts_request.path)
     ts_asset_payload = ts_runtime.TSGetAssetDetail(ts_asset_id)
     if ts_asset_payload is None:
@@ -129,13 +178,13 @@ async def TSHandleAsset(ts_runtime, ts_request):
 
 
 async def TSHandlePreview(ts_runtime, ts_request):
-    ts_asset_id = int(ts_request.match_info["id"])
+    ts_asset_id = TSParseRouteAssetId(ts_request)
     TSLogVerbose("route.preview.request", asset_id=ts_asset_id, path=ts_request.path)
     return ts_runtime.TSBuildPreviewResponse(ts_asset_id)
 
 
 async def TSHandlePreviewWarm(ts_runtime, ts_request):
-    ts_asset_id = int(ts_request.match_info["id"])
+    ts_asset_id = TSParseRouteAssetId(ts_request)
     TSLogVerbose("route.preview.warm.request", asset_id=ts_asset_id, path=ts_request.path)
     return TSWeb.json_response(ts_runtime.TSWarmPreview(ts_asset_id))
 
@@ -148,9 +197,9 @@ async def TSHandleFile(ts_runtime, ts_request):
 
 
 async def TSHandleRescan(ts_runtime, ts_request):
-    ts_payload = await ts_request.json() if ts_request.can_read_body else {}
-    ts_scope = ts_payload.get("scope") if isinstance(ts_payload, dict) else None
-    ts_root_id = ts_payload.get("root_id") if isinstance(ts_payload, dict) else None
+    ts_payload = await TSReadJsonObject(ts_request)
+    ts_scope = ts_payload.get("scope")
+    ts_root_id = ts_payload.get("root_id")
     TSLogVerbose("route.rescan.request", scope=ts_scope, root_id=ts_root_id, path=ts_request.path)
     ts_started = await ts_runtime.TSRequestScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
     return TSWeb.json_response({"started": ts_started, "status": ts_runtime.TSGetScanStatus()})
@@ -162,8 +211,8 @@ async def TSHandleRebuildCache(ts_runtime, ts_request):
 
 
 async def TSHandleDelete(ts_runtime, ts_request):
-    ts_payload = await ts_request.json()
-    ts_asset_ids = [int(ts_asset_id) for ts_asset_id in ts_payload.get("ids", [])]
+    ts_payload = await TSReadJsonObject(ts_request, ts_required=True)
+    ts_asset_ids = TSParseAssetIdList(ts_payload.get("ids", []))
     TSLogVerbose("route.delete.request", asset_ids=ts_asset_ids, path=ts_request.path)
     ts_result = ts_runtime.TSDeleteAssets(ts_asset_ids)
     return TSWeb.json_response(ts_result)
@@ -175,15 +224,15 @@ async def TSHandleSettingsGet(ts_runtime, ts_request):
 
 
 async def TSHandleSettingsPost(ts_runtime, ts_request):
-    ts_payload = await ts_request.json() if ts_request.can_read_body else {}
+    ts_payload = await TSReadJsonObject(ts_request)
     TSLogVerbose("route.settings.post", path=ts_request.path, keys=sorted((ts_payload or {}).keys()))
-    ts_ui_updates = ts_payload.get("ui") if isinstance(ts_payload, dict) else {}
+    ts_ui_updates = ts_payload.get("ui")
     return TSWeb.json_response({"ui": ts_runtime.TSSaveUISettings(ts_ui_updates)})
 
 
 async def TSHandleWorkflowDelete(ts_runtime, ts_request):
-    ts_payload = await ts_request.json() if ts_request.can_read_body else {}
-    ts_relative_path = str(ts_payload.get("path") or "") if isinstance(ts_payload, dict) else ""
+    ts_payload = await TSReadJsonObject(ts_request)
+    ts_relative_path = str(ts_payload.get("path") or "")
     TSLogVerbose("route.workflow.delete.request", path=ts_request.path, workflow_path=ts_relative_path)
     return TSWeb.json_response(ts_runtime.TSDeleteRequestWorkflowFile(ts_request, ts_relative_path))
 
@@ -194,14 +243,20 @@ async def TSHandle3DViewer(ts_runtime, ts_request):
 
 
 async def TSHandle3DThumbnail(ts_runtime, ts_request):
-    ts_asset_id = int(ts_request.match_info["id"])
-    ts_payload = await ts_request.json() if ts_request.can_read_body else {}
-    ts_image_data_url = ts_payload.get("image_data_url") if isinstance(ts_payload, dict) else ""
+    ts_asset_id = TSParseRouteAssetId(ts_request)
+    TSEnforceRequestContentLength(ts_request, TS_MAX_3D_CAPTURE_DATA_URL_LENGTH)
+    ts_payload = await TSReadJsonObject(ts_request, ts_required=True)
+    ts_image_data_url = ts_payload.get("image_data_url")
+    if isinstance(ts_image_data_url, str) and len(ts_image_data_url) > TS_MAX_3D_CAPTURE_DATA_URL_LENGTH:
+        raise TSWeb.HTTPRequestEntityTooLarge(
+            max_size=TS_MAX_3D_CAPTURE_DATA_URL_LENGTH,
+            actual_size=len(ts_image_data_url),
+        )
     TSLogVerbose("route.3d_thumbnail.post", asset_id=ts_asset_id, path=ts_request.path)
     return TSWeb.json_response({"asset": ts_runtime.TSSave3DThumbnail(ts_asset_id, str(ts_image_data_url or ""))})
 
 
 async def TSHandle3DStage(ts_runtime, ts_request):
-    ts_asset_id = int(ts_request.match_info["id"])
+    ts_asset_id = TSParseRouteAssetId(ts_request)
     TSLogVerbose("route.3d_stage.post", asset_id=ts_asset_id, path=ts_request.path)
     return TSWeb.json_response(TSPrepare3DAssetForLoad3D(ts_runtime, ts_asset_id))

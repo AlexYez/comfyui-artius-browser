@@ -14,13 +14,27 @@ def TSNormalizeFolderPath(ts_value: Any) -> str:
     return str(ts_value or "").replace("\\", "/").strip("/")
 
 
+def TSParseClampedInt(ts_value: Any, ts_minimum: int, ts_maximum: int) -> int | None:
+    try:
+        return max(ts_minimum, min(ts_maximum, int(ts_value)))
+    except (TypeError, ValueError):
+        return None
+
+
 def TSClampInt(ts_value: Any, ts_minimum: int, ts_maximum: int, ts_default: int) -> int:
-    return max(ts_minimum, min(ts_maximum, int(ts_value or ts_default)))
+    ts_clamped_value = TSParseClampedInt(ts_value or ts_default, ts_minimum, ts_maximum)
+    return ts_clamped_value if ts_clamped_value is not None else ts_default
 
 
 def TSNormalizeChoice(ts_value: Any, ts_allowed_values: set[str], ts_default: str) -> str:
     ts_text_value = str(ts_value or ts_default)
     return ts_text_value if ts_text_value in ts_allowed_values else ts_default
+
+
+def TSNormalizeStringSequence(ts_value: Any) -> list[str]:
+    if not isinstance(ts_value, (list, tuple, set)):
+        return []
+    return [str(ts_item) for ts_item in ts_value if str(ts_item)]
 
 
 def TSNormalizeUISettings(ts_ui: dict[str, Any] | None) -> dict[str, Any]:
@@ -39,15 +53,11 @@ def TSNormalizeUISettings(ts_ui: dict[str, Any] | None) -> dict[str, Any]:
         "workflow_sort_direction": str(ts_ui.get("workflow_sort_direction") or "desc"),
         "workflow_preview_size": TSClampInt(ts_ui.get("workflow_preview_size"), 48, 512, 180),
         "workflow_search": str(ts_ui.get("workflow_search") or ""),
-        "asset_types": [
-            str(ts_type)
-            for ts_type in (ts_ui.get("asset_types") or [])
-            if str(ts_type) in TS_ASSET_TYPES
-        ],
+        "asset_types": [ts_type for ts_type in TSNormalizeStringSequence(ts_ui.get("asset_types")) if ts_type in TS_ASSET_TYPES],
         "selected_root_id": str(ts_ui.get("selected_root_id") or "all"),
         "selected_folder_path": TSNormalizeFolderPath(ts_ui.get("selected_folder_path")),
         "workflow_selected_folder_path": TSNormalizeFolderPath(ts_ui.get("workflow_selected_folder_path")),
-        "expanded_folders": [str(ts_key) for ts_key in (ts_ui.get("expanded_folders") or []) if str(ts_key)],
+        "expanded_folders": TSNormalizeStringSequence(ts_ui.get("expanded_folders")),
         "browser_width": TSClampInt(ts_ui.get("browser_width"), 0, 1600, 0),
     }
 
@@ -73,17 +83,15 @@ def TSApplyUISettingsUpdates(ts_ui: dict[str, Any], ts_ui_updates: dict[str, Any
     if "workflow_sort_direction" in ts_updates:
         ts_ui["workflow_sort_direction"] = TSNormalizeChoice(ts_updates.get("workflow_sort_direction"), TS_SORT_DIRECTIONS, "desc")
     if "asset_preview_size" in ts_updates:
-        try:
-            ts_ui["asset_preview_size"] = TSClampInt(ts_updates.get("asset_preview_size"), 48, 512, 180)
-        except (TypeError, ValueError):
-            pass
+        ts_preview_size = TSParseClampedInt(ts_updates.get("asset_preview_size"), 48, 512)
+        if ts_preview_size is not None:
+            ts_ui["asset_preview_size"] = ts_preview_size
     if "asset_search" in ts_updates:
         ts_ui["asset_search"] = str(ts_updates.get("asset_search") or "")
     if "workflow_preview_size" in ts_updates:
-        try:
-            ts_ui["workflow_preview_size"] = TSClampInt(ts_updates.get("workflow_preview_size"), 48, 512, 180)
-        except (TypeError, ValueError):
-            pass
+        ts_preview_size = TSParseClampedInt(ts_updates.get("workflow_preview_size"), 48, 512)
+        if ts_preview_size is not None:
+            ts_ui["workflow_preview_size"] = ts_preview_size
     if "workflow_search" in ts_updates:
         ts_ui["workflow_search"] = str(ts_updates.get("workflow_search") or "")
     if "asset_types" in ts_updates:
@@ -101,7 +109,6 @@ def TSApplyUISettingsUpdates(ts_ui: dict[str, Any], ts_ui_updates: dict[str, Any
         if isinstance(ts_expanded_folders, (list, tuple, set)):
             ts_ui["expanded_folders"] = [str(ts_key) for ts_key in ts_expanded_folders if str(ts_key)]
     if "browser_width" in ts_updates:
-        try:
-            ts_ui["browser_width"] = TSClampInt(ts_updates.get("browser_width"), 0, 1600, 0)
-        except (TypeError, ValueError):
-            pass
+        ts_browser_width = TSParseClampedInt(ts_updates.get("browser_width"), 0, 1600)
+        if ts_browser_width is not None:
+            ts_ui["browser_width"] = ts_browser_width
