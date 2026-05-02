@@ -6,6 +6,7 @@
 
 - `js/ts-artius-browser-panel.js`: основной браузер ассетов и workflows.
 - `js/ts-artius-browser-viewer.js`: lightbox/viewer для image, video, audio, 3D и compare modes.
+- `js/ts-artius-browser-api.js`: frontend API/bridge module, но только покрытые helper-зоны без изменения drag/drop lifecycle.
 
 Цель обоих срезов: уменьшить monolith files, вынести уже существующую чистую или почти чистую логику в маленькие ES modules, оставить публичные exports, DOM-контракты, API-запросы, клавиатурное/мышиное поведение и user-facing markup без изменений.
 
@@ -38,6 +39,11 @@
 - prompt / negative prompt / workflow metadata markup;
 - 3D metadata markup;
 - technical video/audio metadata markup;
+- workflow userdata path normalization and preview matching;
+- Comfy workflow load options and store-path behavior;
+- folder-tree count rollup;
+- open/download link behavior;
+- widget lookup/options/value-setting behavior;
 - существующие DOM entrypoints и event handlers.
 
 ## Baseline state
@@ -82,7 +88,25 @@ Viewer test groups:
 
 После добавления stage markup coverage перед stage extraction: `53 assertions OK`.
 
-`scripts/check_release.py` запускает оба frontend characterization checks автоматически.
+Добавлен `scripts/check_frontend_api_characterization.mjs`.
+
+API test groups:
+
+- `scripts/check_frontend_api_characterization.mjs:220` `tsRunPathTests`: фиксирует relative path normalization, userdata URLs, workflow folder/store paths.
+- `scripts/check_frontend_api_characterization.mjs:234` `tsRunFormattingTests`: фиксирует modified timestamps, clamp и byte labels.
+- `scripts/check_frontend_api_characterization.mjs:245` `tsRunDebounceTests`: фиксирует timeout clearing, wait time и передачу последних аргументов.
+- `scripts/check_frontend_api_characterization.mjs:270` `tsRunWorkflowLibraryTests`: фиксирует `/v2/userdata` workflow parsing, preview sidecars, spaces in filenames, image/video preview kind.
+- `scripts/check_frontend_api_characterization.mjs:299` `tsRunWorkflowLoadTests`: фиксирует `app.loadGraphData` call, Comfy store path и native workflow load options.
+- `scripts/check_frontend_api_characterization.mjs:319` `tsRunFolderTreeTests`: фиксирует root sorting и rollup child counts for tree mode.
+- `scripts/check_frontend_api_characterization.mjs:343` `tsRunOpenableUrlTests`: фиксирует openable URL resolution, download link и new-tab link behavior.
+- `scripts/check_frontend_api_characterization.mjs:361` `tsRunAssetPathTests`: фиксирует asset fetch path, relative asset path, node class resolution и graph bounds check.
+- `scripts/check_frontend_api_characterization.mjs:373` `tsRunWidgetHelperTests`: фиксирует selected node normalization, widget lookup, widget options, callback и dirty-canvas side effects.
+
+Первый API characterization baseline на неизмененном `api.js`: `52 assertions OK`.
+
+После debounce/open/widget coverage перед соответствующими extracts: `71 assertions OK`.
+
+`scripts/check_release.py` запускает API, panel и viewer frontend characterization checks автоматически.
 
 ## No-test mode declaration
 
@@ -150,6 +174,46 @@ No-test mode не использовался.
     Verification: `frontend viewer characterization: 53 assertions OK`; Python tests `116 passed`; release check clean.
     Commit: `330d9b7 Extract viewer stage markup helper`.
 
+16. Add frontend API characterization checks.
+    Verification: `frontend api characterization: 52 assertions OK`; Python tests `116 passed`; release check clean.
+    Commit: `5de5c5c Add frontend API characterization checks`.
+
+17. Extract frontend API workflow path helpers.
+    Verification: `frontend api characterization: 52 assertions OK`; Python tests `116 passed`; release check clean.
+    Commit: `a2f54e8 Extract frontend API workflow path helpers`.
+
+18. Extract frontend API folder tree helper.
+    Verification: `frontend api characterization: 52 assertions OK`; Python tests `116 passed`; release check clean.
+    Commit: `8864e5c Extract frontend API folder tree helper`.
+
+19. Add frontend API debounce characterization.
+    Verification: `frontend api characterization: 56 assertions OK`; Python tests `116 passed`; release check clean.
+    Commit: `4878fc0 Add frontend API debounce characterization`.
+
+20. Extract frontend API utility helpers.
+    Verification: `frontend api characterization: 56 assertions OK`; Python tests `116 passed`; release check clean.
+    Commit: `3b47ec5 Extract frontend API utility helpers`.
+
+21. Add frontend API open helper characterization.
+    Verification: `frontend api characterization: 61 assertions OK`; Python tests `116 passed`; release check clean.
+    Commit: `c035ce9 Add frontend API open helper characterization`.
+
+22. Extract frontend API open helpers.
+    Verification: `frontend api characterization: 61 assertions OK`; Python tests `116 passed`; release check clean.
+    Commit: `b90cf1d Extract frontend API open helpers`.
+
+23. Extract frontend API workflow pure helpers.
+    Verification: `frontend api characterization: 61 assertions OK`; Python tests `116 passed`; release check clean.
+    Commit: `23b6dbb Extract frontend API workflow pure helpers`.
+
+24. Add frontend API widget characterization.
+    Verification: `frontend api characterization: 71 assertions OK`; Python tests `116 passed`; release check clean.
+    Commit: `8729619 Add frontend API widget characterization`.
+
+25. Extract frontend API widget helpers.
+    Verification: `frontend api characterization: 71 assertions OK`; Python tests `116 passed`; release check clean.
+    Commit: `8a014e2 Extract frontend API widget helpers`.
+
 ## Diff summary
 
 Production code:
@@ -166,20 +230,29 @@ Production code:
 - `js/ts-artius-browser-viewer-stage.js`: new stage markup helper.
 - `js/ts-artius-browser-viewer-state.js`: new compare/sync state helpers.
 - `js/ts-artius-browser-viewer.js`: delegates to extracted helpers, public exports unchanged.
+- `js/ts-artius-browser-api-open.js`: new open/download URL helpers.
+- `js/ts-artius-browser-api-paths.js`: new workflow userdata path and library item helpers.
+- `js/ts-artius-browser-api-tree.js`: new folder tree helper.
+- `js/ts-artius-browser-api-utils.js`: new debounce/clamp/format helpers.
+- `js/ts-artius-browser-api-workflow.js`: new pure workflow/node path helpers.
+- `js/ts-artius-browser-api-widgets.js`: new widget helper functions.
+- `js/ts-artius-browser-api.js`: delegates covered helper logic, public exports unchanged.
 
 Test/tooling:
 
+- `scripts/check_frontend_api_characterization.mjs`: API/bridge helper behavior characterization.
 - `scripts/check_frontend_panel_characterization.mjs`: panel behavior characterization.
 - `scripts/check_frontend_viewer_characterization.mjs`: viewer behavior characterization.
-- `scripts/check_release.py`: runs panel and viewer frontend characterization checks.
+- `scripts/check_release.py`: runs API, panel and viewer frontend characterization checks.
 
-Aggregate diff for frontend refactor slice through `330d9b7`: about `1464 insertions / 650 deletions` across production and test/tooling files. Большая часть insertions находится в characterization scripts, то есть это safety net, а не runtime-size growth.
+Большая часть insertions находится в characterization scripts, то есть это safety net, а не runtime-size growth.
 
 ## Final state
 
 Final verification before this report update:
 
 - Python tests: `116 passed / 0 failed / 0 skipped / 0 errored`.
+- Frontend API characterization: `71 assertions OK`.
 - Frontend panel characterization: `70 assertions OK`.
 - Frontend viewer characterization: `53 assertions OK`.
 - JavaScript syntax: clean through `scripts/check_release.py`.
@@ -196,13 +269,12 @@ Commands used after the last production refactor step:
 ```powershell
 D:\AiApps\ComfyUI\comfyui\python\python.exe scripts\check_release.py
 D:\AiApps\ComfyUI\comfyui\python\python.exe -m unittest discover -s tests -p "test_*.py"
+node scripts\check_frontend_api_characterization.mjs
+node scripts\check_frontend_panel_characterization.mjs
 node scripts\check_frontend_viewer_characterization.mjs
-node --check js\ts-artius-browser-viewer.js
-node --check js\ts-artius-browser-viewer-stage.js
-node --check scripts\check_frontend_viewer_characterization.mjs
 ```
 
-Observed result: release checks clean, Python tests `116 passed`, panel characterization `70 assertions OK`, viewer characterization `53 assertions OK`.
+Observed result: release checks clean, Python tests `116 passed`, API characterization `71 assertions OK`, panel characterization `70 assertions OK`, viewer characterization `53 assertions OK`.
 
 ## Behavior preservation evidence
 
@@ -212,7 +284,7 @@ No previously failing test started passing.
 
 No test expectation was changed to hide a production failure. One early panel characterization assumption for `23.976 FPS` was corrected before production refactor because unchanged code proved the current behavior is `24 FPS`.
 
-Public panel/viewer exports and browser entrypoints are unchanged.
+Public API/panel/viewer exports and browser entrypoints are unchanged.
 
 The refactor was mechanical: extract helper modules, delegate from original class methods, keep the original public method names as wrappers where external or intra-class code may rely on them.
 
@@ -222,7 +294,7 @@ The refactor was mechanical: extract helper modules, delegate from original clas
 - `js/ts-artius-browser-panel.js`: toolbar event wiring remains in the panel class. Extracting it would require event-level characterization first.
 - `js/ts-artius-browser-viewer.js`: `tsSetupVideoStage()`, `tsSetupVideoCompareStage()`, `tsSetupImageCompareStage()`, `tsSetup3DStage()` and `tsSetupAudioStage()` remain in the viewer class because they are DOM/event/WebGL integration points, not pure markup.
 - `js/ts-artius-browser-viewer.js`: CSS shell/template logic remains in the viewer class. Moving it without visual/browser snapshot tests would be higher risk.
-- `js/ts-artius-browser-api.js`: `tsLoadAssetIntoWorkflow()` remains in API/bridge module. Drag/drop workflow behavior is sensitive and was outside this refactor.
+- `js/ts-artius-browser-api.js`: `tsEnsureNativeInputPath()`, `tsApplyNativeAssetToNode()`, `tsSyncNative3DNode()`, `tsResolveNativeWidgetValue()`, `tsResolveDropTargetNode()`, `tsTryLoadIntoNodes()`, `tsCreateWorkflowNode()` and `tsLoadAssetIntoWorkflow()` remain in API/bridge module. They are Comfy/LiteGraph lifecycle integration points and need browser-level drag/drop smoke tests before deeper extraction.
 - `js/ts-artius-browser-api.js`: `tsEnsureCanvasDropBridge()` still owns canvas drag/drop binding. It should be handled only with dedicated drag/drop characterization.
 
 ## Open questions / decisions that needed user input
@@ -233,6 +305,17 @@ No open questions were asked during execution per user instruction. Decisions we
 
 Rollback by commit:
 
+- Revert API widget extraction: `git revert 8a014e2`.
+- Revert API widget characterization: `git revert 8729619`.
+- Revert API workflow pure helper extraction: `git revert 23b6dbb`.
+- Revert API open helper extraction: `git revert b90cf1d`.
+- Revert API open helper characterization: `git revert c035ce9`.
+- Revert API utility extraction: `git revert 3b47ec5`.
+- Revert API debounce characterization: `git revert 4878fc0`.
+- Revert API folder tree extraction: `git revert 8864e5c`.
+- Revert API workflow path extraction: `git revert a2f54e8`.
+- Revert API characterization harness: `git revert 5de5c5c`.
+- Revert viewer report commit: `git revert 784ce80`.
 - Revert viewer stage extraction: `git revert 330d9b7`.
 - Revert viewer stage characterization: `git revert 1be8619`.
 - Revert viewer metadata extraction: `git revert 24b4054`.
