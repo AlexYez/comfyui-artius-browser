@@ -62,6 +62,7 @@ async function tsLoadOptionalModule(tsRelativePath) {
 
 async function tsLoadHelperExports() {
     const tsModules = await Promise.all([
+        tsLoadOptionalModule("js/ts-artius-browser-api-open.js"),
         tsLoadOptionalModule("js/ts-artius-browser-api-paths.js"),
         tsLoadOptionalModule("js/ts-artius-browser-api-tree.js"),
         tsLoadOptionalModule("js/ts-artius-browser-api-utils.js"),
@@ -151,7 +152,10 @@ function tsBuildApiHarness(tsOptions = {}, tsHelperExports = {}) {
         tsBuildUserdataFileURLBase: tsHelperExports.tsBuildUserdataFileURL,
         tsDebounceImpl: tsHelperExports.tsDebounce,
         tsFormatBytesImpl: tsHelperExports.tsFormatBytes,
+        tsOpenAssetInNewTabImpl: tsHelperExports.tsOpenAssetInNewTab,
+        tsOpenDownloadImpl: tsHelperExports.tsOpenDownload,
         tsProjectSettings,
+        tsResolveOpenableURLImpl: tsHelperExports.tsResolveOpenableURL,
         window: {
             clearTimeout: tsOptions.clearTimeout || (() => {}),
             setTimeout: tsOptions.setTimeout || ((tsCallback) => {

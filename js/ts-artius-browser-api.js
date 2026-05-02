@@ -6,6 +6,11 @@ import {
     tsBrowserRuntimeSettings,
     tsProjectSettings,
 } from "./ts-artius-browser-settings.js";
+import {
+    tsOpenAssetInNewTab as tsOpenAssetInNewTabImpl,
+    tsOpenDownload as tsOpenDownloadImpl,
+    tsResolveOpenableURL as tsResolveOpenableURLImpl,
+} from "./ts-artius-browser-api-open.js";
 import { tsBuildFolderTree as tsBuildFolderTreeImpl } from "./ts-artius-browser-api-tree.js";
 import {
     tsClamp as tsClampImpl,
@@ -196,41 +201,15 @@ export async function tsCopyText(tsText) {
 }
 
 function tsResolveOpenableURL(tsURL) {
-    const tsValue = String(tsURL || "");
-    if (!tsValue) {
-        return "";
-    }
-    if (tsValue.startsWith("/api/") || tsValue.startsWith("http://") || tsValue.startsWith("https://") || tsValue.startsWith("blob:") || tsValue.startsWith("data:")) {
-        return tsValue;
-    }
-    return tsApiURL(tsValue);
+    return tsResolveOpenableURLImpl(tsURL, tsApiURL);
 }
 
 export function tsOpenDownload(tsAsset) {
-    if (!tsAsset?.file_url) {
-        return;
-    }
-    const tsLink = document.createElement("a");
-    tsLink.href = tsResolveOpenableURL(tsAsset.file_url);
-    tsLink.download = tsAsset.filename || "asset";
-    tsLink.rel = "noopener";
-    document.body.append(tsLink);
-    tsLink.click();
-    tsLink.remove();
+    return tsOpenDownloadImpl(tsAsset, { document, apiURL: tsApiURL });
 }
 
 export function tsOpenAssetInNewTab(tsAsset) {
-    if (!tsAsset?.file_url) {
-        return false;
-    }
-    const tsLink = document.createElement("a");
-    tsLink.href = tsResolveOpenableURL(tsAsset.file_url);
-    tsLink.target = "_blank";
-    tsLink.rel = "noopener noreferrer";
-    document.body.append(tsLink);
-    tsLink.click();
-    tsLink.remove();
-    return true;
+    return tsOpenAssetInNewTabImpl(tsAsset, { document, apiURL: tsApiURL });
 }
 export function tsEnsureSidebarIconStyle() {
     if (document.getElementById("ts-artius-sidebar-icon-style")) {
