@@ -27,6 +27,7 @@ import {
     tsFormatCardFPS,
     tsLerp,
 } from "./ts-artius-browser-panel-format.js";
+import { tsBuildAssetSearchParams } from "./ts-artius-browser-panel-query.js";
 import {
     tsBuildWorkflowFolders,
     tsBuildWorkflowQueryResult,
@@ -1836,35 +1837,18 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsBuildSearchParams(tsOffset, tsOverrides = {}) {
-        const tsParams = new URLSearchParams();
-        const tsLimit = Number(tsOverrides.limit ?? tsDefaultLimit);
-        const tsView = tsOverrides.view ?? this.tsState.tsMode;
-        const tsSortKey = tsOverrides.sortKey ?? this.tsState.tsSortKey;
-        const tsSortDirection = tsOverrides.sortDirection ?? this.tsState.tsSortDirection;
-        const tsSearch = Object.prototype.hasOwnProperty.call(tsOverrides, "search") ? tsOverrides.search : this.tsState.tsSearch;
-        const tsRootId = Object.prototype.hasOwnProperty.call(tsOverrides, "rootId") ? tsOverrides.rootId : this.tsState.tsRootId;
-        const tsTypes = Object.prototype.hasOwnProperty.call(tsOverrides, "types") ? tsOverrides.types : [...this.tsState.tsTypes];
-        const tsFolder = Object.prototype.hasOwnProperty.call(tsOverrides, "folder")
-            ? tsOverrides.folder
-            : (this.tsState.tsMode === "tree" ? this.tsState.tsFolder : "");
-        tsParams.set("offset", String(Math.max(0, Number(tsOffset) || 0)));
-        tsParams.set("limit", String(Math.max(1, tsLimit || tsDefaultLimit)));
-        tsParams.set("view", tsView || "flat");
-        tsParams.set("sort", tsSortKey || "created_at");
-        tsParams.set("order", tsSortDirection || "desc");
-        if (tsSearch) {
-            tsParams.set("q", String(tsSearch));
-        }
-        if (tsRootId && tsRootId !== "all") {
-            tsParams.set("root_id", String(tsRootId));
-        }
-        if (Array.isArray(tsTypes) && tsTypes.length > 0) {
-            tsParams.set("types", tsTypes.join(","));
-        }
-        if (tsFolder) {
-            tsParams.set("folder", String(tsFolder));
-        }
-        return tsParams;
+        return tsBuildAssetSearchParams({
+            offset: tsOffset,
+            defaultLimit: tsDefaultLimit,
+            view: this.tsState.tsMode,
+            sortKey: this.tsState.tsSortKey,
+            sortDirection: this.tsState.tsSortDirection,
+            search: this.tsState.tsSearch,
+            rootId: this.tsState.tsRootId,
+            types: [...this.tsState.tsTypes],
+            folder: this.tsState.tsFolder,
+            overrides: tsOverrides,
+        });
     }
 
     tsBuildRequestPath(tsOffset) {
