@@ -29,6 +29,18 @@ import {
 } from "./ts-artius-browser-panel-format.js";
 import { tsBuildAssetSearchParams } from "./ts-artius-browser-panel-query.js";
 import {
+    tsApplySectionSettingsToState,
+    tsIsBrowserSection,
+    tsNormalizeAssetSortKey,
+    tsNormalizeAssetTypeSet,
+    tsNormalizeFolderPath,
+    tsNormalizeSortDirection,
+    tsNormalizeViewMode,
+    tsNormalizeWorkflowSortKey,
+    tsResolvePreviewSize,
+    tsSyncSectionSettingsFromActiveState,
+} from "./ts-artius-browser-panel-state.js";
+import {
     tsBuildWorkflowFolders,
     tsBuildWorkflowQueryResult,
     tsBuildWorkflowRootNodes,
@@ -43,7 +55,6 @@ const tsGridLayout = tsPanelSettings.gridLayout;
 const tsGridOverscanRows = Math.max(0, Number(tsPanelSettings.gridOverscanRows || 1));
 const tsCardChromeScale = tsPanelSettings.cardChromeScale;
 const ts3DThumbnailSettings = tsPanelSettings.threeDThumbnails;
-const tsBrowserSections = Object.freeze(["assets", "workflows"]);
 
 export class TSArtiusBrowserPanel extends HTMLElement {
     constructor() {
@@ -257,46 +268,25 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         try {
             const tsPayload = await tsFetchBrowserSettings();
             const tsUI = tsPayload?.ui || {};
-            if (tsBrowserSections.includes(tsUI.browser_section)) {
+            if (tsIsBrowserSection(tsUI.browser_section)) {
                 this.tsState.tsSection = tsUI.browser_section;
             }
-            this.tsState.tsAssetMode = tsUI.asset_view_mode === "flat" || tsUI.asset_view_mode === "tree"
-                ? tsUI.asset_view_mode
-                : tsPanelSettings.defaultMode;
-            this.tsState.tsWorkflowMode = tsUI.workflow_view_mode === "flat" || tsUI.workflow_view_mode === "tree"
-                ? tsUI.workflow_view_mode
-                : tsPanelSettings.defaultMode;
+            this.tsState.tsAssetMode = tsNormalizeViewMode(tsUI.asset_view_mode, tsPanelSettings.defaultMode);
+            this.tsState.tsWorkflowMode = tsNormalizeViewMode(tsUI.workflow_view_mode, tsPanelSettings.defaultMode);
             if (typeof tsUI.autoscan === "boolean") {
                 this.tsState.tsAutoscan = tsUI.autoscan;
             }
-            const tsResolvePreviewSize = (tsValue, tsFallback) => {
-                const tsSize = Number(tsValue || 0);
-                return Number.isFinite(tsSize) && tsSize > 0
-                    ? tsClamp(tsSize, tsPreviewSizeRange.min, tsPreviewSizeRange.max)
-                    : tsFallback;
-            };
-            this.tsState.tsAssetSortKey = tsUI.asset_sort_key === "created_at" || tsUI.asset_sort_key === "filename" || tsUI.asset_sort_key === "size_bytes"
-                ? tsUI.asset_sort_key
-                : tsPanelSettings.defaultSort.key;
-            this.tsState.tsAssetSortDirection = tsUI.asset_sort_direction === "asc" || tsUI.asset_sort_direction === "desc"
-                ? tsUI.asset_sort_direction
-                : tsPanelSettings.defaultSort.direction;
-            this.tsState.tsWorkflowSortKey = tsUI.workflow_sort_key === "created_at" || tsUI.workflow_sort_key === "filename"
-                ? tsUI.workflow_sort_key
-                : (tsPanelSettings.defaultSort.key === "size_bytes" ? "created_at" : tsPanelSettings.defaultSort.key);
-            this.tsState.tsWorkflowSortDirection = tsUI.workflow_sort_direction === "asc" || tsUI.workflow_sort_direction === "desc"
-                ? tsUI.workflow_sort_direction
-                : tsPanelSettings.defaultSort.direction;
-            this.tsState.tsAssetPreviewSize = tsResolvePreviewSize(tsUI.asset_preview_size, tsPreviewSizeRange.default);
-            this.tsState.tsWorkflowPreviewSize = tsResolvePreviewSize(tsUI.workflow_preview_size, tsPreviewSizeRange.default);
+            this.tsState.tsAssetSortKey = tsNormalizeAssetSortKey(tsUI.asset_sort_key, tsPanelSettings.defaultSort.key);
+            this.tsState.tsAssetSortDirection = tsNormalizeSortDirection(tsUI.asset_sort_direction, tsPanelSettings.defaultSort.direction);
+            this.tsState.tsWorkflowSortKey = tsNormalizeWorkflowSortKey(tsUI.workflow_sort_key, tsPanelSettings.defaultSort.key);
+            this.tsState.tsWorkflowSortDirection = tsNormalizeSortDirection(tsUI.workflow_sort_direction, tsPanelSettings.defaultSort.direction);
+            this.tsState.tsAssetPreviewSize = tsResolvePreviewSize(tsUI.asset_preview_size, tsPreviewSizeRange.default, tsPreviewSizeRange);
+            this.tsState.tsWorkflowPreviewSize = tsResolvePreviewSize(tsUI.workflow_preview_size, tsPreviewSizeRange.default, tsPreviewSizeRange);
             this.tsState.tsAssetSearch = typeof tsUI.asset_search === "string" ? tsUI.asset_search : "";
             this.tsState.tsWorkflowSearch = typeof tsUI.workflow_search === "string" ? tsUI.workflow_search : "";
-            if (Array.isArray(tsUI.asset_types)) {
-                this.tsState.tsTypes = new Set(
-                    tsUI.asset_types
-                        .map((tsType) => String(tsType || ""))
-                        .filter((tsType) => tsTypeOrder.includes(tsType))
-                );
+            const tsAssetTypes = tsNormalizeAssetTypeSet(tsUI.asset_types, tsTypeOrder);
+            if (tsAssetTypes) {
+                this.tsState.tsTypes = tsAssetTypes;
             }
             if (typeof tsUI.selected_root_id === "string" && tsUI.selected_root_id) {
                 this.tsState.tsRootId = tsUI.selected_root_id;
@@ -305,11 +295,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 }
             }
             if (typeof tsUI.selected_folder_path === "string") {
-                this.tsState.tsFolder = tsUI.selected_folder_path.replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+                this.tsState.tsFolder = tsNormalizeFolderPath(tsUI.selected_folder_path);
                 this.tsLastAssetFolder = this.tsState.tsFolder;
             }
             if (typeof tsUI.workflow_selected_folder_path === "string") {
-                this.tsWorkflowSelectedFolder = tsUI.workflow_selected_folder_path.replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+                this.tsWorkflowSelectedFolder = tsNormalizeFolderPath(tsUI.workflow_selected_folder_path);
             }
             if (Array.isArray(tsUI.expanded_folders)) {
                 this.tsState.tsExpandedFolders = new Set(
@@ -395,37 +385,15 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsSyncSectionSettingsFromActive() {
-        if (this.tsIsWorkflowSection()) {
-            this.tsState.tsWorkflowMode = this.tsState.tsMode;
-            this.tsState.tsWorkflowSortKey = this.tsState.tsSortKey === "size_bytes" ? "created_at" : this.tsState.tsSortKey;
-            this.tsState.tsWorkflowSortDirection = this.tsState.tsSortDirection;
-            this.tsState.tsWorkflowPreviewSize = this.tsState.tsPreviewSize;
-            this.tsState.tsWorkflowSearch = this.tsState.tsSearch;
-            return;
-        }
-        this.tsState.tsAssetMode = this.tsState.tsMode;
-        this.tsState.tsAssetSortKey = this.tsState.tsSortKey;
-        this.tsState.tsAssetSortDirection = this.tsState.tsSortDirection;
-        this.tsState.tsAssetPreviewSize = this.tsState.tsPreviewSize;
-        this.tsState.tsAssetSearch = this.tsState.tsSearch;
+        tsSyncSectionSettingsFromActiveState(this.tsState, this.tsIsWorkflowSection());
     }
 
     tsApplySectionSettings() {
-        if (this.tsIsWorkflowSection()) {
-            this.tsState.tsMode = this.tsState.tsWorkflowMode;
-            this.tsState.tsSortKey = this.tsState.tsWorkflowSortKey === "size_bytes" ? "created_at" : this.tsState.tsWorkflowSortKey;
-            this.tsState.tsSortDirection = this.tsState.tsWorkflowSortDirection;
-            this.tsState.tsPreviewSize = this.tsState.tsWorkflowPreviewSize;
-            this.tsState.tsSearch = this.tsState.tsWorkflowSearch;
-            this.tsState.tsFolder = this.tsState.tsMode === "tree" ? (this.tsWorkflowSelectedFolder || "") : "";
-            return;
-        }
-        this.tsState.tsMode = this.tsState.tsAssetMode;
-        this.tsState.tsSortKey = this.tsState.tsAssetSortKey;
-        this.tsState.tsSortDirection = this.tsState.tsAssetSortDirection;
-        this.tsState.tsPreviewSize = this.tsState.tsAssetPreviewSize;
-        this.tsState.tsSearch = this.tsState.tsAssetSearch;
-        this.tsState.tsFolder = this.tsState.tsMode === "tree" ? (this.tsLastAssetFolder || "") : "";
+        tsApplySectionSettingsToState(this.tsState, {
+            isWorkflowSection: this.tsIsWorkflowSection(),
+            workflowSelectedFolder: this.tsWorkflowSelectedFolder,
+            lastAssetFolder: this.tsLastAssetFolder,
+        });
     }
 
     tsEmitAutoscanChanged() {
