@@ -96,6 +96,7 @@ async function tsLoadHelperExports() {
     const tsModules = await Promise.all([
         tsLoadOptionalModule("js/ts-artius-browser-panel-format.js"),
         tsLoadOptionalModule("js/ts-artius-browser-panel-state.js"),
+        tsLoadOptionalModule("js/ts-artius-browser-panel-selection.js"),
         tsLoadOptionalModule("js/ts-artius-browser-panel-query.js"),
         tsLoadOptionalModule("js/ts-artius-browser-panel-workflows.js"),
         tsLoadOptionalModule("js/ts-artius-browser-panel-grid.js"),

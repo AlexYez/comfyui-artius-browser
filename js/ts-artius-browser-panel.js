@@ -44,6 +44,11 @@ import {
     tsSyncSectionSettingsFromActiveState,
 } from "./ts-artius-browser-panel-state.js";
 import {
+    tsBuildItemIndexById,
+    tsFindItemById,
+    tsGetSelectedItems,
+} from "./ts-artius-browser-panel-selection.js";
+import {
     tsBuildWorkflowFolders,
     tsBuildWorkflowQueryResult,
     tsBuildWorkflowRootNodes,
@@ -2044,10 +2049,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsRebuildItemIndex() {
-        this.tsItemIndexById = new Map();
-        this.tsState.tsItems.forEach((tsItem, tsIndex) => {
-            this.tsItemIndexById.set(tsItem.id, tsIndex);
-        });
+        this.tsItemIndexById = tsBuildItemIndexById(this.tsState.tsItems);
     }
 
     tsRenderHealth() {
@@ -2269,23 +2271,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsGetSelectedItems() {
-        const tsItems = [];
-        this.tsState.tsSelection.forEach((tsAssetId) => {
-            const tsIndex = this.tsItemIndexById.get(tsAssetId);
-            if (tsIndex === undefined) {
-                return;
-            }
-            const tsItem = this.tsState.tsItems[tsIndex];
-            if (tsItem) {
-                tsItems.push(tsItem);
-            }
-        });
-        return tsItems;
+        return tsGetSelectedItems(this.tsState.tsItems, this.tsItemIndexById, this.tsState.tsSelection);
     }
 
     tsFindItemById(tsAssetId) {
-        const tsIndex = this.tsItemIndexById.get(tsAssetId);
-        return tsIndex === undefined ? null : (this.tsState.tsItems[tsIndex] || null);
+        return tsFindItemById(this.tsState.tsItems, this.tsItemIndexById, tsAssetId);
     }
 
     async tsEnsureAssetDetail(tsAssetId) {
