@@ -7,6 +7,7 @@
 - `js/ts-artius-browser-panel.js`: основной браузер ассетов и workflows.
 - `js/ts-artius-browser-viewer.js`: lightbox/viewer для image, video, audio, 3D и compare modes.
 - `js/ts-artius-browser-api.js`: frontend API/bridge module, но только покрытые helper-зоны без изменения drag/drop lifecycle.
+- `js/ts-artius-browser-3d.js` и `js/ts-artius-browser-3d-worker.js`: characterization coverage for 3D helper/worker behavior, без production-refactor в этом срезе.
 
 Цель обоих срезов: уменьшить monolith files, вынести уже существующую чистую или почти чистую логику в маленькие ES modules, оставить публичные exports, DOM-контракты, API-запросы, клавиатурное/мышиное поведение и user-facing markup без изменений.
 
@@ -106,7 +107,15 @@ API test groups:
 
 После debounce/open/widget coverage перед соответствующими extracts: `71 assertions OK`.
 
-`scripts/check_release.py` запускает API, panel и viewer frontend characterization checks автоматически.
+Добавлен `scripts/check_frontend_3d_characterization.mjs`.
+
+3D test groups:
+
+- `scripts/check_frontend_3d_characterization.mjs`: фиксирует `Load3d` export resolution, 3D viewer file extension parsing, 3D worker search query, scan-complete scheduling, skip conditions and capture/save thumbnail flow.
+
+Первый 3D characterization baseline на неизмененном 3D frontend code: `15 assertions OK`.
+
+`scripts/check_release.py` запускает 3D, API, panel и viewer frontend characterization checks автоматически.
 
 ## No-test mode declaration
 
@@ -214,6 +223,10 @@ No-test mode не использовался.
     Verification: `frontend api characterization: 71 assertions OK`; Python tests `116 passed`; release check clean.
     Commit: `8a014e2 Extract frontend API widget helpers`.
 
+26. Add frontend 3D characterization checks.
+    Verification: `frontend 3d characterization: 15 assertions OK`; Python tests `116 passed`; release check clean.
+    Commit: `bd3aaf0 Add frontend 3D characterization checks`.
+
 ## Diff summary
 
 Production code:
@@ -241,9 +254,10 @@ Production code:
 Test/tooling:
 
 - `scripts/check_frontend_api_characterization.mjs`: API/bridge helper behavior characterization.
+- `scripts/check_frontend_3d_characterization.mjs`: 3D helper/worker behavior characterization.
 - `scripts/check_frontend_panel_characterization.mjs`: panel behavior characterization.
 - `scripts/check_frontend_viewer_characterization.mjs`: viewer behavior characterization.
-- `scripts/check_release.py`: runs API, panel and viewer frontend characterization checks.
+- `scripts/check_release.py`: runs 3D, API, panel and viewer frontend characterization checks.
 
 Большая часть insertions находится в characterization scripts, то есть это safety net, а не runtime-size growth.
 
@@ -252,6 +266,7 @@ Test/tooling:
 Final verification before this report update:
 
 - Python tests: `116 passed / 0 failed / 0 skipped / 0 errored`.
+- Frontend 3D characterization: `15 assertions OK`.
 - Frontend API characterization: `71 assertions OK`.
 - Frontend panel characterization: `70 assertions OK`.
 - Frontend viewer characterization: `53 assertions OK`.
@@ -269,12 +284,13 @@ Commands used after the last production refactor step:
 ```powershell
 D:\AiApps\ComfyUI\comfyui\python\python.exe scripts\check_release.py
 D:\AiApps\ComfyUI\comfyui\python\python.exe -m unittest discover -s tests -p "test_*.py"
+node scripts\check_frontend_3d_characterization.mjs
 node scripts\check_frontend_api_characterization.mjs
 node scripts\check_frontend_panel_characterization.mjs
 node scripts\check_frontend_viewer_characterization.mjs
 ```
 
-Observed result: release checks clean, Python tests `116 passed`, API characterization `71 assertions OK`, panel characterization `70 assertions OK`, viewer characterization `53 assertions OK`.
+Observed result: release checks clean, Python tests `116 passed`, 3D characterization `15 assertions OK`, API characterization `71 assertions OK`, panel characterization `70 assertions OK`, viewer characterization `53 assertions OK`.
 
 ## Behavior preservation evidence
 
@@ -296,6 +312,8 @@ The refactor was mechanical: extract helper modules, delegate from original clas
 - `js/ts-artius-browser-viewer.js`: CSS shell/template logic remains in the viewer class. Moving it without visual/browser snapshot tests would be higher risk.
 - `js/ts-artius-browser-api.js`: `tsEnsureNativeInputPath()`, `tsApplyNativeAssetToNode()`, `tsSyncNative3DNode()`, `tsResolveNativeWidgetValue()`, `tsResolveDropTargetNode()`, `tsTryLoadIntoNodes()`, `tsCreateWorkflowNode()` and `tsLoadAssetIntoWorkflow()` remain in API/bridge module. They are Comfy/LiteGraph lifecycle integration points and need browser-level drag/drop smoke tests before deeper extraction.
 - `js/ts-artius-browser-api.js`: `tsEnsureCanvasDropBridge()` still owns canvas drag/drop binding. It should be handled only with dedicated drag/drop characterization.
+- `js/ts-artius-browser-3d.js`: `tsCapture3DThumbnail()` remains intact because it owns real DOM/WebGL viewer lifecycle.
+- `js/ts-artius-browser-3d-worker.js`: worker class remains intact; only characterization was added. Deeper splitting should follow after browser smoke checks with real 3D assets.
 
 ## Open questions / decisions that needed user input
 
@@ -305,6 +323,8 @@ No open questions were asked during execution per user instruction. Decisions we
 
 Rollback by commit:
 
+- Revert 3D characterization: `git revert bd3aaf0`.
+- Revert API report update: `git revert aeae1ff`.
 - Revert API widget extraction: `git revert 8a014e2`.
 - Revert API widget characterization: `git revert 8729619`.
 - Revert API workflow pure helper extraction: `git revert 23b6dbb`.
