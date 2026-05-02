@@ -149,13 +149,13 @@ function tsBuildApiHarness(tsOptions = {}, tsHelperExports = {}) {
         tsBuildUserdataFileURLBase: tsHelperExports.tsBuildUserdataFileURL,
         tsProjectSettings,
         window: {
-            clearTimeout() {},
-            setTimeout(tsCallback) {
+            clearTimeout: tsOptions.clearTimeout || (() => {}),
+            setTimeout: tsOptions.setTimeout || ((tsCallback) => {
                 if (typeof tsCallback === "function") {
                     tsCallback();
                 }
                 return 1;
-            },
+            }),
             LiteGraph: tsOptions.LiteGraph,
         },
         ...tsHelperExports,
@@ -180,6 +180,7 @@ function tsBuildApiHarness(tsOptions = {}, tsHelperExports = {}) {
             tsFetchWorkflowBrowserLibrary,
             tsLoadWorkflowIntoComfy,
             tsDeleteWorkflowFile,
+            tsDebounce,
             tsClamp,
             tsFormatBytes,
             tsResolveOpenableURL,
@@ -221,6 +222,31 @@ function tsRunFormattingTests(tsApiExports) {
     tsEqual(tsApiExports.tsFormatBytes(0), "0 B", "zero bytes label");
     tsEqual(tsApiExports.tsFormatBytes(1536), "1.5 KB", "kilobytes label");
     tsEqual(tsApiExports.tsFormatBytes(5 * 1024 * 1024), "5.0 MB", "megabytes label");
+}
+
+function tsRunDebounceTests(tsHelperExports) {
+    const tsClearedTimeouts = [];
+    const tsScheduledTimeouts = [];
+    const tsCalls = [];
+    const tsApiExports = tsBuildApiHarness({
+        clearTimeout: (tsTimeoutId) => {
+            tsClearedTimeouts.push(tsTimeoutId);
+        },
+        setTimeout: (tsCallback, tsWaitMs) => {
+            tsScheduledTimeouts.push({ tsCallback, tsWaitMs });
+            return tsScheduledTimeouts.length;
+        },
+    }, tsHelperExports);
+    const tsDebounced = tsApiExports.tsDebounce((...tsArgs) => {
+        tsCalls.push(tsArgs);
+    }, 123);
+    tsDebounced("first");
+    tsDebounced("second", "value");
+    tsEqual(tsClearedTimeouts, [0, 1], "debounce clears the previous timeout id before scheduling");
+    tsEqual(tsScheduledTimeouts.map((tsEntry) => tsEntry.tsWaitMs), [123, 123], "debounce schedules with the requested wait time");
+    tsEqual(tsCalls, [], "debounce does not call synchronously when setTimeout is deferred");
+    tsScheduledTimeouts[1].tsCallback();
+    tsEqual(tsCalls, [["second", "value"]], "debounce callback receives the latest arguments");
 }
 
 async function tsRunWorkflowLibraryTests(tsHelperExports) {
@@ -323,6 +349,7 @@ const tsHelperExports = await tsLoadHelperExports();
 const tsApiExports = tsBuildApiHarness({}, tsHelperExports);
 tsRunPathTests(tsApiExports);
 tsRunFormattingTests(tsApiExports);
+tsRunDebounceTests(tsHelperExports);
 await tsRunWorkflowLibraryTests(tsHelperExports);
 await tsRunWorkflowLoadTests(tsHelperExports);
 tsRunFolderTreeTests(tsApiExports);
