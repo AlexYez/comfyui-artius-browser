@@ -441,6 +441,26 @@ function tsRunGridTests(tsPanelClass) {
     tsAssert(tsStyleWrites.some(([tsName, tsValue]) => tsName === "--ts-card-preview-height" && tsValue === "110px"), "grid metrics write preview CSS variable");
 }
 
+function tsRunSelectionTests(tsPanelClass) {
+    const tsProbe = tsBuildPanelProbe(tsPanelClass, {
+        tsItems: [
+            { id: 10, filename: "first.png" },
+            { id: 20, filename: "second.png" },
+            { id: null, filename: "null-id.png" },
+        ],
+        tsSelection: new Set([20, 999, null]),
+    });
+    tsProbe.tsRebuildItemIndex();
+    tsEqual([...tsProbe.tsItemIndexById.entries()], [[10, 0], [20, 1], [null, 2]], "item index preserves every current item id, including null");
+    tsEqual(tsProbe.tsFindItemById(10), { id: 10, filename: "first.png" }, "find item by id uses the index map");
+    tsEqual(tsProbe.tsFindItemById(999), null, "find item by id returns null for missing ids");
+    tsEqual(
+        tsProbe.tsGetSelectedItems(),
+        [{ id: 20, filename: "second.png" }, { id: null, filename: "null-id.png" }],
+        "selected items preserve selection insertion order and skip missing ids",
+    );
+}
+
 const tsHelperExports = await tsLoadHelperExports();
 const tsPanelExports = tsBuildPanelHarness(tsHelperExports);
 
@@ -449,5 +469,6 @@ tsRunSearchParamTests(tsPanelExports.TSArtiusBrowserPanel);
 tsRunWorkflowTests(tsPanelExports.TSArtiusBrowserPanel);
 tsRunSectionStateTests(tsPanelExports.TSArtiusBrowserPanel);
 tsRunGridTests(tsPanelExports.TSArtiusBrowserPanel);
+tsRunSelectionTests(tsPanelExports.TSArtiusBrowserPanel);
 
 console.log(`frontend panel characterization: ${tsAssertions} assertions OK`);
