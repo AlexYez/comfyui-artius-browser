@@ -52,7 +52,22 @@ function tsBuildResponse(tsPayload, tsOptions = {}) {
     };
 }
 
-function tsBuildApiHarness(tsOptions = {}) {
+async function tsLoadOptionalModule(tsRelativePath) {
+    const tsAbsolutePath = path.join(tsRepoRoot, tsRelativePath);
+    if (!fs.existsSync(tsAbsolutePath)) {
+        return {};
+    }
+    return import(`${pathToFileURL(tsAbsolutePath).href}?ts=${Date.now()}`);
+}
+
+async function tsLoadHelperExports() {
+    const tsModules = await Promise.all([
+        tsLoadOptionalModule("js/ts-artius-browser-api-paths.js"),
+    ]);
+    return Object.assign({}, ...tsModules);
+}
+
+function tsBuildApiHarness(tsOptions = {}, tsHelperExports = {}) {
     const tsSource = fs.readFileSync(tsApiPath, "utf8")
         .replace(/^import[\s\S]*?;\r?\n/gm, "")
         .replace(/import\.meta\.url/g, JSON.stringify(pathToFileURL(tsApiPath).href))
@@ -129,6 +144,7 @@ function tsBuildApiHarness(tsOptions = {}) {
         },
         tsApiSettings,
         tsBrowserRuntimeSettings,
+        tsBuildUserdataFileURLBase: tsHelperExports.tsBuildUserdataFileURL,
         tsProjectSettings,
         window: {
             clearTimeout() {},
@@ -140,6 +156,7 @@ function tsBuildApiHarness(tsOptions = {}) {
             },
             LiteGraph: tsOptions.LiteGraph,
         },
+        ...tsHelperExports,
     };
     vm.createContext(tsContext);
     vm.runInContext(
@@ -204,7 +221,7 @@ function tsRunFormattingTests(tsApiExports) {
     tsEqual(tsApiExports.tsFormatBytes(5 * 1024 * 1024), "5.0 MB", "megabytes label");
 }
 
-async function tsRunWorkflowLibraryTests() {
+async function tsRunWorkflowLibraryTests(tsHelperExports) {
     const tsEntries = [
         { type: "directory", path: "workflows/Sub", name: "Sub" },
         { type: "file", path: "workflows/Live Portrait Video.webp", name: "Live Portrait Video.webp", size: 111, modified: "2026-04-20T10:20:30Z" },
@@ -220,7 +237,7 @@ async function tsRunWorkflowLibraryTests() {
             tsFetchCalls.push(tsPath);
             return tsBuildResponse(tsEntries);
         },
-    });
+    }, tsHelperExports);
     const tsLibrary = await tsApiExports.tsFetchWorkflowBrowserLibrary();
     tsEqual(tsFetchCalls, ["/v2/userdata?path=workflows"], "workflow library requests userdata workflows root");
     tsEqual(tsLibrary.map((tsItem) => tsItem.filename), ["Live Portrait Video.json", "Deep Flow.json"], "workflow library keeps only workflow JSON files sorted by path");
@@ -233,14 +250,14 @@ async function tsRunWorkflowLibraryTests() {
     tsEqual(tsLibrary[1].folder_path, "Sub", "workflow subfolder is relative to workflows root");
 }
 
-async function tsRunWorkflowLoadTests() {
+async function tsRunWorkflowLoadTests(tsHelperExports) {
     const tsLoadCalls = [];
     const tsApiExports = tsBuildApiHarness({
         getUserData: async (tsPath) => tsBuildResponse({ nodes: [], path: tsPath }),
         loadGraphData: async (...tsArgs) => {
             tsLoadCalls.push(tsArgs);
         },
-    });
+    }, tsHelperExports);
     const tsLoaded = await tsApiExports.tsLoadWorkflowIntoComfy("workflows/Sub/My Flow.json");
     tsEqual(tsLoaded, true, "workflow load reports success when app.loadGraphData exists");
     tsEqual(tsLoadCalls.length, 1, "workflow load calls app.loadGraphData once");
@@ -279,7 +296,7 @@ function tsRunFolderTreeTests(tsApiExports) {
 
 function tsRunOpenableUrlTests() {
     const tsAppended = [];
-    const tsApiExports = tsBuildApiHarness({ appendedElements: tsAppended });
+    const tsApiExports = tsBuildApiHarness({ appendedElements: tsAppended }, tsHelperExports);
     tsEqual(tsApiExports.tsResolveOpenableURL("/asset_browser/file?id=1"), "/api/asset_browser/file?id=1", "relative backend URL goes through apiURL");
     tsEqual(tsApiExports.tsResolveOpenableURL("/api/view?filename=a.png"), "/api/view?filename=a.png", "api URL is already openable");
     tsEqual(tsApiExports.tsResolveOpenableURL("https://example.test/a.png"), "https://example.test/a.png", "absolute HTTPS URL is already openable");
@@ -300,11 +317,12 @@ function tsRunAssetPathTests(tsApiExports) {
     tsEqual(tsApiExports.tsIsGraphPointInsideNode({ pos: [10, 20], size: [100, 50] }, 200, 30), false, "bounds check rejects point outside node");
 }
 
-const tsApiExports = tsBuildApiHarness();
+const tsHelperExports = await tsLoadHelperExports();
+const tsApiExports = tsBuildApiHarness({}, tsHelperExports);
 tsRunPathTests(tsApiExports);
 tsRunFormattingTests(tsApiExports);
-await tsRunWorkflowLibraryTests();
-await tsRunWorkflowLoadTests();
+await tsRunWorkflowLibraryTests(tsHelperExports);
+await tsRunWorkflowLoadTests(tsHelperExports);
 tsRunFolderTreeTests(tsApiExports);
 tsRunOpenableUrlTests();
 tsRunAssetPathTests(tsApiExports);

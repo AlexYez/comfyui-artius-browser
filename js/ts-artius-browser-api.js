@@ -6,6 +6,13 @@ import {
     tsBrowserRuntimeSettings,
     tsProjectSettings,
 } from "./ts-artius-browser-settings.js";
+import {
+    tsBuildUserdataFilePath,
+    tsBuildUserdataFileURL as tsBuildUserdataFileURLBase,
+    tsBuildWorkflowBrowserLibraryItems,
+    tsNormalizeRelativePath,
+    tsToWorkflowStorePath,
+} from "./ts-artius-browser-api-paths.js";
 
 export const tsRouteBase = tsApiSettings.routeBase;
 export const tsAssetDragMime = tsApiSettings.assetDragMime;
@@ -15,8 +22,6 @@ const tsFallbackWorkflowTargets = tsApiSettings.fallbackWorkflowTargets;
 const tsLocaleCache = new Map();
 const tsEnableConsoleDebug = Boolean(tsBrowserRuntimeSettings.enableConsoleDebug);
 const tsWorkflowUserdataRoot = "workflows";
-const tsWorkflowPreviewImageExtensions = new Set([".png", ".jpg", ".jpeg", ".webp", ".avif", ".gif"]);
-const tsWorkflowPreviewVideoExtensions = new Set([".mp4", ".webm", ".mov", ".m4v"]);
 
 export function tsConsoleWarn(...tsArgs) {
     if (tsEnableConsoleDebug) {
@@ -34,82 +39,8 @@ export function tsApiURL(tsPath) {
     return typeof api?.apiURL === "function" ? api.apiURL(tsPath) : tsPath;
 }
 
-function tsNormalizeRelativePath(tsPath) {
-    return String(tsPath || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
-}
-
-function tsBuildUserdataFilePath(tsRelativePath) {
-    const tsNormalizedPath = tsNormalizeRelativePath(tsRelativePath);
-    if (!tsNormalizedPath) {
-        return "";
-    }
-    return `/userdata/${encodeURIComponent(tsNormalizedPath)}`;
-}
-
 function tsBuildUserdataFileURL(tsRelativePath) {
-    const tsPath = tsBuildUserdataFilePath(tsRelativePath);
-    return tsPath ? tsApiURL(tsPath) : "";
-}
-
-function tsGetPathExtension(tsPath) {
-    const tsFilename = tsNormalizeRelativePath(tsPath).split("/").at(-1) || "";
-    const tsDotIndex = tsFilename.lastIndexOf(".");
-    return tsDotIndex >= 0 ? tsFilename.slice(tsDotIndex).toLowerCase() : "";
-}
-
-function tsGetPathStem(tsPath) {
-    const tsFilename = tsNormalizeRelativePath(tsPath).split("/").at(-1) || "";
-    const tsDotIndex = tsFilename.lastIndexOf(".");
-    return tsDotIndex >= 0 ? tsFilename.slice(0, tsDotIndex) : tsFilename;
-}
-
-function tsGetParentFolderPath(tsPath) {
-    const tsNormalizedPath = tsNormalizeRelativePath(tsPath);
-    const tsSegments = tsNormalizedPath.split("/").filter(Boolean);
-    return tsSegments.slice(0, -1).join("/");
-}
-
-function tsParseModifiedEpoch(tsValue) {
-    if (Number.isFinite(tsValue)) {
-        return Math.floor(Number(tsValue));
-    }
-    if (typeof tsValue !== "string" || !tsValue) {
-        return 0;
-    }
-    const tsEpochMs = Date.parse(tsValue);
-    return Number.isFinite(tsEpochMs) ? Math.floor(tsEpochMs / 1000) : 0;
-}
-
-function tsPickWorkflowPreview(tsCandidates) {
-    if (!Array.isArray(tsCandidates) || tsCandidates.length === 0) {
-        return null;
-    }
-    const tsImageCandidate = tsCandidates.find((tsCandidate) => tsCandidate.preview_kind === "image");
-    return tsImageCandidate || tsCandidates[0] || null;
-}
-
-function tsToWorkflowBrowserFolderPath(tsRelativePath) {
-    const tsNormalizedPath = tsNormalizeRelativePath(tsRelativePath);
-    if (!tsNormalizedPath.toLowerCase().startsWith(`${tsWorkflowUserdataRoot}/`)) {
-        return "";
-    }
-    return tsNormalizedPath
-        .slice(tsWorkflowUserdataRoot.length + 1)
-        .split("/")
-        .filter(Boolean)
-        .slice(0, -1)
-        .join("/");
-}
-
-function tsToWorkflowStorePath(tsRelativePath) {
-    const tsNormalizedPath = tsNormalizeRelativePath(tsRelativePath);
-    if (!tsNormalizedPath) {
-        return "";
-    }
-    if (!tsNormalizedPath.toLowerCase().startsWith(`${tsWorkflowUserdataRoot}/`)) {
-        return tsNormalizedPath;
-    }
-    return tsNormalizedPath.slice(tsWorkflowUserdataRoot.length + 1);
+    return tsBuildUserdataFileURLBase(tsRelativePath, tsApiURL);
 }
 
 async function tsFetchResponse(tsPath, tsOptions = undefined) {
@@ -167,66 +98,7 @@ export async function tsFetchWorkflowBrowserLibrary() {
     const tsParams = new URLSearchParams({ path: tsWorkflowUserdataRoot });
     const tsPayload = await tsFetchJSON(`/v2/userdata?${tsParams.toString()}`);
     const tsEntries = Array.isArray(tsPayload) ? tsPayload : [];
-    const tsFileEntries = tsEntries
-        .filter((tsEntry) => String(tsEntry?.type || "").toLowerCase() === "file")
-        .map((tsEntry) => {
-            const tsPath = tsNormalizeRelativePath(tsEntry?.path || "");
-            return {
-                ...tsEntry,
-                path: tsPath,
-                name: String(tsEntry?.name || tsPath.split("/").at(-1) || ""),
-            };
-        })
-        .filter((tsEntry) => tsEntry.path.toLowerCase().startsWith(`${tsWorkflowUserdataRoot}/`));
-
-    const tsPreviewsByKey = new Map();
-    const tsWorkflowEntries = [];
-    for (const tsEntry of tsFileEntries) {
-        const tsExtension = tsGetPathExtension(tsEntry.path);
-        const tsFolderKey = tsGetParentFolderPath(tsEntry.path);
-        const tsStem = tsGetPathStem(tsEntry.path);
-        if (tsExtension === ".json") {
-            tsWorkflowEntries.push(tsEntry);
-            continue;
-        }
-        const tsPreviewKind = tsWorkflowPreviewImageExtensions.has(tsExtension)
-            ? "image"
-            : (tsWorkflowPreviewVideoExtensions.has(tsExtension) ? "video" : "");
-        if (!tsPreviewKind) {
-            continue;
-        }
-        const tsPreviewKey = `${tsFolderKey}::${tsStem}`;
-        const tsExistingCandidates = tsPreviewsByKey.get(tsPreviewKey) || [];
-        tsExistingCandidates.push({
-            preview_kind: tsPreviewKind,
-            path: tsEntry.path,
-            extension: tsExtension,
-        });
-        tsPreviewsByKey.set(tsPreviewKey, tsExistingCandidates);
-    }
-
-    const tsSortedWorkflows = [...tsWorkflowEntries].sort((tsLeft, tsRight) => tsLeft.path.localeCompare(tsRight.path));
-    return tsSortedWorkflows.map((tsEntry, tsIndex) => {
-        const tsPreviewKey = `${tsGetParentFolderPath(tsEntry.path)}::${tsGetPathStem(tsEntry.path)}`;
-        const tsPreview = tsPickWorkflowPreview(tsPreviewsByKey.get(tsPreviewKey));
-        const tsModifiedAt = tsParseModifiedEpoch(tsEntry.modified);
-        return {
-            id: -(tsIndex + 1),
-            type: "workflow",
-            filename: tsEntry.name,
-            extension: ".json",
-            folder_path: tsToWorkflowBrowserFolderPath(tsEntry.path),
-            relative_path: tsEntry.path,
-            file_url: tsBuildUserdataFileURL(tsEntry.path),
-            preview_url: tsPreview ? tsBuildUserdataFileURL(tsPreview.path) : "",
-            preview_kind: tsPreview?.preview_kind || "",
-            size_bytes: Number(tsEntry.size || 0),
-            created_at: tsModifiedAt,
-            modified_at: tsModifiedAt,
-            allow_delete: false,
-            detail_loaded: true,
-        };
-    });
+    return tsBuildWorkflowBrowserLibraryItems(tsEntries, tsBuildUserdataFileURL);
 }
 
 export async function tsLoadWorkflowIntoComfy(tsRelativePath) {
