@@ -67,6 +67,7 @@ async function tsLoadHelperExports() {
         tsLoadOptionalModule("js/ts-artius-browser-api-tree.js"),
         tsLoadOptionalModule("js/ts-artius-browser-api-utils.js"),
         tsLoadOptionalModule("js/ts-artius-browser-api-workflow.js"),
+        tsLoadOptionalModule("js/ts-artius-browser-api-widgets.js"),
     ]);
     return Object.assign({}, ...tsModules);
 }
@@ -152,11 +153,15 @@ function tsBuildApiHarness(tsOptions = {}, tsHelperExports = {}) {
         tsBuildFolderTreeImpl: tsHelperExports.tsBuildFolderTree,
         tsBuildUserdataFileURLBase: tsHelperExports.tsBuildUserdataFileURL,
         tsDebounceImpl: tsHelperExports.tsDebounce,
+        tsEnsureWidgetOptionValueImpl: tsHelperExports.tsEnsureWidgetOptionValue,
+        tsFindWidgetImpl: tsHelperExports.tsFindWidget,
         tsFormatBytesImpl: tsHelperExports.tsFormatBytes,
+        tsGetSelectedNodesImpl: tsHelperExports.tsGetSelectedNodes,
         tsOpenAssetInNewTabImpl: tsHelperExports.tsOpenAssetInNewTab,
         tsOpenDownloadImpl: tsHelperExports.tsOpenDownload,
         tsProjectSettings,
         tsResolveOpenableURLImpl: tsHelperExports.tsResolveOpenableURL,
+        tsSetWidgetValueImpl: tsHelperExports.tsSetWidgetValue,
         window: {
             clearTimeout: tsOptions.clearTimeout || (() => {}),
             setTimeout: tsOptions.setTimeout || ((tsCallback) => {
