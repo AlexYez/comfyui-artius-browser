@@ -15,6 +15,10 @@ import {
     tsFormatBitrate,
     tsFormatTime,
 } from "./ts-artius-browser-viewer-format.js";
+import {
+    tsIsViewerTypedCompareMode,
+    tsSyncViewerItemsFromSource,
+} from "./ts-artius-browser-viewer-state.js";
 import { tsViewerSettings } from "./ts-artius-browser-settings.js";
 
 export class TSArtiusBrowserViewer extends HTMLElement {
@@ -797,20 +801,12 @@ export class TSArtiusBrowserViewer extends HTMLElement {
 
     tsIsVideoCompareMode() {
         const tsAsset = this.tsIndex >= 0 ? this.tsItems[this.tsIndex] : null;
-        return Boolean(
-            tsAsset?.type === "video"
-            && Array.isArray(this.tsCompareItems)
-            && (this.tsCompareItems.length === 2 || this.tsCompareItems.length === 4),
-        );
+        return tsIsViewerTypedCompareMode(tsAsset, this.tsCompareItems, "video");
     }
 
     tsIsImageCompareMode() {
         const tsAsset = this.tsIndex >= 0 ? this.tsItems[this.tsIndex] : null;
-        return Boolean(
-            tsAsset?.type === "image"
-            && Array.isArray(this.tsCompareItems)
-            && (this.tsCompareItems.length === 2 || this.tsCompareItems.length === 4),
-        );
+        return tsIsViewerTypedCompareMode(tsAsset, this.tsCompareItems, "image");
     }
 
     tsIsCompareMode() {
@@ -869,23 +865,17 @@ export class TSArtiusBrowserViewer extends HTMLElement {
     }
 
     tsSyncItemsFromSource(tsPreferredAssetId = null) {
-        if (typeof this.tsGetItems !== "function") {
+        const tsSyncResult = tsSyncViewerItemsFromSource({
+            items: this.tsItems,
+            index: this.tsIndex,
+            getItems: this.tsGetItems,
+            preferredAssetId: tsPreferredAssetId,
+        });
+        if (!tsSyncResult.tsDidSync) {
             return false;
         }
-        const tsSourceItems = this.tsGetItems();
-        if (!Array.isArray(tsSourceItems) || tsSourceItems.length === 0) {
-            return false;
-        }
-        const tsCurrentAssetId = tsPreferredAssetId ?? this.tsItems[this.tsIndex]?.id ?? null;
-        this.tsItems = [...tsSourceItems];
-        if (tsCurrentAssetId !== null) {
-            const tsMatchedIndex = this.tsItems.findIndex((tsItem) => tsItem.id === tsCurrentAssetId);
-            if (tsMatchedIndex >= 0) {
-                this.tsIndex = tsMatchedIndex;
-                return true;
-            }
-        }
-        this.tsIndex = Math.max(0, Math.min(this.tsIndex, this.tsItems.length - 1));
+        this.tsItems = tsSyncResult.tsItems;
+        this.tsIndex = tsSyncResult.tsIndex;
         return true;
     }
 
