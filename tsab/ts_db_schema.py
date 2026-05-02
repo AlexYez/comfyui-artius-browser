@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-TS_DB_SCHEMA_VERSION = 7
+TS_DB_SCHEMA_VERSION = 8
 
 TS_DB_DROP_SCHEMA_SQL = """
 DROP VIEW IF EXISTS assets_view;
@@ -76,6 +76,13 @@ CREATE TABLE IF NOT EXISTS asset_metadata (
     FOREIGN KEY(asset_id) REFERENCES assets(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS asset_user_fields (
+    path TEXT PRIMARY KEY,
+    tags TEXT NOT NULL DEFAULT '',
+    rating INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS idx_assets_path ON assets(path);
 CREATE INDEX IF NOT EXISTS idx_assets_filename ON assets(filename);
 CREATE INDEX IF NOT EXISTS idx_assets_created_at ON assets(created_at);
@@ -87,6 +94,7 @@ CREATE INDEX IF NOT EXISTS idx_assets_size_bytes ON assets(size_bytes);
 CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(status);
 CREATE INDEX IF NOT EXISTS idx_assets_preview_ready ON assets(has_preview);
 CREATE INDEX IF NOT EXISTS idx_asset_folders_root_lookup_id ON asset_folders(root_lookup_id);
+CREATE INDEX IF NOT EXISTS idx_asset_user_fields_rating ON asset_user_fields(rating);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS assets_fts
 USING fts5(
@@ -106,9 +114,9 @@ SELECT
     assets.mtime_ns AS mtime_ns,
     assets.size_bytes AS size_bytes,
     assets.hash AS hash,
-    assets.tags AS tags,
-    assets.rating AS rating,
-    assets.created_at AS created_at,
+    COALESCE(asset_user_fields.tags, assets.tags) AS tags,
+    COALESCE(asset_user_fields.rating, assets.rating) AS rating,
+    COALESCE(NULLIF(asset_user_fields.created_at, 0), assets.created_at) AS created_at,
     COALESCE(asset_folders.folder_path, '') AS folder_path,
     assets.duration AS duration,
     assets.width AS width,
@@ -129,7 +137,8 @@ INNER JOIN asset_types ON asset_types.id = assets.type_lookup_id
 INNER JOIN asset_extensions ON asset_extensions.id = assets.extension_lookup_id
 INNER JOIN asset_roots ON asset_roots.id = assets.root_lookup_id
 INNER JOIN asset_folders ON asset_folders.id = assets.folder_lookup_id
-LEFT JOIN asset_metadata ON asset_metadata.asset_id = assets.id;
+LEFT JOIN asset_metadata ON asset_metadata.asset_id = assets.id
+LEFT JOIN asset_user_fields ON asset_user_fields.path = assets.path;
 """
 
 TS_DB_RESET_INDEX_SQL = """
