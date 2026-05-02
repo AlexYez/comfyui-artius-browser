@@ -300,6 +300,81 @@ function tsRunMetaMarkupTests(tsViewerClass) {
     tsIncludes(tsModelMarkup, "1.5 KB", "3D metadata includes formatted size");
 }
 
+function tsRunStageMarkupTests(tsViewerClass) {
+    const tsImageProbe = tsBuildViewerProbe(tsViewerClass, {
+        tsItems: [{ id: 1, type: "image" }],
+        tsIndex: 0,
+        tsCompareItems: [],
+    });
+    const tsImageMarkup = tsImageProbe.tsBuildStageMarkup({
+        id: 1,
+        type: "image",
+        file_url: "/image.png",
+        preview_url: "/preview.png",
+        filename: "A <image>.png",
+    });
+    tsIncludes(tsImageMarkup, `<img src="/image.png"`, "image stage uses full file URL");
+    tsIncludes(tsImageMarkup, `alt="A &lt;image&gt;.png"`, "image stage escapes alt text");
+
+    const tsImageCompareProbe = tsBuildViewerProbe(tsViewerClass, {
+        tsItems: [{ id: 1, type: "image" }],
+        tsIndex: 0,
+        tsCompareItems: [
+            { id: 1, type: "image", file_url: "/before.png", filename: "before.png" },
+            { id: 2, type: "image", file_url: "/after.png", filename: "after.png" },
+        ],
+    });
+    const tsImageCompareMarkup = tsImageCompareProbe.tsBuildStageMarkup({
+        id: 1,
+        type: "image",
+        file_url: "/before.png",
+        preview_url: "/before-preview.png",
+        filename: "before.png",
+    });
+    tsIncludes(tsImageCompareMarkup, `ts-image-compare-wipe`, "two-image compare uses wipe shell");
+    tsIncludes(tsImageCompareMarkup, `src="/before.png"`, "two-image compare includes before image");
+    tsIncludes(tsImageCompareMarkup, `src="/after.png"`, "two-image compare includes after image");
+
+    const tsVideoCompareProbe = tsBuildViewerProbe(tsViewerClass, {
+        tsItems: [{ id: 1, type: "video" }],
+        tsIndex: 0,
+        tsCompareItems: [
+            { id: 1, type: "video", file_url: "/primary.mp4", filename: "primary.mp4" },
+            { id: 2, type: "video", file_url: "/other.mp4", filename: "other.mp4" },
+        ],
+    });
+    const tsVideoCompareMarkup = tsVideoCompareProbe.tsBuildStageMarkup({
+        id: 1,
+        type: "video",
+        file_url: "/primary.mp4",
+        preview_url: "/primary.jpg",
+        filename: "primary.mp4",
+    });
+    tsIncludes(tsVideoCompareMarkup, `ts-video-compare-shell`, "video compare uses compare shell");
+    tsIncludes(tsVideoCompareMarkup, `data-primary="true" src="/primary.mp4"`, "video compare marks current video as primary");
+    tsIncludes(tsVideoCompareMarkup, `src="/other.mp4" muted`, "video compare mutes non-primary video");
+
+    const tsAudioMarkup = tsBuildViewerProbe(tsViewerClass).tsBuildStageMarkup({
+        id: 3,
+        type: "audio",
+        file_url: "/sound.wav",
+        preview_url: "/wave.png",
+        filename: "sound.wav",
+    });
+    tsIncludes(tsAudioMarkup, `background-image:url('/wave.png')`, "audio stage uses waveform preview");
+    tsIncludes(tsAudioMarkup, `<audio class="ts-audio-element" src="/sound.wav"`, "audio stage includes audio element");
+
+    const tsModelMarkup = tsBuildViewerProbe(tsViewerClass).tsBuildStageMarkup({
+        id: 4,
+        type: "3d",
+        file_url: "/model.glb",
+        preview_url: "/model.png",
+        filename: "model.glb",
+    });
+    tsIncludes(tsModelMarkup, `ts-3d-viewer-host`, "3D stage includes viewer host");
+    tsIncludes(tsModelMarkup, `src="/model.png"`, "3D stage includes preview fallback");
+}
+
 const tsHelperExports = await tsLoadHelperExports();
 const tsViewerExports = tsBuildViewerHarness(tsHelperExports);
 
@@ -308,5 +383,6 @@ tsRunChannelLayoutTests(tsViewerExports.TSArtiusBrowserViewer);
 tsRunCompareModeTests(tsViewerExports.TSArtiusBrowserViewer);
 tsRunSyncItemsTests(tsViewerExports.TSArtiusBrowserViewer);
 tsRunMetaMarkupTests(tsViewerExports.TSArtiusBrowserViewer);
+tsRunStageMarkupTests(tsViewerExports.TSArtiusBrowserViewer);
 
 console.log(`frontend viewer characterization: ${tsAssertions} assertions OK`);
