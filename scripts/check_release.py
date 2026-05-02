@@ -85,6 +85,7 @@ def TSCheckLocalization() -> None:
     for ts_path in TSIterFiles("*.js"):
         ts_text = ts_path.read_text(encoding="utf-8-sig")
         ts_used_keys.update(re.findall(r'tsT\(\s*"([^"]+)"', ts_text))
+        ts_used_keys.update(re.findall(r'\.t\(\s*"([^"]+)"', ts_text))
 
     for ts_prefix in ("type", "tooltip.type"):
         for ts_suffix in ("image", "video", "audio", "3d"):

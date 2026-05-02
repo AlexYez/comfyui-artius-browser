@@ -16,6 +16,14 @@ import {
     tsFormatTime,
 } from "./ts-artius-browser-viewer-format.js";
 import {
+    tsBuild3DMetaMarkup,
+    tsBuildImageMetaMarkup,
+    tsBuildPromptMetaBlock,
+    tsBuildPromptSeedMetaMarkup,
+    tsBuildTechnicalMetaMarkup,
+    tsResolveChannelLayoutLabel,
+} from "./ts-artius-browser-viewer-meta.js";
+import {
     tsIsViewerTypedCompareMode,
     tsSyncViewerItemsFromSource,
 } from "./ts-artius-browser-viewer-state.js";
@@ -719,17 +727,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
     }
 
     tsResolveChannelLayoutLabel(tsChannelCount) {
-        const tsChannels = Number(tsChannelCount) || 0;
-        if (tsChannels === 1) {
-            return this.tsT("label.mono", "Mono");
-        }
-        if (tsChannels === 2) {
-            return this.tsT("label.stereo", "Stereo");
-        }
-        if (tsChannels > 2) {
-            return `${tsChannels}ch`;
-        }
-        return "";
+        return tsResolveChannelLayoutLabel(tsChannelCount, {
+            mono: this.tsT("label.mono", "Mono"),
+            stereo: this.tsT("label.stereo", "Stereo"),
+        });
     }
 
     async tsEnsureAssetDetail(tsItemIndex = this.tsIndex) {
@@ -1026,168 +1027,41 @@ export class TSArtiusBrowserViewer extends HTMLElement {
     }
 
     tsBuildPromptMetaBlock(tsTitle, tsField, tsText, tsEmptyText) {
-        const tsResolvedText = tsText || tsEmptyText;
-        return `
-            <div class="ts-meta-block">
-                <div class="ts-meta-row">
-                    <h4>${this.tsEscapeHTML(tsTitle)}</h4>
-                    <button class="ts-meta-copy" type="button" data-copy-field="${this.tsEscapeAttribute(tsField)}" ${tsText ? "" : "disabled"}>${this.tsT("button.copy", "Copy")}</button>
-                </div>
-                <div class="ts-prompt">${this.tsEscapeHTML(tsResolvedText)}</div>
-            </div>
-        `;
+        return tsBuildPromptMetaBlock({
+            title: tsTitle,
+            field: tsField,
+            text: tsText,
+            emptyText: tsEmptyText,
+            copyLabel: this.tsT("button.copy", "Copy"),
+            escapeHTML: (tsTextValue) => this.tsEscapeHTML(tsTextValue),
+            escapeAttribute: (tsTextValue) => this.tsEscapeAttribute(tsTextValue),
+        });
     }
 
     tsBuildImageMetaMarkup(tsAsset) {
-        const tsPromptText = tsAsset.prompt_text || "";
-        const tsNegativePromptText = tsAsset.negative_prompt_text || "";
-        const tsPositivePromptMarkup = this.tsBuildPromptMetaBlock(
-            this.tsT("meta.positivePrompt", "Positive Prompt"),
-            "prompt",
-            tsPromptText,
-            this.tsT("meta.noPrompt", "No prompt metadata found."),
-        );
-        const tsNegativePromptMarkup = tsNegativePromptText
-            ? this.tsBuildPromptMetaBlock(
-                this.tsT("meta.negativePrompt", "Negative Prompt"),
-                "negative_prompt",
-                tsNegativePromptText,
-                "",
-            )
-            : "";
-        const tsWorkflowButtonMarkup = tsAsset.workflow_text
-            ? `
-                <div class="ts-meta-block">
-                    <div class="ts-meta-row">
-                        <h4>${this.tsT("meta.workflow", "Workflow")}</h4>
-                        <button class="ts-meta-copy" type="button" data-copy-field="workflow">${this.tsT("button.copyWorkflow", "Copy Workflow")}</button>
-                    </div>
-                </div>
-            `
-            : "";
-        return `
-            ${tsPositivePromptMarkup}
-            ${tsNegativePromptMarkup}
-            ${tsWorkflowButtonMarkup}
-        `;
+        return tsBuildImageMetaMarkup(tsAsset, this.tsGetMetaDeps());
     }
 
     tsBuild3DMetaMarkup(tsAsset) {
-        const tsTechnical = tsAsset?.technical_info || {};
-        const tsFormatName = tsTechnical.format_name || String(tsAsset?.extension || "").replace(/^\./, "").toUpperCase();
-        const tsSizeText = tsFormatBytes(tsAsset?.size_bytes);
-        const tsRows = [];
-        if (tsFormatName) {
-            tsRows.push({ tsLabel: this.tsT("meta.fileFormat", "File Format"), tsValue: tsFormatName });
-        }
-        if (tsSizeText) {
-            tsRows.push({ tsLabel: this.tsT("meta.size", "Size"), tsValue: tsSizeText });
-        }
-        if (tsRows.length === 0) {
-            return `
-                <div class="ts-meta-block">
-                    <div class="ts-meta-row">
-                        <h4>${this.tsT("meta.technical", "Technical")}</h4>
-                    </div>
-                    <div class="ts-technical-empty">${this.tsT("meta.noTechnical", "No model metadata found.")}</div>
-                </div>
-            `;
-        }
-        return `
-            <div class="ts-meta-block">
-                <div class="ts-meta-row">
-                    <h4>${this.tsT("meta.technical", "Technical")}</h4>
-                </div>
-                <div class="ts-technical-grid">
-                    ${tsRows.map((tsRow) => `
-                        <div class="ts-technical-item">
-                            <div class="ts-technical-label">${this.tsEscapeHTML(tsRow.tsLabel)}</div>
-                            <div class="ts-technical-value">${this.tsEscapeHTML(tsRow.tsValue)}</div>
-                        </div>
-                    `).join("")}
-                </div>
-            </div>
-        `;
+        return tsBuild3DMetaMarkup(tsAsset, this.tsGetMetaDeps());
     }
 
     tsBuildPromptSeedMetaMarkup(tsAsset) {
-        const tsPromptText = tsAsset.prompt_text || this.tsT("meta.noPrompt", "No prompt metadata found.");
-        return `
-            <div class="ts-meta-block">
-                <div class="ts-meta-row">
-                    <h4>${this.tsT("meta.prompt", "Prompt")}</h4>
-                    <button class="ts-meta-copy" type="button" data-copy-field="prompt" ${tsAsset.prompt_text ? "" : "disabled"}>${this.tsT("button.copy", "Copy")}</button>
-                </div>
-                <div class="ts-prompt">${this.tsEscapeHTML(tsPromptText)}</div>
-            </div>
-        `;
+        return tsBuildPromptSeedMetaMarkup(tsAsset, this.tsGetMetaDeps());
     }
 
     tsBuildTechnicalMetaMarkup(tsAsset) {
-        const tsTechnical = tsAsset?.technical_info || {};
-        const tsRows = [];
-        if (tsTechnical.format_name) {
-            tsRows.push({ tsLabel: this.tsT("meta.fileFormat", "File Format"), tsValue: tsTechnical.format_name });
-        }
-        if (tsAsset?.type === "video" && Number(tsTechnical.width) > 0 && Number(tsTechnical.height) > 0) {
-            tsRows.push({ tsLabel: this.tsT("meta.resolution", "Resolution"), tsValue: `${tsTechnical.width}x${tsTechnical.height}` });
-        }
-        if (tsAsset?.type === "video" && tsTechnical.codec_name) {
-            tsRows.push({ tsLabel: this.tsT("meta.codec", "Codec"), tsValue: String(tsTechnical.codec_name).toUpperCase() });
-        }
-        if (tsAsset?.type === "audio" && tsTechnical.codec_name) {
-            tsRows.push({ tsLabel: this.tsT("meta.codec", "Codec"), tsValue: String(tsTechnical.codec_name).toUpperCase() });
-        }
-        if (tsAsset?.type === "video" && Number(tsTechnical.fps) > 0) {
-            const tsRoundedFPS = Math.round(Number(tsTechnical.fps) * 100) / 100;
-            tsRows.push({ tsLabel: this.tsT("meta.fps", "FPS"), tsValue: Number.isInteger(tsRoundedFPS) ? `${tsRoundedFPS}` : `${tsRoundedFPS}` });
-        }
-        if (tsAsset?.type === "video" && (tsTechnical.audio_codec_name || tsAsset.audio_codec_name || tsTechnical.audio_channels || tsAsset.audio_channel_layout)) {
-            const tsAudioCodec = String(tsTechnical.audio_codec_name || tsAsset.audio_codec_name || "").toUpperCase();
-            const tsAudioChannels = String(tsAsset.audio_channel_layout || this.tsResolveChannelLayoutLabel(tsTechnical.audio_channels) || "");
-            const tsAudioParts = [tsAudioCodec, tsAudioChannels].filter(Boolean);
-            if (tsAudioParts.length > 0) {
-                tsRows.push({ tsLabel: this.tsT("meta.audioTrack", "Audio Track"), tsValue: tsAudioParts.join(" / ") });
-            }
-        }
-        if (tsAsset?.type === "audio" && (tsTechnical.channels || tsAsset.channel_layout)) {
-            const tsChannelLayout = String(tsAsset.channel_layout || this.tsResolveChannelLayoutLabel(tsTechnical.channels) || "");
-            if (tsChannelLayout) {
-                tsRows.push({ tsLabel: this.tsT("meta.channels", "Channels"), tsValue: tsChannelLayout });
-            }
-        }
-        if (Number(tsTechnical.duration) > 0) {
-            tsRows.push({ tsLabel: this.tsT("meta.duration", "Duration"), tsValue: tsFormatTime(tsTechnical.duration) });
-        }
-        const tsBitrateText = tsFormatBitrate(tsTechnical.bit_rate);
-        if (tsBitrateText) {
-            tsRows.push({ tsLabel: this.tsT("meta.bitrate", "Bitrate"), tsValue: tsBitrateText });
-        }
-        if (tsRows.length === 0) {
-            return `
-                <div class="ts-meta-block">
-                    <div class="ts-meta-row">
-                        <h4>${this.tsT("meta.technical", "Technical")}</h4>
-                    </div>
-                    <div class="ts-technical-empty">${this.tsT("meta.noTechnical", "No ffprobe metadata found.")}</div>
-                </div>
-            `;
-        }
-        return `
-            <div class="ts-meta-block">
-                <div class="ts-meta-row">
-                    <h4>${this.tsT("meta.technical", "Technical")}</h4>
-                </div>
-                <div class="ts-technical-grid">
-                    ${tsRows.map((tsRow) => `
-                        <div class="ts-technical-item">
-                            <div class="ts-technical-label">${this.tsEscapeHTML(tsRow.tsLabel)}</div>
-                            <div class="ts-technical-value">${this.tsEscapeHTML(tsRow.tsValue)}</div>
-                        </div>
-                    `).join("")}
-                </div>
-            </div>
-        `;
+        return tsBuildTechnicalMetaMarkup(tsAsset, this.tsGetMetaDeps());
+    }
+
+    tsGetMetaDeps() {
+        return {
+            t: (tsKey, tsFallback) => this.tsT(tsKey, tsFallback),
+            escapeHTML: (tsText) => this.tsEscapeHTML(tsText),
+            escapeAttribute: (tsText) => this.tsEscapeAttribute(tsText),
+            formatBytes: (tsBytes) => tsFormatBytes(tsBytes),
+            resolveChannelLayoutLabel: (tsChannelCount) => this.tsResolveChannelLayoutLabel(tsChannelCount),
+        };
     }
 
     tsRender() {
