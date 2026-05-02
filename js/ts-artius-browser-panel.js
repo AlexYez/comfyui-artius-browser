@@ -25,8 +25,11 @@ import { tsCapture3DThumbnail } from "./ts-artius-browser-3d.js";
 import {
     tsFormatCardDuration,
     tsFormatCardFPS,
-    tsLerp,
 } from "./ts-artius-browser-panel-format.js";
+import {
+    tsApplyGridMetricStyles,
+    tsCalculateGridMetrics,
+} from "./ts-artius-browser-panel-grid.js";
 import { tsBuildAssetSearchParams } from "./ts-artius-browser-panel-query.js";
 import {
     tsApplySectionSettingsToState,
@@ -1989,67 +1992,22 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsGetGridMetrics() {
-        const tsGap = tsGridLayout.spacing;
-        const tsPaddingTop = tsGridLayout.spacing;
-        const tsPaddingRight = tsGridLayout.spacing;
-        const tsPaddingBottom = tsGridLayout.spacing;
-        const tsPaddingLeft = tsGridLayout.spacing;
         const tsViewportWidth = Math.max(0, Math.round(Number(this.tsRefs.tsGalleryScroll.clientWidth || 0)));
         const tsCardWidth = tsClamp(this.tsState.tsPreviewSize, tsPreviewSizeRange.min, tsPreviewSizeRange.max);
-        const tsMetricsKey = [tsViewportWidth, tsCardWidth, tsGap].join("::");
+        const tsMetricsKey = [tsViewportWidth, tsCardWidth, tsGridLayout.spacing].join("::");
         if (this.tsGridMetrics && this.tsGridMetricsKey === tsMetricsKey) {
             return this.tsGridMetrics;
         }
-        const tsContentWidth = Math.max(220, tsViewportWidth - (tsPaddingLeft + tsPaddingRight + 4));
-        const tsCardPreviewHeight = Math.round(tsCardWidth * 0.92);
-        const tsCardHeight = tsCardPreviewHeight;
-        const tsPreviewRatio = tsClamp((tsCardWidth - tsPreviewSizeRange.min) / Math.max(1, tsPreviewSizeRange.max - tsPreviewSizeRange.min), 0, 1);
-        const tsMetrics = {
-            tsGap,
-            tsPaddingTop,
-            tsPaddingRight,
-            tsPaddingBottom,
-            tsPaddingLeft,
-            tsContentWidth,
-            tsCardWidth,
-            tsCardPreviewHeight,
-            tsCardHeight,
-            tsCardInset: Math.round(tsLerp(tsCardChromeScale.insetMin, tsCardChromeScale.insetMax, tsPreviewRatio)),
-            tsActionSize: Math.round(tsLerp(tsCardChromeScale.actionSizeMin, tsCardChromeScale.actionSizeMax, tsPreviewRatio)),
-            tsActionRadius: Math.round(tsLerp(tsCardChromeScale.actionRadiusMin, tsCardChromeScale.actionRadiusMax, tsPreviewRatio)),
-            tsActionFontSize: Math.round(tsLerp(tsCardChromeScale.actionFontMin, tsCardChromeScale.actionFontMax, tsPreviewRatio)),
-            tsActionGap: Math.round(tsLerp(tsCardChromeScale.actionGapMin, tsCardChromeScale.actionGapMax, tsPreviewRatio)),
-            tsBadgeFontSize: Math.round(tsLerp(tsCardChromeScale.badgeFontMin, tsCardChromeScale.badgeFontMax, tsPreviewRatio)),
-            tsBadgePadY: Math.round(tsLerp(tsCardChromeScale.badgePadYMin, tsCardChromeScale.badgePadYMax, tsPreviewRatio)),
-            tsBadgePadX: Math.round(tsLerp(tsCardChromeScale.badgePadXMin, tsCardChromeScale.badgePadXMax, tsPreviewRatio)),
-            tsBadgeRadius: Math.round(tsLerp(tsCardChromeScale.badgeRadiusMin, tsCardChromeScale.badgeRadiusMax, tsPreviewRatio)),
-            tsOverlayPadX: Math.round(tsLerp(tsCardChromeScale.overlayPadXMin, tsCardChromeScale.overlayPadXMax, tsPreviewRatio)),
-            tsOverlayPadBottom: Math.round(tsLerp(tsCardChromeScale.overlayPadBottomMin, tsCardChromeScale.overlayPadBottomMax, tsPreviewRatio)),
-            tsOverlayTop: Math.round(tsLerp(tsCardChromeScale.overlayTopMin, tsCardChromeScale.overlayTopMax, tsPreviewRatio)),
-            tsOverlayTitleSize: Math.round(tsLerp(tsCardChromeScale.overlayTitleMin, tsCardChromeScale.overlayTitleMax, tsPreviewRatio)),
-            tsOverlayMetaSize: Math.round(tsLerp(tsCardChromeScale.overlayMetaMin, tsCardChromeScale.overlayMetaMax, tsPreviewRatio)),
-            tsCardRadius: Math.round(tsLerp(tsCardChromeScale.cardRadiusMin, tsCardChromeScale.cardRadiusMax, tsPreviewRatio)),
-        };
-        tsMetrics.tsColumns = Math.max(1, Math.floor((tsMetrics.tsContentWidth + tsGap) / (tsCardWidth + tsGap)));
-        tsMetrics.tsRowHeight = tsMetrics.tsCardHeight + tsGap;
+        const tsMetrics = tsCalculateGridMetrics({
+            viewportWidth: tsViewportWidth,
+            cardWidth: tsCardWidth,
+            previewSizeRange: tsPreviewSizeRange,
+            gridLayout: tsGridLayout,
+            cardChromeScale: tsCardChromeScale,
+        });
         this.tsState.tsGridColumns = tsMetrics.tsColumns;
         this.tsState.tsGridRowHeight = tsMetrics.tsRowHeight;
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-preview-height", `${tsMetrics.tsCardPreviewHeight}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-radius", `${tsMetrics.tsCardRadius}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-inset", `${tsMetrics.tsCardInset}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-action-size", `${tsMetrics.tsActionSize}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-action-radius", `${tsMetrics.tsActionRadius}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-action-font-size", `${tsMetrics.tsActionFontSize}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-action-gap", `${tsMetrics.tsActionGap}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-badge-font-size", `${tsMetrics.tsBadgeFontSize}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-badge-pad-y", `${tsMetrics.tsBadgePadY}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-badge-pad-x", `${tsMetrics.tsBadgePadX}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-badge-radius", `${tsMetrics.tsBadgeRadius}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-overlay-pad-x", `${tsMetrics.tsOverlayPadX}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-overlay-pad-bottom", `${tsMetrics.tsOverlayPadBottom}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-overlay-top", `${tsMetrics.tsOverlayTop}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-overlay-title-size", `${tsMetrics.tsOverlayTitleSize}px`);
-        this.tsRefs.tsGalleryContent.style.setProperty("--ts-card-overlay-meta-size", `${tsMetrics.tsOverlayMetaSize}px`);
+        tsApplyGridMetricStyles(this.tsRefs.tsGalleryContent, tsMetrics);
         this.tsGridMetrics = tsMetrics;
         this.tsGridMetricsKey = tsMetricsKey;
         return tsMetrics;
