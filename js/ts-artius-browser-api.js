@@ -18,6 +18,13 @@ import {
     tsFormatBytes as tsFormatBytesImpl,
 } from "./ts-artius-browser-api-utils.js";
 import {
+    tsBuildAssetFetchPath,
+    tsGetRelativeAssetPath,
+    tsIsGraphPointInsideNode,
+    tsResolveNodeComfyClass,
+    tsSplitRelativePath,
+} from "./ts-artius-browser-api-workflow.js";
+import {
     tsBuildUserdataFilePath,
     tsBuildUserdataFileURL as tsBuildUserdataFileURLBase,
     tsBuildWorkflowBrowserLibraryItems,
@@ -298,40 +305,12 @@ function tsDelay(tsTimeoutMs) {
     });
 }
 
-function tsSplitRelativePath(tsRelativePath) {
-    const tsNormalized = String(tsRelativePath || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
-    if (!tsNormalized) {
-        return { tsSubfolder: "", tsFilename: "" };
-    }
-    const tsParts = tsNormalized.split("/").filter(Boolean);
-    if (!tsParts.length) {
-        return { tsSubfolder: "", tsFilename: "" };
-    }
-    return {
-        tsSubfolder: tsParts.slice(0, -1).join("/"),
-        tsFilename: tsParts.at(-1) || "",
-    };
-}
-
-function tsBuildAssetFetchPath(tsAsset) {
-    if (!tsAsset) {
-        return "";
-    }
-    if (tsAsset.file_url) {
-        return String(tsAsset.file_url);
-    }
-    if (tsAsset.id != null) {
-        return `${tsRouteBase}/file?id=${encodeURIComponent(String(tsAsset.id))}`;
-    }
-    return "";
-}
-
 async function tsEnsureNativeInputPath(tsAsset) {
     const tsRelativePath = tsGetRelativeAssetPath(tsAsset);
     if ((tsAsset?.root_id === "input" || tsAsset?.scope === "input") && tsRelativePath) {
         return tsRelativePath;
     }
-    const tsSourcePath = tsBuildAssetFetchPath(tsAsset);
+    const tsSourcePath = tsBuildAssetFetchPath(tsAsset, tsRouteBase);
     if (!tsSourcePath) {
         return "";
     }
@@ -418,14 +397,6 @@ async function tsSyncNative3DNode(tsNode, tsAsset) {
     }
 }
 
-function tsGetRelativeAssetPath(tsAsset) {
-    if (!tsAsset?.filename) {
-        return "";
-    }
-    const tsFolder = String(tsAsset.folder_path || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
-    return tsFolder ? `${tsFolder}/${tsAsset.filename}` : tsAsset.filename;
-}
-
 async function tsResolveNativeWidgetValue(tsAsset, tsNode) {
     if (!tsAsset || tsAsset?.type === "3d") {
         return "";
@@ -450,16 +421,6 @@ async function tsResolveNativeWidgetValue(tsAsset, tsNode) {
     }
 }
 
-function tsResolveNodeComfyClass(tsNode) {
-    return String(
-        tsNode?.comfyClass
-        || tsNode?.constructor?.comfyClass
-        || tsNode?.properties?.["Node name for S&R"]
-        || tsNode?.type
-        || "",
-    );
-}
-
 function tsGetCanvasDropGraphPosition(tsEvent) {
     if (tsEvent && typeof app?.canvas?.convertEventToCanvasOffset === "function") {
         const tsOffset = app.canvas.convertEventToCanvasOffset(tsEvent);
@@ -471,31 +432,6 @@ function tsGetCanvasDropGraphPosition(tsEvent) {
         return [Number(app.canvas.graph_mouse[0]) || 0, Number(app.canvas.graph_mouse[1]) || 0];
     }
     return null;
-}
-
-function tsIsGraphPointInsideNode(tsNode, tsGraphX, tsGraphY) {
-    if (!tsNode) {
-        return false;
-    }
-    if (typeof tsNode.isPointInside === "function") {
-        try {
-            return Boolean(tsNode.isPointInside(tsGraphX, tsGraphY, 2, false));
-        } catch {
-            try {
-                return Boolean(tsNode.isPointInside(tsGraphX, tsGraphY));
-            } catch {
-                // Fall back to the node bounds check below.
-            }
-        }
-    }
-    const tsPosX = Number(tsNode?.pos?.[0]) || 0;
-    const tsPosY = Number(tsNode?.pos?.[1]) || 0;
-    const tsWidth = Number(tsNode?.size?.[0]) || 0;
-    const tsHeight = Number(tsNode?.size?.[1]) || 0;
-    return tsGraphX >= tsPosX
-        && tsGraphX <= tsPosX + tsWidth
-        && tsGraphY >= tsPosY
-        && tsGraphY <= tsPosY + tsHeight;
 }
 
 function tsResolveDropTargetNode(tsAsset, tsEvent) {

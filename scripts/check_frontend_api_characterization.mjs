@@ -66,6 +66,7 @@ async function tsLoadHelperExports() {
         tsLoadOptionalModule("js/ts-artius-browser-api-paths.js"),
         tsLoadOptionalModule("js/ts-artius-browser-api-tree.js"),
         tsLoadOptionalModule("js/ts-artius-browser-api-utils.js"),
+        tsLoadOptionalModule("js/ts-artius-browser-api-workflow.js"),
     ]);
     return Object.assign({}, ...tsModules);
 }
@@ -196,7 +197,7 @@ function tsBuildApiHarness(tsOptions = {}, tsHelperExports = {}) {
             tsOpenAssetInNewTab,
             tsBuildFolderTree,
             tsSplitRelativePath,
-            tsBuildAssetFetchPath,
+            tsBuildAssetFetchPath: (tsAsset) => tsBuildAssetFetchPath(tsAsset, tsRouteBase),
             tsGetRelativeAssetPath,
             tsResolveNodeComfyClass,
             tsIsGraphPointInsideNode,
