@@ -335,6 +335,13 @@ function tsRunOpenableUrlTests() {
     tsEqual(tsApiExports.tsOpenAssetInNewTab({ file_url: "/asset_browser/file?id=1" }), true, "open in new tab returns true for assets with file_url");
     tsEqual(tsAppended[0].href, "/api/asset_browser/file?id=1", "new tab link uses resolved URL");
     tsEqual(tsAppended[0].target, "_blank", "new tab link target is blank");
+    tsApiExports.tsOpenDownload({ file_url: "/asset_browser/file?id=2", filename: "clip.mov" });
+    tsEqual(tsAppended[1].href, "/api/asset_browser/file?id=2", "download link uses resolved URL");
+    tsEqual(tsAppended[1].download, "clip.mov", "download link preserves filename");
+    tsEqual(tsAppended[1].rel, "noopener", "download link keeps noopener rel");
+    tsEqual([tsAppended[1].clickCount, tsAppended[1].removeCount], [1, 1], "download link is clicked and removed");
+    tsApiExports.tsOpenDownload({});
+    tsEqual(tsAppended.length, 2, "download without file_url does not create a link");
 }
 
 function tsRunAssetPathTests(tsApiExports) {
