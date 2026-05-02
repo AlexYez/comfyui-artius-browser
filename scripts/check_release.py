@@ -63,6 +63,14 @@ def TSCheckJavaScriptSyntax() -> None:
         TSRunCommand([ts_node, "--check", str(ts_path.relative_to(TS_REPO_ROOT))])
 
 
+def TSCheckFrontendCharacterization() -> None:
+    ts_node = shutil.which("node")
+    if not ts_node:
+        print("frontend characterization: skipped (node not found)")
+        return
+    TSRunCommand([ts_node, "scripts/check_frontend_panel_characterization.mjs"])
+
+
 def TSCheckJsonFiles() -> None:
     for ts_path in TSIterFiles("*.json"):
         json.loads(ts_path.read_text(encoding="utf-8-sig"))
@@ -170,6 +178,7 @@ def main() -> int:
     TSCheckPythonSyntax()
     TSCheckPyflakes()
     TSCheckJavaScriptSyntax()
+    TSCheckFrontendCharacterization()
     TSCheckJsonFiles()
     TSCheckLocalization()
     TSCheckTopLevelDeadDefs()
