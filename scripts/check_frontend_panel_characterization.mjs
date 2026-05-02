@@ -212,6 +212,9 @@ function tsBuildPanelProbe(tsPanelClass, tsStateOverrides = {}) {
         tsWorkflowSearch: "",
         tsGridColumns: 1,
         tsGridRowHeight: 296,
+        tsItems: [],
+        tsSelection: new Set(),
+        tsLastSelectedIndex: -1,
         ...tsStateOverrides,
     };
     tsProbe.tsWorkflowLibrary = [];
@@ -414,6 +417,68 @@ function tsRunSectionStateTests(tsPanelClass) {
     tsEqual(tsApplyAssetProbe.tsState.tsFolder, "asset/folder", "asset apply restores selected folder in tree mode");
 }
 
+async function tsRunSectionSwitchTests(tsPanelClass) {
+    const tsCalls = [];
+    const tsProbe = tsBuildPanelProbe(tsPanelClass, {
+        tsSection: "assets",
+        tsMode: "tree",
+        tsAssetMode: "tree",
+        tsWorkflowMode: "tree",
+        tsRootId: "output",
+        tsFolder: "images",
+        tsSelection: new Set([10]),
+        tsLastSelectedIndex: 2,
+    });
+    tsProbe.tsWorkflowSelectedFolder = "jobs/sub";
+    tsProbe.tsLastAssetRootId = "output";
+    tsProbe.tsLastAssetFolder = "images";
+    tsProbe.tsWorkflowLibraryLoaded = true;
+    tsProbe.tsRefs = {
+        tsGalleryContent: {
+            innerHTML: "stale cards",
+        },
+    };
+    tsProbe.tsQueueSaveUISettings = () => {
+        tsCalls.push("save");
+    };
+    tsProbe.tsRenderSectionButtons = () => {
+        tsCalls.push("sections");
+    };
+    tsProbe.tsRenderToolbarForSection = () => {
+        tsCalls.push("toolbar");
+    };
+    tsProbe.tsRenderSortOptions = () => {
+        tsCalls.push("sort");
+    };
+    tsProbe.tsFetchAssets = async (tsReset) => {
+        tsCalls.push(`fetch:${tsReset}`);
+    };
+    tsProbe.tsScheduleGridRender = (tsForce, tsRefreshMetrics) => {
+        tsCalls.push(`grid:${tsForce}:${tsRefreshMetrics}`);
+    };
+    tsProbe.tsHandleGalleryScroll = () => {
+        tsCalls.push("scroll");
+    };
+    tsProbe.tsScheduleSidebarRefresh = (tsDelay) => {
+        tsCalls.push(`sidebar:${tsDelay}`);
+    };
+
+    await tsProbe.tsSetSection("workflows");
+
+    tsEqual(tsProbe.tsState.tsSection, "workflows", "section switch sets workflows as active section");
+    tsEqual(tsProbe.tsState.tsRootId, "workflows", "workflow section uses the virtual workflows root");
+    tsEqual(tsProbe.tsState.tsFolder, "jobs/sub", "workflow section restores workflow tree folder");
+    tsEqual(tsProbe.tsState.tsSelection.size, 0, "section switch clears selected asset ids");
+    tsEqual(tsProbe.tsState.tsLastSelectedIndex, -1, "section switch clears selection anchor");
+    tsEqual(tsProbe.tsWorkflowLibraryLoaded, false, "workflow section switch forces workflow library reload");
+    tsEqual(tsProbe.tsRefs.tsGalleryContent.innerHTML, "", "section switch clears stale gallery markup");
+    tsEqual(
+        tsCalls,
+        ["save", "sections", "toolbar", "sort", "fetch:true", "grid:true:true", "scroll", "sidebar:0", "sidebar:48", "sidebar:120"],
+        "section switch refreshes the toolbar, data, grid, and sidebar",
+    );
+}
+
 function tsRunGridTests(tsPanelClass) {
     const tsStyleWrites = [];
     const tsProbe = tsBuildPanelProbe(tsPanelClass, {
@@ -469,6 +534,7 @@ tsRunFormatTests(tsPanelExports);
 tsRunSearchParamTests(tsPanelExports.TSArtiusBrowserPanel);
 tsRunWorkflowTests(tsPanelExports.TSArtiusBrowserPanel);
 tsRunSectionStateTests(tsPanelExports.TSArtiusBrowserPanel);
+await tsRunSectionSwitchTests(tsPanelExports.TSArtiusBrowserPanel);
 tsRunGridTests(tsPanelExports.TSArtiusBrowserPanel);
 tsRunSelectionTests(tsPanelExports.TSArtiusBrowserPanel);
 

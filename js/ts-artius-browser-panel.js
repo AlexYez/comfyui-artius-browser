@@ -1669,7 +1669,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     async tsSetSection(tsSection) {
-        if (!tsBrowserSections.includes(tsSection) || this.tsState.tsSection === tsSection) {
+        if (!tsIsBrowserSection(tsSection) || this.tsState.tsSection === tsSection) {
             return;
         }
         this.tsSyncSectionSettingsFromActive();
