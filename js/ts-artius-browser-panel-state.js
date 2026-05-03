@@ -50,6 +50,7 @@ export function tsSyncSectionSettingsFromActiveState(tsState, tsIsWorkflowSectio
         tsState.tsWorkflowSortDirection = tsState.tsSortDirection;
         tsState.tsWorkflowPreviewSize = tsState.tsPreviewSize;
         tsState.tsWorkflowSearch = tsState.tsSearch;
+        tsState.tsWorkflowTreeWidth = tsState.tsTreeWidth;
         return;
     }
     tsState.tsAssetMode = tsState.tsMode;
@@ -57,6 +58,7 @@ export function tsSyncSectionSettingsFromActiveState(tsState, tsIsWorkflowSectio
     tsState.tsAssetSortDirection = tsState.tsSortDirection;
     tsState.tsAssetPreviewSize = tsState.tsPreviewSize;
     tsState.tsAssetSearch = tsState.tsSearch;
+    tsState.tsAssetTreeWidth = tsState.tsTreeWidth;
 }
 
 export function tsApplySectionSettingsToState(tsState, tsOptions = {}) {
@@ -66,6 +68,7 @@ export function tsApplySectionSettingsToState(tsState, tsOptions = {}) {
         tsState.tsSortDirection = tsState.tsWorkflowSortDirection;
         tsState.tsPreviewSize = tsState.tsWorkflowPreviewSize;
         tsState.tsSearch = tsState.tsWorkflowSearch;
+        tsState.tsTreeWidth = tsState.tsWorkflowTreeWidth;
         tsState.tsFolder = tsState.tsMode === "tree" ? (tsOptions.workflowSelectedFolder || "") : "";
         return;
     }
@@ -74,5 +77,6 @@ export function tsApplySectionSettingsToState(tsState, tsOptions = {}) {
     tsState.tsSortDirection = tsState.tsAssetSortDirection;
     tsState.tsPreviewSize = tsState.tsAssetPreviewSize;
     tsState.tsSearch = tsState.tsAssetSearch;
+    tsState.tsTreeWidth = tsState.tsAssetTreeWidth;
     tsState.tsFolder = tsState.tsMode === "tree" ? (tsOptions.lastAssetFolder || "") : "";
 }

@@ -105,6 +105,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsGridRowHeight: 296,
             tsBrowserWidth: 0,
             tsTreeWidth: 220,
+            tsAssetTreeWidth: 220,
+            tsWorkflowTreeWidth: 220,
             tsSettingsHydrated: false,
             tsQueuedFetchReset: false,
             tsQueuedFetchAppend: false,
@@ -340,6 +342,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsResizer.removeEventListener("pointermove", tsOnPointerMove);
             tsResizer.removeEventListener("pointerup", tsOnPointerUp);
             tsResizer.removeEventListener("pointercancel", tsOnPointerUp);
+            this.tsSyncSectionSettingsFromActive();
             this.tsQueueSaveUISettings();
         };
         tsResizer.addEventListener("pointerdown", (tsEvent) => {
@@ -406,11 +409,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             if (Number.isFinite(tsBrowserWidth) && tsBrowserWidth > 0) {
                 this.tsState.tsBrowserWidth = Math.round(tsBrowserWidth);
             }
-            const tsTreeWidth = Number(tsUI.tree_panel_width);
-            if (Number.isFinite(tsTreeWidth) && tsTreeWidth > 0) {
-                this.tsState.tsTreeWidth = Math.max(120, Math.min(700, Math.round(tsTreeWidth)));
+            const tsAssetTreeWidth = Number(tsUI.asset_tree_panel_width);
+            if (Number.isFinite(tsAssetTreeWidth) && tsAssetTreeWidth > 0) {
+                this.tsState.tsAssetTreeWidth = Math.max(120, Math.min(700, Math.round(tsAssetTreeWidth)));
             }
-            this.tsApplyTreeWidth();
+            const tsWorkflowTreeWidth = Number(tsUI.workflow_tree_panel_width);
+            if (Number.isFinite(tsWorkflowTreeWidth) && tsWorkflowTreeWidth > 0) {
+                this.tsState.tsWorkflowTreeWidth = Math.max(120, Math.min(700, Math.round(tsWorkflowTreeWidth)));
+            }
             this.tsApplySectionSettings();
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser settings fetch failed", tsError);
@@ -469,7 +475,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 workflow_selected_folder_path: this.tsWorkflowSelectedFolder || "",
                 expanded_folders: [...this.tsState.tsExpandedFolders],
                 browser_width: this.tsState.tsBrowserWidth,
-                tree_panel_width: this.tsState.tsTreeWidth,
+                asset_tree_panel_width: this.tsState.tsAssetTreeWidth,
+                workflow_tree_panel_width: this.tsState.tsWorkflowTreeWidth,
             });
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser settings save failed", tsError);
@@ -494,6 +501,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             workflowSelectedFolder: this.tsWorkflowSelectedFolder,
             lastAssetFolder: this.tsLastAssetFolder,
         });
+        this.tsApplyTreeWidth();
     }
 
     tsEmitAutoscanChanged() {

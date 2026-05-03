@@ -130,8 +130,20 @@ class TSConfigStore:
             ts_tools["ffmpeg_workers"] = ts_default["tools"]["ffmpeg_workers"]
             ts_result["version"] = 14
         if TSCurrentVersion() < 15:
-            ts_result.setdefault("ui", {}).setdefault("tree_panel_width", ts_default["ui"]["tree_panel_width"])
+            # v15 introduced a single tree_panel_width key; v16 split it per-section
+            ts_result.setdefault("ui", {}).setdefault("tree_panel_width", 220)
             ts_result["version"] = 15
+        if TSCurrentVersion() < 16:
+            ts_ui = ts_result.setdefault("ui", {})
+            ts_legacy_width = ts_ui.pop("tree_panel_width", None)
+            ts_user_ui = ts_config.get("ui") if isinstance(ts_config, dict) else None
+            ts_user_ui = ts_user_ui if isinstance(ts_user_ui, dict) else {}
+            ts_seed_width = ts_legacy_width if ts_legacy_width is not None else ts_default["ui"]["asset_tree_panel_width"]
+            if "asset_tree_panel_width" not in ts_user_ui:
+                ts_ui["asset_tree_panel_width"] = ts_seed_width
+            if "workflow_tree_panel_width" not in ts_user_ui:
+                ts_ui["workflow_tree_panel_width"] = ts_seed_width
+            ts_result["version"] = 16
         self._TSNormalizeTopLevelSections(ts_result, ts_default)
         return ts_result
 

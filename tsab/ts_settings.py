@@ -126,7 +126,7 @@ TS_EVENT_ASSET_REMOVE = f"{TS_EVENT_PREFIX}:asset-remove"
 TS_EVENT_HEALTH = f"{TS_EVENT_PREFIX}:health"
 
 TS_DEFAULT_CONFIG = {
-    "version": 15,
+    "version": 16,
     "roots": {
         "output": {"enabled": True, "allow_delete": True},
         "input": {"enabled": True, "allow_delete": True},
@@ -158,7 +158,8 @@ TS_DEFAULT_CONFIG = {
         "workflow_selected_folder_path": "",
         "expanded_folders": [],
         "browser_width": 0,
-        "tree_panel_width": 220,
+        "asset_tree_panel_width": 220,
+        "workflow_tree_panel_width": 220,
     },
     "indexing": {
         "batch_size": TS_DEFAULT_SCAN_BATCH,
