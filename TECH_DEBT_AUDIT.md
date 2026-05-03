@@ -8,7 +8,7 @@ Read-only обзор основной ветки `main` (HEAD `25759f0`). Арт
 
 ## Сжатый итог (executive summary)
 
-Статус F01–F03, F07 — **RESOLVED** в коммите после `63750f6`. См. соответствующие строки в таблице ниже.
+Статус F01–F03, F07 (Critical/High + security latent) и F11–F14, F20, F24 (Quick wins) — **RESOLVED** в коммитах после `63750f6`. См. соответствующие строки в таблице ниже.
 
 1. **CRIT — RESOLVED** — Глобальный 3D worker зацикливался. `js/ts-artius-browser-3d-worker.js` теперь использует `after_sort`/`after_id` и `next_cursor` из ответа; characterization-тест регрессирует контракт.
 2. **HIGH — RESOLVED** — `python scripts/check_release.py` проходит. `tests/test_config_store.py` читает версию из `TS_DEFAULT_CONFIG["version"]`.
@@ -72,20 +72,20 @@ Workflows-вкладка — целиком frontend: читает нативн�
 | F08 | Inconsistent input validation | tsab/ts_ui_settings.py:46-49,52-54 | Medium | S | `TSNormalizeUISettings` не проверяет enum для `asset_view_mode`, `workflow_view_mode`, `asset_sort_key`, `workflow_sort_key`, `asset_sort_direction`, `workflow_sort_direction`. `TSApplyUISettingsUpdates` (тот же файл, строки 73-84) — проверяет через `TSNormalizeChoice`. Если в `config.json` руками или после миграции окажется мусор, нормализация его пропустит, фронтенд получит невалидное значение. | Применить `TSNormalizeChoice(..., TS_VIEW_MODES, "flat")` и аналогичные на чтении тоже. Заодно дефолт `TSClampInt` в строке 50/54 сделать `TS_DEFAULT_PREVIEW_SIZE` (=120) вместо хард-кода 180 — сейчас расходится с `tsab/ts_settings.py:96`. |
 | F09 | Code duplication — preview pipelines | tsab/ts_preview.py:118-132 vs 134-157, 188-207 vs 159-186; tsab/ts_tools.py:338-404 | Medium | M | Один и тот же путь записан дважды: legacy sequential (`TSGenerateVideoPoster`/`TSGenerateWaveformPreview`/`TSExtractVideoFrame`/`TSExtractWaveform`) и parallel-варианты. Sequential остался для `TSGeneratePreview` post-discovery flow (когда ffprobe уже не нужен). Любой fix приходится дублировать. | В `TSGenerateVideoPoster`/`*Waveform*` принимать опциональный флаг `with_probe`; sequential-обёртку оставить тонким адаптером, либо удалить, заменив `TSAssetProcessingService.TSEnsurePreview` на parallel-путь и игнорировать ffprobe-результат. |
 | F10 | Per-card `os.stat` | tsab/ts_asset_payload.py:65 | Medium | S | `TSBuildAssetCard` делает `ts_preview_cache.TSResolvePreviewPath(...).exists()` на каждый ассет. На сетевом диске или с лимитом 500 — заметно. Hot path: `TSAssetCatalogService.TSQueryAssets` → `TSBuildAssetCard` × N. | Полагаться на флаг `assets.has_preview` (он уже хранится в БД и выставляется индексером). `exists()` нужен только если хотим само-исцеляться от внешнего удаления preview-файлов — тогда вынести это в фоновый health-check, а не в hot path. |
-| F11 | Bug — partial workflow delete | tsab/ts_workflows.py:81-90 | Medium | S | В цикле `for ts_target_path in [workflow, *sidecars]` нет try/except вокруг `send_to_trash`. Если корзина откажет на втором файле, основной workflow уже удалён, sidecar — нет, ответ — exception, фронтенд не знает что произошло. | Обернуть `self.ts_send_to_trash(...)` в try/except, собирать `failed_paths`, возвращать в payload. |
-| F12 | Dead code in DB migration | tsab/ts_db.py:45-63 | Medium | S | `TSMigrate` — две ветки `if/else`, обе делают `executescript(TS_DB_SCHEMA_SQL)`. Различие только в обработке ошибки. После исключения вызывается `_TSRebuildSchema` (drop + create). `or 0` в `int(... or 0)` лишний (`PRAGMA user_version` всегда возвращает int). | Переписать как: `try: executescript(SCHEMA_SQL) except DatabaseError: _TSRebuildSchema(...)` без if/else. Ясность важнее. |
-| F13 | Dead variable | tsab/ts_indexer.py:171-177 | Low | S | `ts_needs_index` вычисляется в первом проходе и не используется (затирается на 198-204 во втором). | Удалить блок 171-177. |
-| F14 | Dead branch | tsab/ts_hashing.py:87-91 | Low | S | Для `.obj` сначала проверяется текстовая сигнатура и условный `return "3d"`, затем безусловный `return "3d"`. Проверка декоративная. | Удалить условную ветку, оставить `return "3d"`. Либо начать использовать сигнатуру для отказа от не-OBJ. |
+| F11 | **RESOLVED** Bug — partial workflow delete | tsab/ts_workflows.py | Medium | S | Цикл оборачивает `ts_send_to_trash` в try/except per-file, копит `failed`-список, payload возвращает `{"deleted": [...], "failed": [{"name", "error"}]}`. Регрессия — `tests/test_workflows.py::test_delete_workflow_continues_after_sidecar_trash_failure`. | — |
+| F12 | **RESOLVED** Dead code in DB migration | tsab/ts_db.py | Medium | S | `TSMigrate` теперь линейный: `try: executescript except DatabaseError: _TSRebuildSchema`; `user_version` обновляется только при mismatch. `or 0` убран. | — |
+| F13 | **RESOLVED** Dead variable | tsab/ts_indexer.py | Low | S | Удалён неиспользуемый блок `ts_needs_index`-вычисления перед `if ts_stat_changed`. | — |
+| F14 | **RESOLVED** Dead branch | tsab/ts_hashing.py | Low | S | Условная ветка для `.obj` удалена, остался безусловный `return "3d"`. | — |
 | F15 | Frontend — folder updates lost | js/ts-artius-browser-panel.js:2049-2070 | Low | S | `tsApplyRevalidatedPayload` сравнивает только items-key; folders обновляются лишь если items уже разъехались. Если на бэке появилась новая папка без новых ассетов, дерево останется устаревшим до следующего полного fetch. | Добавить отдельное сравнение для `folders` и обновлять при расхождении ключа. |
 | F16 | Observability gap — verbose-only logs | tsab/ts_indexer.py:273-281, tsab/ts_indexer_processing.py:61-68, tsab/ts_preview.py:113,129,154,183,204,247,294,372 (и 9 других) | Medium | S | Все ошибки скана/превью пишутся через `TSLogVerbose`. По умолчанию verbose выключен (`tsab/ts_settings.py:16`). При проблемах в проде/у пользователей логи молчат, кроме `TSLogger.exception` верхнего уровня в `_TSRunScanAsync`. | `_indexer_processing` и preview-исключения логировать как `logger.warning(... exc_info=True)` хотя бы агрегированно (например, счётчик неудач + один WARN на N=50). Verbose оставить для деталей. |
 | F17 | Routes — module-global registration flag | tsab/ts_routes.py:9, 70-114 | Low | M | `TSRoutesRegistered` — module-level. Если runtime пересоздаётся (тесты, hot-reload, повторный bootstrap), повторно роуты уже не зарегистрировать. Текущее поведение работает только для одного процесса/одного runtime. | Перенести флаг внутрь runtime (или прицепить к `ts_server.app`-объекту), чтобы повторный init с другим server-instance проходил. |
 | F18 | Route — closure over runtime | tsab/ts_routes.py:83-111 | Low | M | Все 14 групп — `lambda ts_request: TSHandleX(ts_runtime, ts_request)`. Замыкания не различаются между вариантами `/...` и `/api/...`, не позволяют отвязать обработчик. | Вынести `partial(TSHandleX, ts_runtime)` или поднять `make_handler(ts_runtime)`-фабрику. Косметика, но проще диагностировать. |
 | F19 | 3D staging — name collision | tsab/ts_load3d_stage.py:118-122 | Low | S | Для `.obj` стэйджинг идёт под подпапку `<stem>`, для `.glb` — общий `<input>/3d/.ts_artius_browser/`. Два разных GLB с одинаковым именем перезатрут друг друга в стейджинге; `_TSCopyOrLinkFile` сравнивает size+mtime и просто заменяет файл. | Добавить `<stem>`-подпапку и для `.glb`/прочих non-obj форматов. |
-| F20 | DB — leftover legacy table not dropped on reset | tsab/ts_db_schema.py:138-148 | Low | S | `TS_DB_RESET_INDEX_SQL` чистит `assets/asset_metadata/...`, но не упоминает `asset_user_fields` (которая в drop-скрипте есть, в schema-скрипте — нет). На свежей БД таблицы нет; на «старой» после resetIndex таблица останется с данными. Тривиальная утечка. | Добавить `DROP TABLE IF EXISTS asset_user_fields;` в `TS_DB_RESET_INDEX_SQL` или сделать reset через `_TSRebuildSchema` (drop+create). |
+| F20 | **RESOLVED** DB — leftover legacy table not dropped on reset | tsab/ts_db_schema.py | Low | S | `TS_DB_RESET_INDEX_SQL` теперь начинается с `DROP TABLE IF EXISTS asset_user_fields;`. | — |
 | F21 | Frontend — `tsConsoleWarn` hidden by default | js/ts-artius-browser-api.js:53-68 | Low | S | `tsEnableConsoleDebug = Boolean(tsBrowserRuntimeSettings.enableConsoleDebug)` — по умолчанию false, поэтому `tsConsoleWarn`/`tsConsoleDebug` молчат. Все catch-блоки фронта (фетчи, drag&drop, 3D capture, workflow load) тихо проглатывают ошибки. Жалобы пользователей будут диагностироваться слепым методом. | Минимум: для `console.warn` оставлять вывод всегда (warning ≠ debug). Альтернатива: отдельный флаг `enableErrorLogs` с дефолтом true. |
 | F22 | Caching — config never reloaded after external edit | tsab/ts_config.py:21-22, 38-42 | Low | S | `TSCachedConfig` живёт всю жизнь процесса. `TSReloadConfig` существует, но не вызывается ни разу. Если оператор отредактирует `config.json` вручную — изменения не подхватятся до рестарта ComfyUI. | Решение продуктовое: либо зафиксировать поведение в README, либо добавить mtime-инвалидцию (одна `Path.stat()` при каждом `TSLoadConfig`). |
 | F23 | Performance — repeat work in detail path | tsab/ts_asset_catalog.py:77-94 | Low | S | `TSGetAssetDetail` дополнительно вызывает `_TSRootMap()` после `ts_ensure_metadata`. На каждый одиночный detail запрос пересобирается список рутов из конфига. Не bottleneck, но симметрия с listing-путём не соблюдена (там кешируется в локальную). | Передать map один раз сверху или закешировать в сервисе по-короткому. |
-| F24 | Documentation drift — minor | README.md:206 | Low | S | README говорит `min(4, cpu_count() // 2)`. Реально — `max(1, min(4, cpu_count() // 2))` (`tsab/ts_settings.py:6`). На большинстве машин совпадает; на 1-CPU виртуалках — нет. | Заменить формулу в README на корректную. |
+| F24 | **RESOLVED** Documentation drift — minor | README.md | Low | S | EN/RU секции содержат корректную формулу `max(1, min(4, cpu_count() // 2))`. | — |
 | F25 | DB index alignment | tsab/ts_db_schema.py:80-92 | Low | S | На горячий запрос `assets_view` фильтр обычно `(root_id, folder_path)` + сортировка `created_at`/`mtime`/`filename`/`size_bytes`. Композитный индекс `(root_lookup_id, folder_lookup_id, created_at)` помог бы keyset-пагинации; сейчас есть только одиночные `idx_assets_root_lookup_id`/`idx_assets_folder_lookup_id`/`idx_assets_created_at`, и SQLite вынужден сортировать в памяти/выбирать одно из них. | После профилирования (EXPLAIN QUERY PLAN на типовом фильтре) добавить композит. До замеров — Open Question, не делать спекулятивно. |
 
 **80-cap не достигнут.** Дедупликация уменьшила список с ~110 кандидатов до 25 строк.
@@ -138,15 +138,15 @@ Workflows-вкладка — целиком frontend: читает нативн�
 
 ## Quick wins (Low effort × Medium+ severity)
 
-- [ ] **F02** — поправить ожидаемую версию в `test_config_store.py`. ~5 минут.
-- [ ] **F12** — упростить `TSMigrate` if/else. ~10 минут.
-- [ ] **F13** — удалить мёртвый блок `ts_needs_index` (171-177). ~2 минуты.
-- [ ] **F14** — удалить декоративный if-else в `TSDetectSupportedType` для `.obj`. ~2 минуты.
-- [ ] **F11** — обернуть `send_to_trash` в try/except в `TSDeleteWorkflowFile`. ~5 минут.
-- [ ] **F20** — добавить `DROP TABLE IF EXISTS asset_user_fields` в `TS_DB_RESET_INDEX_SQL`. ~1 минута.
-- [ ] **F24** — синхронизировать формулу `*_workers` в README с кодом. ~1 минута.
+- [x] **F02** — поправить ожидаемую версию в `test_config_store.py`. ~5 минут.
+- [x] **F12** — упростить `TSMigrate` if/else. ~10 минут.
+- [x] **F13** — удалить мёртвый блок `ts_needs_index` (171-177). ~2 минуты.
+- [x] **F14** — удалить декоративный if-else в `TSDetectSupportedType` для `.obj`. ~2 минуты.
+- [x] **F11** — обернуть `send_to_trash` в try/except в `TSDeleteWorkflowFile`. ~5 минут.
+- [x] **F20** — добавить `DROP TABLE IF EXISTS asset_user_fields` в `TS_DB_RESET_INDEX_SQL`. ~1 минута.
+- [x] **F24** — синхронизировать формулу `*_workers` в README с кодом. ~1 минута.
 
-Эти семь точек закрываются за ~30 минут, при этом два пункта (F02, F11) реально снижают риск.
+Все семь закрыты.
 
 ---
 

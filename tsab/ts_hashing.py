@@ -85,9 +85,6 @@ def TSDetectSupportedType(ts_path: Path) -> Literal["image", "video", "audio", "
     if ts_extension == ".glb" and ts_magic.startswith(b"glTF"):
         return "3d"
     if ts_extension == ".obj":
-        ts_text_prefix = ts_magic.decode("utf-8", errors="ignore").lstrip()
-        if ts_text_prefix.startswith(("#", "o ", "v ", "g ", "mtllib", "usemtl")):
-            return "3d"
         return "3d"
 
     return ts_type_by_extension
