@@ -59,7 +59,8 @@ def TSNormalizeUISettings(ts_ui: dict[str, Any] | None) -> dict[str, Any]:
         "workflow_selected_folder_path": TSNormalizeFolderPath(ts_ui.get("workflow_selected_folder_path")),
         "expanded_folders": TSNormalizeStringSequence(ts_ui.get("expanded_folders")),
         "browser_width": TSClampInt(ts_ui.get("browser_width"), 0, 1600, 0),
-        "tree_panel_width": TSClampInt(ts_ui.get("tree_panel_width"), 120, 700, 220),
+        "asset_tree_panel_width": TSClampInt(ts_ui.get("asset_tree_panel_width"), 120, 700, 220),
+        "workflow_tree_panel_width": TSClampInt(ts_ui.get("workflow_tree_panel_width"), 120, 700, 220),
     }
 
 
@@ -113,7 +114,11 @@ def TSApplyUISettingsUpdates(ts_ui: dict[str, Any], ts_ui_updates: dict[str, Any
         ts_browser_width = TSParseClampedInt(ts_updates.get("browser_width"), 0, 1600)
         if ts_browser_width is not None:
             ts_ui["browser_width"] = ts_browser_width
-    if "tree_panel_width" in ts_updates:
-        ts_tree_panel_width = TSParseClampedInt(ts_updates.get("tree_panel_width"), 120, 700)
-        if ts_tree_panel_width is not None:
-            ts_ui["tree_panel_width"] = ts_tree_panel_width
+    if "asset_tree_panel_width" in ts_updates:
+        ts_asset_tree_panel_width = TSParseClampedInt(ts_updates.get("asset_tree_panel_width"), 120, 700)
+        if ts_asset_tree_panel_width is not None:
+            ts_ui["asset_tree_panel_width"] = ts_asset_tree_panel_width
+    if "workflow_tree_panel_width" in ts_updates:
+        ts_workflow_tree_panel_width = TSParseClampedInt(ts_updates.get("workflow_tree_panel_width"), 120, 700)
+        if ts_workflow_tree_panel_width is not None:
+            ts_ui["workflow_tree_panel_width"] = ts_workflow_tree_panel_width
