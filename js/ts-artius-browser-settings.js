@@ -41,6 +41,11 @@ export const tsPanelSettings = Object.freeze({
     debounceMs: {
         search: 220,
         realtimeRefresh: 350,
+        filterChip: 120,
+    },
+    responseCache: {
+        ttlMs: 30000,
+        capacity: 10,
     },
     previewWarmup: {
         concurrency: 2,

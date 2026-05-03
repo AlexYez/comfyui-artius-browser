@@ -70,6 +70,7 @@ def TSCheckFrontendCharacterization() -> None:
         return
     TSRunCommand([ts_node, "scripts/check_frontend_3d_characterization.mjs"])
     TSRunCommand([ts_node, "scripts/check_frontend_api_characterization.mjs"])
+    TSRunCommand([ts_node, "scripts/check_frontend_cache_characterization.mjs"])
     TSRunCommand([ts_node, "scripts/check_frontend_panel_characterization.mjs"])
     TSRunCommand([ts_node, "scripts/check_frontend_viewer_characterization.mjs"])
 

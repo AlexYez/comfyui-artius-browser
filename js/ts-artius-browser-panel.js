@@ -30,6 +30,7 @@ import {
     tsApplyGridMetricStyles,
     tsCalculateGridMetrics,
 } from "./ts-artius-browser-panel-grid.js";
+import { TSAssetResponseCache } from "./ts-artius-browser-panel-cache.js";
 import { tsBuildAssetSearchParams } from "./ts-artius-browser-panel-query.js";
 import {
     tsApplySectionSettingsToState,
@@ -121,6 +122,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsItemIndexById = new Map();
         this.tsDebouncedSearch = tsDebounce(() => this.tsFetchAssets(true), tsPanelSettings.debounceMs.search);
         this.tsDebouncedRealtimeRefresh = tsDebounce(() => this.tsFetchAssets(true), tsPanelSettings.debounceMs.realtimeRefresh);
+        this.tsDebouncedFilterRefresh = tsDebounce(() => this.tsFetchAssets(true), tsPanelSettings.debounceMs.filterChip);
+        this.tsResponseCache = new TSAssetResponseCache({
+            tsCapacity: tsPanelSettings.responseCache.capacity,
+            tsTtlMs: tsPanelSettings.responseCache.ttlMs,
+        });
+        this.tsRevalidationsInFlight = new Set();
         this.tsDebouncedAssetEventRefresh = tsDebounce(() => {
             this.tsScheduleGridRender(true, false);
             this.tsRenderSelectionButtons();
@@ -1266,6 +1273,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRenderProgress();
         this.tsRenderSelectionButtons();
         if (tsShouldRefresh) {
+            this.tsInvalidateResponseCache();
             this.tsDebouncedRealtimeRefresh();
         }
     }
@@ -1541,6 +1549,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (this.tsState.tsScanStatus?.running) {
             return;
         }
+        this.tsInvalidateResponseCache();
         const tsDetail = this.tsReadEventDetail(tsEvent);
         const tsAssetPatch = tsDetail?.asset;
         if (!tsAssetPatch?.id) {
@@ -1567,6 +1576,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (this.tsState.tsScanStatus?.running) {
             return;
         }
+        this.tsInvalidateResponseCache();
         const tsDetail = this.tsReadEventDetail(tsEvent);
         const tsAssetId = Number(tsDetail?.id || 0);
         if (!tsAssetId) {
@@ -1689,7 +1699,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 }
                 this.tsRenderTypeChips();
                 this.tsQueueSaveUISettings();
-                this.tsFetchAssets(true);
+                this.tsDebouncedFilterRefresh();
             });
         });
     }
@@ -1813,6 +1823,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsState.tsHasMore = false;
         this.tsState.tsNextCursor = null;
         this.tsState.tsFolders = [];
+        this.tsInvalidateResponseCache();
         this.ts3DThumbnailPending.clear();
         this.ts3DThumbnailInFlight.clear();
         this.ts3DThumbnailFailed.clear();
@@ -1887,9 +1898,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsState.tsLoading = true;
             const tsWorkflowOffset = tsReset ? 0 : this.tsState.tsItems.length;
             const tsCursorForFetch = tsReset ? null : this.tsState.tsNextCursor;
+            const tsCanUseCache = tsReset && !this.tsIsWorkflowSection();
+            const tsCacheKey = tsCanUseCache ? this.tsBuildRequestPath(null) : null;
+            const tsCacheEntry = tsCacheKey ? this.tsResponseCache.tsGet(tsCacheKey) : null;
             try {
                 let tsPayload;
-                if (this.tsIsWorkflowSection()) {
+                if (tsCacheEntry) {
+                    tsPayload = tsCacheEntry.tsPayload;
+                } else if (this.tsIsWorkflowSection()) {
                     await this.tsEnsureWorkflowLibrary(false);
                     const tsWorkflowQuery = this.tsBuildWorkflowQueryResult();
                     const tsWindowItems = tsWorkflowQuery.items.slice(tsWorkflowOffset, tsWorkflowOffset + tsDefaultLimit);
@@ -1903,7 +1919,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         scan_status: null,
                     };
                 } else {
-                    tsPayload = await tsFetchJSON(this.tsBuildRequestPath(tsCursorForFetch));
+                    const tsRequestPath = this.tsBuildRequestPath(tsCursorForFetch);
+                    tsPayload = await tsFetchJSON(tsRequestPath);
+                    if (tsCacheKey && tsRequestPath === tsCacheKey) {
+                        this.tsResponseCache.tsSet(tsCacheKey, tsPayload);
+                    }
                 }
                 const tsIncomingItems = Array.isArray(tsPayload.items) ? tsPayload.items : [];
                 if (tsReset) {
@@ -1946,6 +1966,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 if (tsReset) {
                     void this.tsMaybeBootstrapScan();
                 }
+                if (tsCacheEntry && tsCacheEntry.tsIsStale && tsCacheKey) {
+                    this.tsScheduleRevalidation(tsCacheKey);
+                }
             } catch (tsError) {
                 tsConsoleWarn("Timesaver Artius Browser fetch failed", tsError);
             } finally {
@@ -1971,6 +1994,53 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 this.tsCurrentFetchPromise = null;
             }
         }
+    }
+
+    tsScheduleRevalidation(tsCacheKey) {
+        if (!tsCacheKey || this.tsRevalidationsInFlight.has(tsCacheKey)) {
+            return;
+        }
+        this.tsRevalidationsInFlight.add(tsCacheKey);
+        window.setTimeout(async () => {
+            try {
+                const tsPayload = await tsFetchJSON(tsCacheKey);
+                this.tsResponseCache.tsSet(tsCacheKey, tsPayload);
+                if (!this.tsIsWorkflowSection() && this.tsBuildRequestPath(null) === tsCacheKey) {
+                    this.tsApplyRevalidatedPayload(tsPayload);
+                }
+            } catch (tsError) {
+                tsConsoleWarn("Timesaver Artius Browser revalidation failed", tsError);
+            } finally {
+                this.tsRevalidationsInFlight.delete(tsCacheKey);
+            }
+        }, 0);
+    }
+
+    tsApplyRevalidatedPayload(tsPayload) {
+        if (this.tsState.tsLoading) {
+            return;
+        }
+        const tsIncomingItems = Array.isArray(tsPayload.items) ? tsPayload.items : [];
+        const tsBuildItemKey = (tsItem) => `${tsItem?.id ?? ""}:${tsItem?.mtime_ns ?? ""}:${tsItem?.has_preview ?? ""}`;
+        const tsCurrentKey = this.tsState.tsItems.map(tsBuildItemKey).join("|");
+        const tsIncomingKey = tsIncomingItems.map(tsBuildItemKey).join("|");
+        if (tsCurrentKey === tsIncomingKey) {
+            this.tsState.tsHasMore = Boolean(tsPayload.has_more);
+            this.tsState.tsNextCursor = tsPayload.next_cursor || null;
+            return;
+        }
+        this.tsState.tsItems = tsIncomingItems;
+        this.tsState.tsHasMore = Boolean(tsPayload.has_more);
+        this.tsState.tsNextCursor = tsPayload.next_cursor || null;
+        this.tsState.tsFolders = Array.isArray(tsPayload.folders) ? tsPayload.folders : this.tsState.tsFolders;
+        this.tsFoldersRevision += 1;
+        this.tsItemsRevision += 1;
+        this.tsRebuildItemIndex();
+        this.tsRenderListOnly();
+    }
+
+    tsInvalidateResponseCache() {
+        this.tsResponseCache.tsClear();
     }
 
     tsRenderAll() {
