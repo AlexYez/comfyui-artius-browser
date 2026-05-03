@@ -40,6 +40,7 @@ It is designed to stay fast on large libraries, keep previews compact, and use n
 
 - `Assets` and `Workflows` tabs
 - `Flat` and `Tree` browsing modes in both tabs
+- resizable tree-panel column in `Tree` mode (drag the divider; width persists per user)
 - independent saved state per tab:
   - search
   - sort

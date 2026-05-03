@@ -104,6 +104,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsGridColumns: 1,
             tsGridRowHeight: 296,
             tsBrowserWidth: 0,
+            tsTreeWidth: 220,
             tsSettingsHydrated: false,
             tsQueuedFetchReset: false,
             tsQueuedFetchAppend: false,
@@ -298,6 +299,65 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.style.minWidth = "0";
     }
 
+    tsApplyTreeWidth() {
+        const tsShell = this.tsRefs?.tsShell;
+        if (!tsShell) {
+            return;
+        }
+        const tsClampedWidth = Math.max(120, Math.min(700, Math.round(Number(this.tsState.tsTreeWidth) || 220)));
+        this.tsState.tsTreeWidth = tsClampedWidth;
+        tsShell.style.setProperty("--ts-tree-width", `${tsClampedWidth}px`);
+    }
+
+    tsBindTreeResizer() {
+        const tsResizer = this.tsRefs?.tsTreeResizer;
+        const tsBody = this.tsRefs?.tsBody;
+        if (!tsResizer || !tsBody) {
+            return;
+        }
+        let tsDragStartX = 0;
+        let tsDragStartWidth = 0;
+        let tsActivePointerId = null;
+        const tsOnPointerMove = (tsEvent) => {
+            if (tsEvent.pointerId !== tsActivePointerId) {
+                return;
+            }
+            const tsBodyRect = tsBody.getBoundingClientRect();
+            const tsMaxWidth = Math.min(700, Math.max(120, tsBodyRect.width - 200));
+            const tsDelta = tsEvent.clientX - tsDragStartX;
+            const tsNewWidth = Math.max(120, Math.min(tsMaxWidth, tsDragStartWidth + tsDelta));
+            this.tsState.tsTreeWidth = tsNewWidth;
+            this.tsApplyTreeWidth();
+            this.tsScheduleGridRender(true, true);
+        };
+        const tsOnPointerUp = (tsEvent) => {
+            if (tsEvent.pointerId !== tsActivePointerId) {
+                return;
+            }
+            tsActivePointerId = null;
+            tsResizer.dataset.dragging = "false";
+            tsResizer.releasePointerCapture?.(tsEvent.pointerId);
+            tsResizer.removeEventListener("pointermove", tsOnPointerMove);
+            tsResizer.removeEventListener("pointerup", tsOnPointerUp);
+            tsResizer.removeEventListener("pointercancel", tsOnPointerUp);
+            this.tsQueueSaveUISettings();
+        };
+        tsResizer.addEventListener("pointerdown", (tsEvent) => {
+            if (this.tsState.tsMode !== "tree") {
+                return;
+            }
+            tsEvent.preventDefault();
+            tsActivePointerId = tsEvent.pointerId;
+            tsDragStartX = tsEvent.clientX;
+            tsDragStartWidth = Number(this.tsState.tsTreeWidth) || 220;
+            tsResizer.dataset.dragging = "true";
+            tsResizer.setPointerCapture?.(tsEvent.pointerId);
+            tsResizer.addEventListener("pointermove", tsOnPointerMove);
+            tsResizer.addEventListener("pointerup", tsOnPointerUp);
+            tsResizer.addEventListener("pointercancel", tsOnPointerUp);
+        });
+    }
+
     async tsLoadUISettings() {
         try {
             const tsPayload = await tsFetchBrowserSettings();
@@ -346,6 +406,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             if (Number.isFinite(tsBrowserWidth) && tsBrowserWidth > 0) {
                 this.tsState.tsBrowserWidth = Math.round(tsBrowserWidth);
             }
+            const tsTreeWidth = Number(tsUI.tree_panel_width);
+            if (Number.isFinite(tsTreeWidth) && tsTreeWidth > 0) {
+                this.tsState.tsTreeWidth = Math.max(120, Math.min(700, Math.round(tsTreeWidth)));
+            }
+            this.tsApplyTreeWidth();
             this.tsApplySectionSettings();
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser settings fetch failed", tsError);
@@ -404,6 +469,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 workflow_selected_folder_path: this.tsWorkflowSelectedFolder || "",
                 expanded_folders: [...this.tsState.tsExpandedFolders],
                 browser_width: this.tsState.tsBrowserWidth,
+                tree_panel_width: this.tsState.tsTreeWidth,
             });
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser settings save failed", tsError);
@@ -812,7 +878,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 .ts-body {
                     min-height: 0;
                     display: grid;
-                    grid-template-columns: minmax(180px, 240px) 1fr;
+                    grid-template-columns: var(--ts-tree-width, 220px) 4px 1fr;
                 }
 
                 .ts-body[data-mode="flat"] {
@@ -827,6 +893,33 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 }
 
                 .ts-body[data-mode="flat"] .ts-tree-panel {
+                    display: none;
+                }
+
+                .ts-tree-resizer {
+                    position: relative;
+                    cursor: col-resize;
+                    background: transparent;
+                    user-select: none;
+                    touch-action: none;
+                    transition: background 0.14s ease;
+                }
+
+                .ts-tree-resizer::after {
+                    content: "";
+                    position: absolute;
+                    top: 0;
+                    bottom: 0;
+                    left: -3px;
+                    right: -3px;
+                }
+
+                .ts-tree-resizer:hover,
+                .ts-tree-resizer[data-dragging="true"] {
+                    background: color-mix(in srgb, var(--ts-accent) 60%, transparent);
+                }
+
+                .ts-body[data-mode="flat"] .ts-tree-resizer {
                     display: none;
                 }
 
@@ -1088,6 +1181,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         border-right: 0;
                         border-bottom: 1px solid var(--ts-border);
                     }
+
+                    .ts-tree-resizer {
+                        display: none;
+                    }
                 }
             </style>
             <div class="ts-shell" tabindex="0">
@@ -1129,6 +1226,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 </div>
                 <div class="ts-body" data-mode="flat">
                     <div class="ts-tree-panel"></div>
+                    <div class="ts-tree-resizer" role="separator" aria-orientation="vertical"></div>
                     <div class="ts-gallery-wrap">
                         <div class="ts-gallery-scroll">
                             <div class="ts-gallery-spacer"></div>
@@ -1168,6 +1266,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsHealth: this.shadowRoot.querySelector(".ts-health"),
             tsBody: this.shadowRoot.querySelector(".ts-body"),
             tsTreePanel: this.shadowRoot.querySelector(".ts-tree-panel"),
+            tsTreeResizer: this.shadowRoot.querySelector(".ts-tree-resizer"),
             tsGalleryScroll: this.shadowRoot.querySelector(".ts-gallery-scroll"),
             tsGallerySpacer: this.shadowRoot.querySelector(".ts-gallery-spacer"),
             tsGalleryContent: this.shadowRoot.querySelector(".ts-gallery-content"),
@@ -1277,6 +1376,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         );
         this.tsRefs.tsTreePanel.addEventListener("click", (tsEvent) => this.tsHandleTreeClick(tsEvent));
         this.tsRefs.tsShell.addEventListener("keydown", (tsEvent) => this.tsHandleKeydown(tsEvent));
+        this.tsBindTreeResizer();
+        this.tsApplyTreeWidth();
         this.tsBindApiEvents();
     }
 

@@ -129,6 +129,9 @@ class TSConfigStore:
             ts_tools["ffprobe_workers"] = ts_default["tools"]["ffprobe_workers"]
             ts_tools["ffmpeg_workers"] = ts_default["tools"]["ffmpeg_workers"]
             ts_result["version"] = 14
+        if TSCurrentVersion() < 15:
+            ts_result.setdefault("ui", {}).setdefault("tree_panel_width", ts_default["ui"]["tree_panel_width"])
+            ts_result["version"] = 15
         self._TSNormalizeTopLevelSections(ts_result, ts_default)
         return ts_result
 
