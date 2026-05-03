@@ -182,6 +182,13 @@ The browser is built around native ComfyUI behavior:
 
 For 3D assets, files are staged into ComfyUI input storage so native 3D nodes load them the same way as files selected from the node UI.
 
+### Compatibility notes
+
+- Drag-and-drop graph access is routed through a small Comfy adapter that prefers current canvas APIs and keeps legacy LiteGraph/private graph fallbacks isolated.
+- Asset search is filename-focused. Unsupported `metadata` query params return `400 Bad Request` instead of silently doing nothing.
+- Database migrations, rescans, and cache rebuilds preserve user fields such as `tags`, `rating`, and `created_at`.
+- Frontend viewer and worker listeners are explicitly torn down when stages close or workers stop.
+
 ### Performance notes
 
 The project is intentionally conservative about performance:
@@ -307,6 +314,13 @@ Then restart ComfyUI and scan again.
 - видео: плеер, кадр, FPS, кодек, аудиодорожка, compare mode
 - аудио: waveform и техинформация
 - 3D: нативный 3D viewer и информация о модели
+
+### Правила совместимости
+
+- доступ к graph/canvas/LiteGraph проходит через adapter, чтобы новые API ComfyUI и legacy fallback не расползались по UI-коду
+- поиск ассетов остается поиском по имени файла; неподдерживаемый query param `metadata` возвращает `400 Bad Request`
+- миграции БД, rescan и `Rebuild Cache` сохраняют пользовательские поля `tags`, `rating` и `created_at`
+- временные frontend listeners у viewer/worker снимаются при закрытии stage или остановке worker
 
 ### Установка
 
