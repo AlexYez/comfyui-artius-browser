@@ -34,6 +34,107 @@ export function tsGetRelativeAssetPath(tsAsset) {
     return tsFolder ? `${tsFolder}/${tsAsset.filename}` : tsAsset.filename;
 }
 
+const tsComfyAdapterLegacyNotices = new Set();
+
+function tsLogComfyLegacySurface(tsDeps, tsKey, tsMessage) {
+    if (tsComfyAdapterLegacyNotices.has(tsKey)) {
+        return;
+    }
+    tsComfyAdapterLegacyNotices.add(tsKey);
+    tsDeps?.consoleDebug?.(tsMessage);
+}
+
+function tsNormalizeGraphPosition(tsPosition) {
+    if (!Array.isArray(tsPosition) || tsPosition.length < 2) {
+        return null;
+    }
+    return [Number(tsPosition[0]) || 0, Number(tsPosition[1]) || 0];
+}
+
+export function tsGetComfyCanvasElement(tsDeps) {
+    return tsDeps?.app?.canvas?.canvas || null;
+}
+
+export function tsGetComfyGraph(tsDeps) {
+    const tsCanvasGraph = tsDeps?.app?.canvas?.graph;
+    if (tsCanvasGraph) {
+        return tsCanvasGraph;
+    }
+    const tsGraph = tsDeps?.app?.graph;
+    if (tsGraph) {
+        tsLogComfyLegacySurface(
+            tsDeps,
+            "app.graph",
+            "Timesaver Artius Browser using legacy app.graph fallback",
+        );
+    }
+    return tsGraph || null;
+}
+
+export function tsGetComfyCanvasDropGraphPosition(tsEvent, tsDeps) {
+    const tsCanvas = tsDeps?.app?.canvas;
+    if (tsEvent && typeof tsCanvas?.convertEventToCanvasOffset === "function") {
+        const tsOffset = tsNormalizeGraphPosition(tsCanvas.convertEventToCanvasOffset(tsEvent));
+        if (tsOffset) {
+            return tsOffset;
+        }
+    }
+    const tsGraphMouse = tsNormalizeGraphPosition(tsCanvas?.graph_mouse);
+    if (tsGraphMouse) {
+        tsLogComfyLegacySurface(
+            tsDeps,
+            "app.canvas.graph_mouse",
+            "Timesaver Artius Browser using legacy canvas graph_mouse fallback",
+        );
+        return tsGraphMouse;
+    }
+    return null;
+}
+
+export function tsGetComfyVisibleNodes(tsDeps) {
+    const tsVisibleNodes = tsDeps?.app?.canvas?.visible_nodes;
+    if (Array.isArray(tsVisibleNodes) && tsVisibleNodes.length > 0) {
+        return tsVisibleNodes;
+    }
+    const tsLegacyNodes = tsDeps?.app?.graph?._nodes;
+    if (Array.isArray(tsLegacyNodes)) {
+        tsLogComfyLegacySurface(
+            tsDeps,
+            "app.graph._nodes",
+            "Timesaver Artius Browser using legacy graph _nodes fallback",
+        );
+        return tsLegacyNodes;
+    }
+    return [];
+}
+
+export function tsCreateComfyGraphNode(tsNodeType, tsDeps) {
+    const tsLiteGraph = tsDeps?.window?.LiteGraph;
+    if (typeof tsLiteGraph?.createNode !== "function") {
+        return null;
+    }
+    tsLogComfyLegacySurface(
+        tsDeps,
+        "window.LiteGraph.createNode",
+        "Timesaver Artius Browser using legacy LiteGraph createNode fallback",
+    );
+    return tsLiteGraph.createNode(tsNodeType);
+}
+
+export function tsAddComfyGraphNode(tsNode, tsDeps) {
+    const tsGraph = tsGetComfyGraph(tsDeps);
+    if (!tsGraph || typeof tsGraph.add !== "function" || !tsNode) {
+        return false;
+    }
+    tsGraph.add(tsNode);
+    return true;
+}
+
+export function tsMarkComfyGraphDirty(tsDeps) {
+    tsGetComfyGraph(tsDeps)?.setDirtyCanvas?.(true, true);
+    tsDeps?.app?.canvas?.setDirty?.(true, true);
+}
+
 export function tsResolveNodeComfyClass(tsNode) {
     return String(
         tsNode?.comfyClass

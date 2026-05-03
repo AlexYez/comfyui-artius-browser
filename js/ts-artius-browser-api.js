@@ -18,9 +18,15 @@ import {
     tsFormatBytes as tsFormatBytesImpl,
 } from "./ts-artius-browser-api-utils.js";
 import {
+    tsAddComfyGraphNode,
     tsBuildAssetFetchPath,
+    tsCreateComfyGraphNode,
+    tsGetComfyCanvasDropGraphPosition,
+    tsGetComfyCanvasElement,
+    tsGetComfyVisibleNodes,
     tsGetRelativeAssetPath,
     tsIsGraphPointInsideNode,
+    tsMarkComfyGraphDirty,
     tsResolveNodeComfyClass,
     tsSplitRelativePath,
 } from "./ts-artius-browser-api-workflow.js";
@@ -46,6 +52,14 @@ const tsFallbackWorkflowTargets = tsApiSettings.fallbackWorkflowTargets;
 const tsLocaleCache = new Map();
 const tsEnableConsoleDebug = Boolean(tsBrowserRuntimeSettings.enableConsoleDebug);
 const tsWorkflowUserdataRoot = "workflows";
+
+function tsComfyAdapterDeps() {
+    return {
+        app,
+        consoleDebug: tsConsoleDebug,
+        window,
+    };
+}
 
 export function tsConsoleWarn(...tsArgs) {
     if (tsEnableConsoleDebug) {
@@ -361,8 +375,7 @@ async function tsSyncNative3DNode(tsNode, tsAsset) {
         }
         tsEnsureWidgetOptionValue(tsModelWidget, tsModelFile);
         tsModelWidget.value = tsModelFile;
-        app?.graph?.setDirtyCanvas?.(true, true);
-        app?.canvas?.setDirty?.(true, true);
+        tsMarkComfyGraphDirty(tsComfyAdapterDeps());
         return true;
     } catch (tsError) {
         tsConsoleWarn("Timesaver Artius Browser failed to sync native Load3D node", tsError);
@@ -395,16 +408,7 @@ async function tsResolveNativeWidgetValue(tsAsset, tsNode) {
 }
 
 function tsGetCanvasDropGraphPosition(tsEvent) {
-    if (tsEvent && typeof app?.canvas?.convertEventToCanvasOffset === "function") {
-        const tsOffset = app.canvas.convertEventToCanvasOffset(tsEvent);
-        if (Array.isArray(tsOffset) && tsOffset.length >= 2) {
-            return [Number(tsOffset[0]) || 0, Number(tsOffset[1]) || 0];
-        }
-    }
-    if (Array.isArray(app?.canvas?.graph_mouse) && app.canvas.graph_mouse.length >= 2) {
-        return [Number(app.canvas.graph_mouse[0]) || 0, Number(app.canvas.graph_mouse[1]) || 0];
-    }
-    return null;
+    return tsGetComfyCanvasDropGraphPosition(tsEvent, tsComfyAdapterDeps());
 }
 
 function tsResolveDropTargetNode(tsAsset, tsEvent) {
@@ -417,9 +421,7 @@ function tsResolveDropTargetNode(tsAsset, tsEvent) {
         return null;
     }
     const [tsGraphX, tsGraphY] = tsGraphPosition;
-    const tsCanvasNodes = Array.isArray(app?.canvas?.visible_nodes) && app.canvas.visible_nodes.length > 0
-        ? app.canvas.visible_nodes
-        : (Array.isArray(app?.graph?._nodes) ? app.graph._nodes : []);
+    const tsCanvasNodes = tsGetComfyVisibleNodes(tsComfyAdapterDeps());
     for (const tsNode of [...tsCanvasNodes].reverse()) {
         if (!tsIsGraphPointInsideNode(tsNode, tsGraphX, tsGraphY)) {
             continue;
@@ -469,29 +471,21 @@ async function tsTryLoadIntoSelectedNode(tsAsset, tsExcludedNodes = []) {
 }
 
 async function tsCreateWorkflowNode(tsAsset, tsEvent = undefined) {
-    const tsLiteGraph = window.LiteGraph;
-    if (!tsLiteGraph) {
-        return false;
-    }
     const tsNativeTarget = tsNativeWorkflowTargets[tsAsset.type] || null;
     const tsFallbackTarget = tsFallbackWorkflowTargets[tsAsset.type] || null;
     const tsTarget = tsNativeTarget || tsFallbackTarget;
     if (!tsTarget) {
         return false;
     }
-    const tsNode = tsLiteGraph.createNode(tsTarget.tsNodeType);
+    const tsDeps = tsComfyAdapterDeps();
+    const tsNode = tsCreateComfyGraphNode(tsTarget.tsNodeType, tsDeps);
     if (!tsNode) {
         return false;
     }
-    const tsGraph = app?.canvas?.graph || app?.graph;
-    if (!tsGraph) {
+    if (!tsAddComfyGraphNode(tsNode, tsDeps)) {
         return false;
     }
-    tsGraph.add(tsNode);
-    let tsPosition = app?.canvas?.graph_mouse ? [...app.canvas.graph_mouse] : [160, 160];
-    if (tsEvent && typeof app?.canvas?.convertEventToCanvasOffset === "function") {
-        tsPosition = app.canvas.convertEventToCanvasOffset(tsEvent);
-    }
+    const tsPosition = tsGetComfyCanvasDropGraphPosition(tsEvent, tsDeps) || [160, 160];
     tsNode.pos = tsPosition;
     window.setTimeout(async () => {
         if (tsNativeTarget) {
@@ -511,8 +505,7 @@ async function tsCreateWorkflowNode(tsAsset, tsEvent = undefined) {
             tsSetWidgetValue(tsNode, tsPathWidget, tsAsset.path);
         }
     }, 0);
-    app?.graph?.setDirtyCanvas?.(true, true);
-    app?.canvas?.setDirty?.(true, true);
+    tsMarkComfyGraphDirty(tsDeps);
     return true;
 }
 
@@ -534,7 +527,7 @@ export async function tsLoadAssetIntoWorkflow(tsAsset, tsEvent = undefined) {
 }
 
 export function tsEnsureCanvasDropBridge() {
-    const tsCanvasElement = app?.canvas?.canvas;
+    const tsCanvasElement = tsGetComfyCanvasElement(tsComfyAdapterDeps());
     if (!tsCanvasElement || tsCanvasElement.__tsArtiusDropBridgeBound) {
         return;
     }
