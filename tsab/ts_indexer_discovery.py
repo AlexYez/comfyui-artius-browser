@@ -4,11 +4,11 @@ import os
 from pathlib import Path
 from typing import Iterable
 
+from .ts_companion import TSNormalizeCompanionStem
 from .ts_logging import TSLogVerbose
 from .ts_settings import (
     TS_3D_EXTENSIONS,
     TS_AUDIO_EXTENSIONS,
-    TS_COMPANION_SUFFIXES,
     TS_IMAGE_EXTENSIONS,
     TS_LEGACY_STORAGE_DIRECTORY_NAMES,
     TS_STORAGE_DIRECTORY_NAME,
@@ -18,21 +18,15 @@ from .ts_settings import (
 from .ts_types import TSAssetStat, TSRootDefinition
 from .ts_utils import TSFolderPosixPath, TSRelativePosixPath
 
+__all__ = [
+    "TSFilterCompanionEntries",
+    "TSIterAssetStats",
+    "TSNormalizeCompanionStem",
+    "TSScanDirectory",
+]
+
 TS_COMPANION_MEDIA_EXTENSIONS = TS_VIDEO_EXTENSIONS | TS_AUDIO_EXTENSIONS | TS_3D_EXTENSIONS
 TS_IGNORED_DIRECTORY_NAMES = {TS_STORAGE_DIRECTORY_NAME.lower(), *(ts_name.lower() for ts_name in TS_LEGACY_STORAGE_DIRECTORY_NAMES)}
-
-
-def TSNormalizeCompanionStem(ts_stem: str) -> str:
-    ts_normalized = str(ts_stem or "").lower()
-    ts_changed = True
-    while ts_changed and ts_normalized:
-        ts_changed = False
-        for ts_suffix in TS_COMPANION_SUFFIXES:
-            if ts_normalized.endswith(ts_suffix):
-                ts_normalized = ts_normalized[: -len(ts_suffix)].rstrip("._- ")
-                ts_changed = True
-                break
-    return ts_normalized
 
 
 def TSFilterCompanionEntries(ts_file_entries: Iterable[os.DirEntry[str]]) -> list[os.DirEntry[str]]:

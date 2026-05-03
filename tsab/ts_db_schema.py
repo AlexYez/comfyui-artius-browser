@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-TS_DB_SCHEMA_VERSION = 8
+TS_DB_SCHEMA_VERSION = 9
 
 TS_DB_DROP_SCHEMA_SQL = """
 DROP VIEW IF EXISTS assets_view;
@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS assets (
     is_indexed INTEGER NOT NULL DEFAULT 0,
     has_preview INTEGER NOT NULL DEFAULT 0,
     has_metadata INTEGER NOT NULL DEFAULT 0,
+    is_companion_image INTEGER NOT NULL DEFAULT 0,
+    companion_stem TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'discovered',
     FOREIGN KEY(type_lookup_id) REFERENCES asset_types(id),
     FOREIGN KEY(extension_lookup_id) REFERENCES asset_extensions(id),
@@ -93,6 +95,8 @@ CREATE INDEX IF NOT EXISTS idx_assets_mtime_ns ON assets(mtime_ns);
 CREATE INDEX IF NOT EXISTS idx_assets_size_bytes ON assets(size_bytes);
 CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(status);
 CREATE INDEX IF NOT EXISTS idx_assets_preview_ready ON assets(has_preview);
+CREATE INDEX IF NOT EXISTS idx_assets_companion_lookup ON assets(root_lookup_id, folder_lookup_id, companion_stem, type_lookup_id);
+CREATE INDEX IF NOT EXISTS idx_assets_companion_filter ON assets(is_companion_image, type_lookup_id);
 CREATE INDEX IF NOT EXISTS idx_asset_folders_root_lookup_id ON asset_folders(root_lookup_id);
 CREATE INDEX IF NOT EXISTS idx_asset_user_fields_rating ON asset_user_fields(rating);
 
@@ -131,6 +135,8 @@ SELECT
     assets.is_indexed AS is_indexed,
     assets.has_preview AS has_preview,
     assets.has_metadata AS has_metadata,
+    assets.is_companion_image AS is_companion_image,
+    assets.companion_stem AS companion_stem,
     assets.status AS status
 FROM assets
 INNER JOIN asset_types ON asset_types.id = assets.type_lookup_id

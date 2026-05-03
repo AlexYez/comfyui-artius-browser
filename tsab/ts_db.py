@@ -6,11 +6,14 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from .ts_companion import TSComputeCompanionStemFromFilename
 from .ts_db_payload import TSBuildUpdatedAssetPayload, TSComputeAssetStatus, TSPayloadFromAssetRow
 from .ts_db_query import TSBuildAssetQueryParts
 from .ts_db_schema import TS_DB_DROP_SCHEMA_SQL, TS_DB_RESET_INDEX_SQL, TS_DB_SCHEMA_SQL, TS_DB_SCHEMA_VERSION
 from .ts_logging import TSLogVerbose
 from .ts_types import TSAssetPayload
+
+TS_COMPANION_NON_IMAGE_TYPE_KEYS = ("video", "audio", "3d")
 
 
 class TSDatabase:
@@ -261,13 +264,14 @@ class TSDatabase:
         TSLogVerbose("db.root_asset_refs", root_ids=ts_root_ids, rows=len(ts_rows))
         return ts_rows
 
-    def TSUpsertAsset(self, ts_payload: TSAssetPayload) -> sqlite3.Row:
+    def _TSDoUpsertAsset(self, ts_payload: TSAssetPayload) -> tuple[int, int, int]:
         ts_connection = self.TSGetConnection()
         ts_payload = self._TSApplyStoredUserFields(ts_payload)
         ts_root_lookup_id = self._TSEnsureRootLookupId(ts_payload.ts_root_id, ts_payload.ts_scope)
         ts_type_lookup_id = self._TSEnsureLookupId("asset_types", "type_key", ts_payload.ts_type)
         ts_extension_lookup_id = self._TSEnsureLookupId("asset_extensions", "extension_key", ts_payload.ts_extension)
         ts_folder_lookup_id = self._TSEnsureFolderLookupId(ts_root_lookup_id, ts_payload.ts_folder_path)
+        ts_companion_stem = TSComputeCompanionStemFromFilename(ts_payload.ts_filename, ts_payload.ts_extension)
         ts_status = TSComputeAssetStatus(
             bool(ts_payload.ts_is_indexed),
             bool(ts_payload.ts_has_preview),
@@ -279,8 +283,8 @@ class TSDatabase:
                 path, filename, preview_path, mtime_ns, size_bytes, hash, tags, rating, created_at,
                 duration, width, height, fps, technical_json,
                 type_lookup_id, extension_lookup_id, root_lookup_id, folder_lookup_id,
-                is_indexed, has_preview, has_metadata, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                is_indexed, has_preview, has_metadata, companion_stem, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET
                 filename = excluded.filename,
                 preview_path = excluded.preview_path,
@@ -302,6 +306,7 @@ class TSDatabase:
                 is_indexed = excluded.is_indexed,
                 has_preview = excluded.has_preview,
                 has_metadata = excluded.has_metadata,
+                companion_stem = excluded.companion_stem,
                 status = excluded.status
             """,
             (
@@ -326,13 +331,17 @@ class TSDatabase:
                 1 if ts_payload.ts_is_indexed else 0,
                 1 if ts_payload.ts_has_preview else 0,
                 1 if ts_payload.ts_has_metadata else 0,
+                ts_companion_stem,
                 ts_status,
             ),
         )
-        ts_row = self.TSGetAssetByPath(ts_payload.ts_path)
-        if ts_row is None:
+        ts_id_row = ts_connection.execute(
+            "SELECT id FROM assets WHERE path = ?",
+            (ts_payload.ts_path,),
+        ).fetchone()
+        if ts_id_row is None:
             raise RuntimeError(f"Unable to upsert asset {ts_payload.ts_path}")
-        ts_asset_id = int(ts_row["id"])
+        ts_asset_id = int(ts_id_row["id"])
         ts_has_stored_metadata = bool(
             (ts_payload.ts_metadata or "{}") != "{}"
             or ts_payload.ts_prompt_text
@@ -359,6 +368,11 @@ class TSDatabase:
             ts_connection.execute("DELETE FROM asset_metadata WHERE asset_id = ?", (ts_asset_id,))
         self._TSSyncFTSRow(ts_asset_id, ts_payload.ts_filename)
         self._TSSyncUserFields(ts_payload.ts_path, ts_payload.ts_tags, ts_payload.ts_rating, ts_payload.ts_created_at)
+        return ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id
+
+    def TSUpsertAsset(self, ts_payload: TSAssetPayload) -> sqlite3.Row:
+        ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id = self._TSDoUpsertAsset(ts_payload)
+        self._TSRecomputeCompanionFlags({(ts_root_lookup_id, ts_folder_lookup_id)})
         ts_row = self.TSGetAssetById(ts_asset_id)
         if ts_row is None:
             raise RuntimeError(f"Unable to fetch asset after upsert {ts_payload.ts_path}")
@@ -376,17 +390,71 @@ class TSDatabase:
         if not ts_payloads:
             return []
         ts_connection = self.TSGetConnection()
-        ts_rows: list[sqlite3.Row] = []
+        ts_asset_ids: list[int] = []
+        ts_touched_folders: set[tuple[int, int]] = set()
         ts_connection.execute("BEGIN IMMEDIATE")
         try:
             for ts_payload in ts_payloads:
-                ts_rows.append(self.TSUpsertAsset(ts_payload))
+                ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id = self._TSDoUpsertAsset(ts_payload)
+                ts_asset_ids.append(ts_asset_id)
+                ts_touched_folders.add((ts_root_lookup_id, ts_folder_lookup_id))
         except Exception:
             ts_connection.execute("ROLLBACK")
             raise
         ts_connection.execute("COMMIT")
-        TSLogVerbose("db.assets.upserted.batch", count=len(ts_rows))
+        self._TSRecomputeCompanionFlags(ts_touched_folders)
+        ts_rows: list[sqlite3.Row] = []
+        for ts_asset_id in ts_asset_ids:
+            ts_row = self.TSGetAssetById(ts_asset_id)
+            if ts_row is not None:
+                ts_rows.append(ts_row)
+        TSLogVerbose("db.assets.upserted.batch", count=len(ts_rows), affected_folders=len(ts_touched_folders))
         return ts_rows
+
+    def _TSRecomputeCompanionFlags(self, ts_folder_keys: set[tuple[int, int]]) -> None:
+        if not ts_folder_keys:
+            return
+        ts_connection = self.TSGetConnection()
+        ts_image_row = ts_connection.execute(
+            "SELECT id FROM asset_types WHERE type_key = 'image'"
+        ).fetchone()
+        if ts_image_row is None:
+            return
+        ts_image_type_id = int(ts_image_row["id"])
+        ts_non_image_placeholders = ",".join("?" for _ in TS_COMPANION_NON_IMAGE_TYPE_KEYS)
+        ts_non_image_rows = ts_connection.execute(
+            f"SELECT id FROM asset_types WHERE type_key IN ({ts_non_image_placeholders})",
+            TS_COMPANION_NON_IMAGE_TYPE_KEYS,
+        ).fetchall()
+        ts_non_image_type_ids = [int(ts_row["id"]) for ts_row in ts_non_image_rows]
+        if not ts_non_image_type_ids:
+            for ts_root_lookup_id, ts_folder_lookup_id in ts_folder_keys:
+                ts_connection.execute(
+                    "UPDATE assets SET is_companion_image = 0 "
+                    "WHERE root_lookup_id = ? AND folder_lookup_id = ? AND type_lookup_id = ?",
+                    (ts_root_lookup_id, ts_folder_lookup_id, ts_image_type_id),
+                )
+            return
+        ts_id_placeholders = ",".join("?" for _ in ts_non_image_type_ids)
+        ts_update_sql = f"""
+            UPDATE assets
+            SET is_companion_image = CASE WHEN companion_stem != '' AND EXISTS (
+                SELECT 1 FROM assets AS sib
+                WHERE sib.id != assets.id
+                  AND sib.root_lookup_id = assets.root_lookup_id
+                  AND sib.folder_lookup_id = assets.folder_lookup_id
+                  AND sib.companion_stem = assets.companion_stem
+                  AND sib.type_lookup_id IN ({ts_id_placeholders})
+            ) THEN 1 ELSE 0 END
+            WHERE root_lookup_id = ?
+              AND folder_lookup_id = ?
+              AND type_lookup_id = ?
+        """
+        for ts_root_lookup_id, ts_folder_lookup_id in ts_folder_keys:
+            ts_connection.execute(
+                ts_update_sql,
+                (*ts_non_image_type_ids, ts_root_lookup_id, ts_folder_lookup_id, ts_image_type_id),
+            )
 
     def TSBuildUpdatedPayload(self, ts_row: sqlite3.Row, **ts_overrides: Any) -> TSAssetPayload:
         return TSBuildUpdatedAssetPayload(ts_row, **ts_overrides)
@@ -459,8 +527,16 @@ class TSDatabase:
             return
         ts_placeholders = ",".join("?" for _ in ts_asset_ids)
         ts_connection = self.TSGetConnection()
+        ts_touched_folders: set[tuple[int, int]] = {
+            (int(ts_row["root_lookup_id"]), int(ts_row["folder_lookup_id"]))
+            for ts_row in ts_connection.execute(
+                f"SELECT root_lookup_id, folder_lookup_id FROM assets WHERE id IN ({ts_placeholders})",
+                ts_asset_ids,
+            ).fetchall()
+        }
         ts_connection.execute(f"DELETE FROM assets_fts WHERE rowid IN ({ts_placeholders})", ts_asset_ids)
         ts_connection.execute(f"DELETE FROM assets WHERE id IN ({ts_placeholders})", ts_asset_ids)
+        self._TSRecomputeCompanionFlags(ts_touched_folders)
         TSLogVerbose("db.asset_ids.deleted", count=len(ts_asset_ids), asset_ids=ts_asset_ids)
 
     def TSDeleteAssetPaths(self, ts_paths: list[str]) -> None:

@@ -2,58 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .ts_settings import TS_COMPANION_SUFFIXES
 from .ts_utils import TSBuildFTSQuery
-
-
-def TSFilenameStemSQL(ts_alias: str) -> str:
-    return (
-        "LOWER(CASE "
-        f"WHEN LENGTH({ts_alias}.extension) > 0 "
-        f"THEN SUBSTR({ts_alias}.filename, 1, LENGTH({ts_alias}.filename) - LENGTH({ts_alias}.extension)) "
-        f"ELSE {ts_alias}.filename END)"
-    )
-
-
-def TSNormalizeCompanionStemSQL(ts_expression: str) -> str:
-    ts_cases: list[str] = []
-    for ts_suffix in sorted(TS_COMPANION_SUFFIXES, key=len, reverse=True):
-        ts_suffix_literal = ts_suffix.replace("'", "''")
-        ts_cases.append(
-            f"WHEN {ts_expression} LIKE '%' || '{ts_suffix_literal}' "
-            f"THEN RTRIM(SUBSTR({ts_expression}, 1, LENGTH({ts_expression}) - {len(ts_suffix)}), '._- ')"
-        )
-    ts_cases_sql = " ".join(ts_cases)
-    return f"(CASE {ts_cases_sql} ELSE {ts_expression} END)"
-
-
-def TSCompanionStemSQL(ts_alias: str) -> str:
-    return TSNormalizeCompanionStemSQL(TSFilenameStemSQL(ts_alias))
-
-
-def TSCompanionImageExclusionClause(ts_outer_alias: str = "assets_view") -> str:
-    ts_outer_stem = TSCompanionStemSQL(ts_outer_alias)
-    ts_inner_stem = TSCompanionStemSQL("companion_view")
-    return f"""(
-            {ts_outer_alias}.type != 'image'
-            OR NOT EXISTS (
-                SELECT 1
-                FROM assets_view AS companion_view
-                WHERE companion_view.id != {ts_outer_alias}.id
-                  AND companion_view.root_id = {ts_outer_alias}.root_id
-                  AND companion_view.folder_path = {ts_outer_alias}.folder_path
-                  AND companion_view.type IN ('video', 'audio', '3d')
-                  AND {ts_inner_stem} = {ts_outer_stem}
-            )
-        )"""
-
-
-def TSFilterIncludesType(ts_filters: dict[str, Any] | None, ts_type_key: str) -> bool:
-    ts_filters = ts_filters or {}
-    ts_types = list(ts_filters.get("types") or [])
-    if not ts_types:
-        return True
-    return ts_type_key in ts_types
 
 
 def TSBuildAssetQueryParts(
@@ -118,8 +67,7 @@ def TSBuildAssetQueryParts(
         ts_where_clauses.append("assets_view.rating <= ?")
         ts_parameters.append(int(ts_filters["max_rating"]))
 
-    if TSFilterIncludesType(ts_filters, "image"):
-        ts_where_clauses.append(TSCompanionImageExclusionClause("assets_view"))
+    ts_where_clauses.append("assets_view.is_companion_image = 0")
     ts_where_sql = f" WHERE {' AND '.join(ts_where_clauses)}" if ts_where_clauses else ""
     ts_sort_key = str(ts_filters.get("sort_key") or "created_at")
     ts_sort_direction = "ASC" if str(ts_filters.get("sort_direction")).lower() == "asc" else "DESC"
