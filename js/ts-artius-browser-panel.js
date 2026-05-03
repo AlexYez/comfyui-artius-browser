@@ -527,6 +527,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 }
 
                 .ts-title {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
                     font-size: 13px;
                     font-weight: 600;
                     letter-spacing: 0.02em;
@@ -539,6 +542,30 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
                 .ts-title-link:hover {
                     text-decoration: underline;
+                }
+
+                .ts-donate {
+                    display: inline-flex;
+                    align-items: center;
+                    padding: 1px 7px;
+                    border-radius: 6px;
+                    border: 1px solid transparent;
+                    background: #8b7fc4;
+                    color: #ffffff;
+                    font-size: 10px;
+                    font-weight: 500;
+                    letter-spacing: 0.02em;
+                    text-decoration: none;
+                    transition: background 0.14s ease, transform 0.06s ease;
+                }
+
+                .ts-donate:hover {
+                    background: #7a6db3;
+                    text-decoration: none;
+                }
+
+                .ts-donate:active {
+                    transform: translateY(1px);
                 }
 
                 .ts-toolbar-main,
@@ -1052,7 +1079,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             </style>
             <div class="ts-shell" tabindex="0">
                 <div class="ts-toolbar">
-                    <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a></div>
+                    <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a></div>
                     <div class="ts-toolbar-main">
                         <div class="ts-toolbar-cluster ts-section-group">
                             <button class="ts-section-button ts-section-assets" type="button"></button>
@@ -1104,6 +1131,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsShell: this.shadowRoot.querySelector(".ts-shell"),
             tsTitle: this.shadowRoot.querySelector(".ts-title"),
             tsTitleLink: this.shadowRoot.querySelector(".ts-title-link"),
+            tsDonate: this.shadowRoot.querySelector(".ts-donate"),
             tsSectionAssets: this.shadowRoot.querySelector(".ts-section-assets"),
             tsSectionWorkflows: this.shadowRoot.querySelector(".ts-section-workflows"),
             tsSearch: this.shadowRoot.querySelector(".ts-search"),
@@ -1597,6 +1625,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
     tsHydrateText() {
         this.tsRefs.tsTitleLink.textContent = this.tsT("panel.title", tsProjectSettings.title);
+        this.tsRefs.tsDonate.textContent = this.tsT("button.donate", "Donate");
+        this.tsRefs.tsDonate.title = this.tsT("tooltip.donate", "Support the project.");
         this.tsRefs.tsSectionAssets.textContent = this.tsT("button.assets", "Assets");
         this.tsRefs.tsSectionWorkflows.textContent = this.tsT("button.workflows", "Workflows");
         this.tsRefs.tsSortDirection.title = this.tsT("tooltip.sortDirection", "Toggle ascending and descending sorting.");

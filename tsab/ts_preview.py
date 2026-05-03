@@ -3,12 +3,30 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import logging
 import shutil
+from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .ts_logging import TSLogVerbose
+
+
+def _TSDetectPillowSimd() -> bool:
+    try:
+        distribution("Pillow-SIMD")
+        return True
+    except PackageNotFoundError:
+        return False
+    except Exception:
+        return False
+
+
+if _TSDetectPillowSimd():
+    logging.getLogger("TSArtiusBrowser").info(
+        "Pillow-SIMD detected — accelerated image pipeline enabled"
+    )
 from .ts_settings import (
     TS_DEFAULT_PLACEHOLDER_HEIGHT,
     TS_DEFAULT_PLACEHOLDER_WIDTH,
@@ -112,6 +130,60 @@ class TSPreviewCache:
             TSLogVerbose("preview.video.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
             return self.TSGetTypePlaceholderPreview("video")
         return self.TSRelativePreviewPath(ts_output_path)
+
+    def TSGenerateVideoPosterParallel(
+        self,
+        ts_source_path: Path,
+        ts_preview_key: str,
+        ts_tools,
+    ) -> tuple[dict, str]:
+        ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "video_frames")
+        if ts_output_path.exists():
+            ts_probe = ts_tools.TSRunFFProbe(ts_source_path)
+            return ts_probe, self.TSRelativePreviewPath(ts_output_path)
+        ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "video_frames", ".source.png")
+        ts_frame_time = float(self._TSPreviewConfig().get("video_frame_time", 0.5))
+        ts_max_output_dim = max(self._TSThumbnailSize() * 2, 256)
+        ts_probe, ts_frame_success = ts_tools.TSRunFFProbeAndExtractFrameParallel(
+            ts_source_path, ts_temp_path, ts_frame_time, ts_max_output_dim=ts_max_output_dim
+        )
+        if not ts_frame_success:
+            return ts_probe, self.TSGetTypePlaceholderPreview("video")
+        try:
+            self._TSNormalizePreviewFile(ts_temp_path, ts_output_path)
+        except Exception as ts_error:
+            TSLogVerbose("preview.video.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
+            return ts_probe, self.TSGetTypePlaceholderPreview("video")
+        return ts_probe, self.TSRelativePreviewPath(ts_output_path)
+
+    def TSGenerateWaveformPreviewParallel(
+        self,
+        ts_source_path: Path,
+        ts_preview_key: str,
+        ts_tools,
+    ) -> tuple[dict, str]:
+        ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "waveforms")
+        ts_waveform_width, ts_waveform_height = self._TSWaveformSize()
+        if ts_output_path.exists() and self._TSPreviewHasMinimumSize(ts_output_path, ts_waveform_width, ts_waveform_height):
+            ts_probe = ts_tools.TSRunFFProbe(ts_source_path)
+            return ts_probe, self.TSRelativePreviewPath(ts_output_path)
+        if ts_output_path.exists():
+            try:
+                ts_output_path.unlink()
+            except OSError:
+                pass
+        ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "waveforms", ".source.png")
+        ts_probe, ts_waveform_success = ts_tools.TSRunFFProbeAndExtractWaveformParallel(
+            ts_source_path, ts_temp_path, ts_waveform_width, ts_waveform_height
+        )
+        if not ts_waveform_success:
+            return ts_probe, self.TSGetTypePlaceholderPreview("audio")
+        try:
+            self._TSNormalizePreviewFile(ts_temp_path, ts_output_path, ts_resize_to_thumbnail=False)
+        except Exception as ts_error:
+            TSLogVerbose("preview.waveform.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
+            return ts_probe, self.TSGetTypePlaceholderPreview("audio")
+        return ts_probe, self.TSRelativePreviewPath(ts_output_path)
 
     def TSGenerateWaveformPreview(self, ts_source_path: Path, ts_preview_key: str, ts_tools) -> str:
         ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "waveforms")
@@ -288,7 +360,7 @@ class TSPreviewCache:
             ts_save_kwargs = {
                 "format": "WEBP",
                 "quality": ts_quality,
-                "method": 4,
+                "method": 0,
             }
         ts_image.save(ts_output_path, **ts_save_kwargs)
 

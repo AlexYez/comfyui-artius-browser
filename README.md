@@ -202,6 +202,13 @@ The project is intentionally conservative about performance:
 - stale-while-revalidate response cache on the frontend (LRU 10, 30s TTL) for instant filter / sort re-toggles
 - frontend-only workflow browsing
 - frontend-generated true 3D thumbnails, persisted into cache
+- video and audio indexing runs `ffprobe` and `ffmpeg` in parallel per asset (single Popen pair instead of two sequential calls)
+- `ffprobe_workers` and `ffmpeg_workers` default to `min(4, cpu_count() // 2)` — adjust in `config.json` if needed
+- video poster extraction asks `ffmpeg` to pre-downscale the captured frame so PIL only has to LANCZOS-finish a small image
+- WebP previews are written with `method=0` for fastest encoding (visually identical at thumbnail sizes)
+- batch asset upserts share resolved root/folder/type/extension lookups in one transaction
+- optional: install `Pillow-SIMD` instead of stock `Pillow` for 4–6× faster image thumbnailing — the backend logs `Pillow-SIMD detected` on startup when it is in use
+- optional: keeping `blake3` installed (it is in `requirements.txt`) avoids the slower `blake2b` fallback during hashing — a `WARNING` is logged if it is missing
 
 ### Installation
 
@@ -215,6 +222,17 @@ pip install -r requirements.txt
 3. Make sure `ffmpeg` and `ffprobe` are available
 4. Restart ComfyUI
 5. Hard refresh with `Ctrl+F5`
+
+#### Optional: Pillow-SIMD
+
+For 4–6× faster image thumbnailing on x86_64 systems with SSE/AVX, replace stock Pillow with Pillow-SIMD:
+
+```bash
+pip uninstall pillow
+pip install pillow-simd
+```
+
+The backend will log `Pillow-SIMD detected — accelerated image pipeline enabled` at startup when it is active. Pillow-SIMD is a drop-in API-compatible replacement, no code changes required.
 
 ### Release checks
 
@@ -326,6 +344,16 @@ Then restart ComfyUI and scan again.
 - companion-картинки (PNG-сайдкары к видео/аудио/3D с тем же stem) скрываются через сохранённый флаг, посчитанный на индексации — без подзапросов в query-time
 - временные frontend listeners у viewer/worker снимаются при закрытии stage или остановке worker
 - фронтенд держит небольшой stale-while-revalidate кэш ответов (LRU 10, TTL 30 сек) для мгновенного переключения между уже виденными фильтрами/сортировкой
+
+### Производительность
+
+- индексация видео и аудио запускает `ffprobe` и `ffmpeg` параллельно (один pair Popen вместо двух последовательных вызовов)
+- `ffprobe_workers` и `ffmpeg_workers` по умолчанию равны `min(4, cpu_count() // 2)` — старые значения `1` автоматически мигрируют при обновлении
+- ffmpeg сразу делает downscale кадра видео до 2× размера превью, PIL только финиширует LANCZOS — экономит decode на 4K-видео
+- WebP-превью пишутся с `method=0` (быстрейшее кодирование, визуально идентично на маленьких размерах)
+- batch-upsert ассетов внутри одной транзакции переиспользует уже разрешённые root/folder/type/extension lookup'ы
+- опционально: установка `Pillow-SIMD` вместо обычного `Pillow` ускоряет генерацию thumbnail в 4–6×; backend пишет `Pillow-SIMD detected` в лог при старте
+- опционально: `blake3` (есть в `requirements.txt`) даёт заметное ускорение хеширования — при его отсутствии в логе появится `WARNING` и используется более медленный `blake2b`
 
 ### Установка
 

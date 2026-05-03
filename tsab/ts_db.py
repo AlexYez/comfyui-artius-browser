@@ -188,12 +188,41 @@ class TSDatabase:
         TSLogVerbose("db.root_asset_refs", root_ids=ts_root_ids, rows=len(ts_rows))
         return ts_rows
 
-    def _TSDoUpsertAsset(self, ts_payload: TSAssetPayload) -> tuple[int, int, int]:
+    def _TSCachedEnsure(self, ts_lookup_cache: dict | None, ts_cache_key: tuple, ts_factory):
+        if ts_lookup_cache is None:
+            return ts_factory()
+        ts_value = ts_lookup_cache.get(ts_cache_key)
+        if ts_value is None:
+            ts_value = ts_factory()
+            ts_lookup_cache[ts_cache_key] = ts_value
+        return ts_value
+
+    def _TSDoUpsertAsset(
+        self,
+        ts_payload: TSAssetPayload,
+        ts_lookup_cache: dict | None = None,
+    ) -> tuple[int, int, int]:
         ts_connection = self.TSGetConnection()
-        ts_root_lookup_id = self._TSEnsureRootLookupId(ts_payload.ts_root_id, ts_payload.ts_scope)
-        ts_type_lookup_id = self._TSEnsureLookupId("asset_types", "type_key", ts_payload.ts_type)
-        ts_extension_lookup_id = self._TSEnsureLookupId("asset_extensions", "extension_key", ts_payload.ts_extension)
-        ts_folder_lookup_id = self._TSEnsureFolderLookupId(ts_root_lookup_id, ts_payload.ts_folder_path)
+        ts_root_lookup_id = self._TSCachedEnsure(
+            ts_lookup_cache,
+            ("root", ts_payload.ts_root_id, ts_payload.ts_scope),
+            lambda: self._TSEnsureRootLookupId(ts_payload.ts_root_id, ts_payload.ts_scope),
+        )
+        ts_type_lookup_id = self._TSCachedEnsure(
+            ts_lookup_cache,
+            ("type", ts_payload.ts_type),
+            lambda: self._TSEnsureLookupId("asset_types", "type_key", ts_payload.ts_type),
+        )
+        ts_extension_lookup_id = self._TSCachedEnsure(
+            ts_lookup_cache,
+            ("ext", ts_payload.ts_extension),
+            lambda: self._TSEnsureLookupId("asset_extensions", "extension_key", ts_payload.ts_extension),
+        )
+        ts_folder_lookup_id = self._TSCachedEnsure(
+            ts_lookup_cache,
+            ("folder", ts_root_lookup_id, ts_payload.ts_folder_path),
+            lambda: self._TSEnsureFolderLookupId(ts_root_lookup_id, ts_payload.ts_folder_path),
+        )
         ts_companion_stem = TSComputeCompanionStemFromFilename(ts_payload.ts_filename, ts_payload.ts_extension)
         ts_status = TSComputeAssetStatus(
             bool(ts_payload.ts_is_indexed),
@@ -310,10 +339,11 @@ class TSDatabase:
         ts_connection = self.TSGetConnection()
         ts_asset_ids: list[int] = []
         ts_touched_folders: set[tuple[int, int]] = set()
+        ts_lookup_cache: dict = {}
         ts_connection.execute("BEGIN IMMEDIATE")
         try:
             for ts_payload in ts_payloads:
-                ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id = self._TSDoUpsertAsset(ts_payload)
+                ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id = self._TSDoUpsertAsset(ts_payload, ts_lookup_cache)
                 ts_asset_ids.append(ts_asset_id)
                 ts_touched_folders.add((ts_root_lookup_id, ts_folder_lookup_id))
         except Exception:
