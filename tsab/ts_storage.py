@@ -72,8 +72,23 @@ class TSStoragePaths:
     def TSResolveCachePath(self, ts_relative_cache_path: str) -> Path:
         ts_candidate = Path(ts_relative_cache_path)
         if ts_candidate.is_absolute():
-            return ts_candidate.resolve()
-        return (self.ts_asset_browser_directory / ts_candidate).resolve()
+            ts_resolved = ts_candidate.resolve()
+        else:
+            ts_resolved = (self.ts_asset_browser_directory / ts_candidate).resolve()
+        ts_root = self.ts_asset_browser_directory.resolve()
+        try:
+            ts_resolved.relative_to(ts_root)
+        except ValueError as ts_error:
+            TSLogVerbose(
+                "storage.cache_path.outside_root",
+                cache_root=str(ts_root),
+                requested_path=str(ts_relative_cache_path),
+                resolved_path=str(ts_resolved),
+            )
+            raise ValueError(
+                f"Cache path '{ts_relative_cache_path}' resolves outside asset browser cache root"
+            ) from ts_error
+        return ts_resolved
 
     def TSBuildBaseRoots(self, ts_config: dict) -> list[TSRootDefinition]:
         ts_roots: list[TSRootDefinition] = []

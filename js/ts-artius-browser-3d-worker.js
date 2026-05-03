@@ -97,14 +97,17 @@ class TSGlobal3DThumbnailWorker {
         return this.tsRun(tsReason);
     }
 
-    tsBuildSearchPath(tsOffset = 0) {
+    tsBuildSearchPath(tsCursor = null) {
         const tsParams = new URLSearchParams();
-        tsParams.set("offset", String(Math.max(0, Number(tsOffset) || 0)));
         tsParams.set("limit", String(Math.max(1, Number(tsPanelSettings.threeDThumbnails?.backgroundPageSize || 8))));
         tsParams.set("view", "flat");
         tsParams.set("sort", "created_at");
         tsParams.set("order", "desc");
         tsParams.set("types", "3d");
+        if (tsCursor && tsCursor.sort_value !== undefined && tsCursor.sort_value !== null && tsCursor.id) {
+            tsParams.set("after_sort", String(tsCursor.sort_value));
+            tsParams.set("after_id", String(tsCursor.id));
+        }
         return `${tsRouteBase}/search?${tsParams.toString()}`;
     }
 
@@ -134,9 +137,9 @@ class TSGlobal3DThumbnailWorker {
         this.tsRunning = true;
         const tsRunToken = ++this.tsRunToken;
         try {
-            let tsOffset = 0;
+            let tsCursor = null;
             while (!this.tsDisposed && tsRunToken === this.tsRunToken) {
-                const tsPayload = await tsFetchJSON(this.tsBuildSearchPath(tsOffset));
+                const tsPayload = await tsFetchJSON(this.tsBuildSearchPath(tsCursor));
                 const tsStatus = tsPayload?.scan_status || {};
                 this.tsScanRunning = Boolean(tsStatus.running);
                 if (this.tsScanRunning) {
@@ -156,10 +159,10 @@ class TSGlobal3DThumbnailWorker {
                         tsConsoleWarn("Timesaver Artius Browser global 3D thumbnail capture failed", tsError);
                     }
                 }
-                if (!tsPayload?.has_more) {
+                if (!tsPayload?.has_more || !tsPayload?.next_cursor) {
                     break;
                 }
-                tsOffset += tsItems.length;
+                tsCursor = tsPayload.next_cursor;
             }
             return true;
         } catch (tsError) {

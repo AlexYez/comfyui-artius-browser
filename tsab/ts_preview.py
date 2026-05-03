@@ -79,7 +79,11 @@ class TSPreviewCache:
     def TSPurgePreview(self, ts_preview_path: str | None) -> None:
         if not ts_preview_path or self.TSIsPlaceholderPreview(ts_preview_path):
             return
-        ts_absolute_path = self.TSResolvePreviewPath(ts_preview_path)
+        try:
+            ts_absolute_path = self.TSResolvePreviewPath(ts_preview_path)
+        except ValueError as ts_error:
+            TSLogVerbose("preview.purge.skipped", path=str(ts_preview_path), error=str(ts_error))
+            return
         try:
             if ts_absolute_path.exists():
                 ts_absolute_path.unlink()

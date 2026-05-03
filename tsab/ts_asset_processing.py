@@ -35,9 +35,15 @@ class TSAssetProcessingService:
         if ts_row is None:
             return {"queued": False, "reason": "missing"}
         ts_preview_path = str(ts_row["preview_path"] or "")
-        if bool(ts_row["has_preview"]) and ts_preview_path and self.ts_preview_cache.TSResolvePreviewPath(ts_preview_path).exists():
+        if bool(ts_row["has_preview"]) and ts_preview_path and self._TSPreviewFileReady(ts_preview_path):
             return {"queued": False, "reason": "ready"}
         return {"queued": False, "reason": "disabled"}
+
+    def _TSPreviewFileReady(self, ts_preview_path: str) -> bool:
+        try:
+            return self.ts_preview_cache.TSResolvePreviewPath(ts_preview_path).exists()
+        except ValueError:
+            return False
 
     def TSEnsureIndexed(self, ts_row):
         if ts_row is None:
@@ -102,7 +108,7 @@ class TSAssetProcessingService:
             if ts_fresh_row is None:
                 return None
             ts_preview_path = str(ts_fresh_row["preview_path"] or "")
-            if bool(ts_fresh_row["has_preview"]) and ts_preview_path and self.ts_preview_cache.TSResolvePreviewPath(ts_preview_path).exists():
+            if bool(ts_fresh_row["has_preview"]) and ts_preview_path and self._TSPreviewFileReady(ts_preview_path):
                 return ts_fresh_row
             ts_handler = self.ts_handler_registry.TSResolveHandler(str(ts_fresh_row["extension"] or ""), str(ts_fresh_row["type"] or ""))
             if ts_handler is None:
