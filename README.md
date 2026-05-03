@@ -207,6 +207,7 @@ The project is intentionally conservative about performance:
 - video poster extraction asks `ffmpeg` to pre-downscale the captured frame so PIL only has to LANCZOS-finish a small image
 - WebP previews are written with `method=0` for fastest encoding (visually identical at thumbnail sizes)
 - batch asset upserts share resolved root/folder/type/extension lookups in one transaction
+- preview URLs include the cached preview file's `mtime` as a cache-busting token, so any Rebuild Cache (or self-heal regeneration) invalidates the browser HTTP cache automatically — no hard refresh needed
 - optional: install `Pillow-SIMD` instead of stock `Pillow` for 4–6× faster image thumbnailing — the backend logs `Pillow-SIMD detected` on startup when it is in use
 - optional: keeping `blake3` installed (it is in `requirements.txt`) avoids the slower `blake2b` fallback during hashing — a `WARNING` is logged if it is missing
 
@@ -260,9 +261,8 @@ Important files:
 
 #### Some previews look stale
 
-- use `Rebuild Cache`
-- restart ComfyUI
-- hard refresh with `Ctrl+F5`
+- use `Rebuild Cache` (preview URLs auto-bust browser HTTP cache via `mtime` token, so a hard refresh is usually not needed)
+- if it still looks stale, restart ComfyUI and hard refresh with `Ctrl+F5`
 
 #### Video or audio metadata is missing
 
@@ -352,6 +352,7 @@ Then restart ComfyUI and scan again.
 - ffmpeg сразу делает downscale кадра видео до 2× размера превью, PIL только финиширует LANCZOS — экономит decode на 4K-видео
 - WebP-превью пишутся с `method=0` (быстрейшее кодирование, визуально идентично на маленьких размерах)
 - batch-upsert ассетов внутри одной транзакции переиспользует уже разрешённые root/folder/type/extension lookup'ы
+- URL превью содержит `mtime` файла-превью как cache-busting токен — после Rebuild Cache (или self-heal перегенерации) браузер автоматически загружает свежие превью без hard refresh
 - опционально: установка `Pillow-SIMD` вместо обычного `Pillow` ускоряет генерацию thumbnail в 4–6×; backend пишет `Pillow-SIMD detected` в лог при старте
 - опционально: `blake3` (есть в `requirements.txt`) даёт заметное ускорение хеширования — при его отсутствии в логе появится `WARNING` и используется более медленный `blake2b`
 

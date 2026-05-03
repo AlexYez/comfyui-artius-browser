@@ -600,7 +600,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 }
 
                 .ts-root-select,
-                .ts-sort-select {
+                .ts-sort-select,
+                .ts-sort-direction {
                     appearance: none;
                     -webkit-appearance: none;
                     font: inherit;
@@ -617,6 +618,18 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         calc(100% - 9px) calc(50% - 2px);
                     background-size: 5px 5px, 5px 5px;
                     background-repeat: no-repeat;
+                }
+
+                .ts-sort-select,
+                .ts-sort-direction {
+                    padding: 0 20px 0 10px;
+                    background-position:
+                        calc(100% - 11px) calc(50% - 2px),
+                        calc(100% - 6px) calc(50% - 2px);
+                }
+
+                .ts-sort-group {
+                    gap: 3px;
                 }
 
                 .ts-root-select option,
@@ -1094,7 +1107,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         </div>
                         <div class="ts-toolbar-cluster ts-sort-group">
                             <select class="ts-sort-select"></select>
-                            <button class="ts-sort-direction" type="button"></button>
+                            <select class="ts-sort-direction"></select>
                         </div>
                         <div class="ts-toolbar-cluster ts-mode-group">
                             <button class="ts-mode-button ts-mode-flat" type="button"></button>
@@ -1223,14 +1236,15 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         });
         this.tsRefs.tsSortSelect.addEventListener("change", (tsEvent) => {
             this.tsState.tsSortKey = tsEvent.target.value;
+            this.tsResizeSelectToCurrent(this.tsRefs.tsSortSelect);
             this.tsSyncSectionSettingsFromActive();
             this.tsQueueSaveUISettings();
             this.tsFetchAssets(true);
         });
-        this.tsRefs.tsSortDirection.addEventListener("click", () => {
-            this.tsState.tsSortDirection = this.tsState.tsSortDirection === "asc" ? "desc" : "asc";
+        this.tsRefs.tsSortDirection.addEventListener("change", (tsEvent) => {
+            this.tsState.tsSortDirection = tsEvent.target.value;
             this.tsSyncSectionSettingsFromActive();
-            this.tsRenderSortDirectionLabel();
+            this.tsResizeSelectToCurrent(this.tsRefs.tsSortDirection);
             this.tsQueueSaveUISettings();
             this.tsFetchAssets(true);
         });
@@ -1703,8 +1717,23 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             .map(([tsValue, tsLabel]) => `<option value="${tsValue}">${tsLabel}</option>`)
             .join("");
         this.tsRefs.tsSortSelect.value = this.tsState.tsSortKey;
-        const tsLongestLabelLength = Math.max(...tsOptions.map(([, tsLabel]) => String(tsLabel || "").length), 4);
-        this.tsRefs.tsSortSelect.style.width = `${Math.max(9, tsLongestLabelLength + 5)}ch`;
+        this.tsResizeSelectToCurrent(this.tsRefs.tsSortSelect);
+    }
+
+    tsResizeSelectToCurrent(tsSelect) {
+        const tsCurrentOption = tsSelect?.selectedOptions?.[0];
+        if (!tsCurrentOption) {
+            return;
+        }
+        if (!this.tsTextMeasureCanvas) {
+            this.tsTextMeasureCanvas = document.createElement("canvas");
+        }
+        const tsCtx = this.tsTextMeasureCanvas.getContext("2d");
+        const tsComputed = window.getComputedStyle(tsSelect);
+        tsCtx.font = `${tsComputed.fontWeight} ${tsComputed.fontSize} ${tsComputed.fontFamily}`;
+        const tsTextWidth = tsCtx.measureText(tsCurrentOption.textContent || "").width;
+        // 10px left padding + 20px right padding (arrow zone) + 2px breathing room
+        tsSelect.style.width = `${Math.ceil(tsTextWidth + 32)}px`;
     }
 
     tsRenderTypeChips() {
@@ -2090,17 +2119,23 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     tsRenderListOnly() {
         this.tsRenderProgress();
         this.tsRenderHealth();
-        this.tsRenderSortDirectionLabel();
+        this.tsRenderSortDirection();
         this.tsRenderModeButtons();
         this.tsRenderTree(true);
         this.tsRenderGrid(true);
         this.tsRenderSelectionButtons();
     }
 
-    tsRenderSortDirectionLabel() {
-        this.tsRefs.tsSortDirection.textContent = this.tsState.tsSortDirection === "asc"
-            ? this.tsT("button.sortAsc", "Asc")
-            : this.tsT("button.sortDesc", "Desc");
+    tsRenderSortDirection() {
+        const tsOptions = [
+            ["desc", this.tsT("button.sortDesc", "Desc")],
+            ["asc", this.tsT("button.sortAsc", "Asc")],
+        ];
+        this.tsRefs.tsSortDirection.innerHTML = tsOptions
+            .map(([tsValue, tsLabel]) => `<option value="${tsValue}">${tsLabel}</option>`)
+            .join("");
+        this.tsRefs.tsSortDirection.value = this.tsState.tsSortDirection || "desc";
+        this.tsResizeSelectToCurrent(this.tsRefs.tsSortDirection);
     }
 
     tsRenderRootOptions() {
@@ -2119,7 +2154,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsQueueSaveUISettings();
         }
         this.tsRefs.tsRootSelect.value = this.tsState.tsRootId;
-        this.tsRenderSortDirectionLabel();
+        this.tsRenderSortDirection();
     }
 
     tsRenderModeButtons() {
