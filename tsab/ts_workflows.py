@@ -82,12 +82,17 @@ class TSWorkflowService:
         if not ts_workflow_path.exists():
             raise TSWeb.HTTPNotFound()
         ts_deleted_paths: list[str] = []
+        ts_failed_paths: list[dict[str, str]] = []
         for ts_target_path in [ts_workflow_path, *self.TSFindPreviewSidecars(ts_workflow_path)]:
             if not ts_target_path.exists():
                 continue
-            self.ts_send_to_trash(str(ts_target_path))
+            try:
+                self.ts_send_to_trash(str(ts_target_path))
+            except Exception as ts_error:
+                ts_failed_paths.append({"name": ts_target_path.name, "error": str(ts_error)})
+                continue
             ts_deleted_paths.append(ts_target_path.name)
-        return {"deleted": ts_deleted_paths}
+        return {"deleted": ts_deleted_paths, "failed": ts_failed_paths}
 
     def TSDeleteRequestWorkflowFile(self, ts_request, ts_relative_path: str) -> dict[str, Any]:
         return self.TSDeleteWorkflowFile(self.TSResolveRequestWorkflowPath(ts_request, ts_relative_path))

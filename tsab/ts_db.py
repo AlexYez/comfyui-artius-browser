@@ -44,21 +44,19 @@ class TSDatabase:
 
     def TSMigrate(self) -> None:
         ts_connection = self.TSGetConnection()
-        ts_user_version = int(ts_connection.execute("PRAGMA user_version").fetchone()[0] or 0)
-        if ts_user_version == TS_DB_SCHEMA_VERSION:
+        ts_user_version = int(ts_connection.execute("PRAGMA user_version").fetchone()[0])
+        try:
             ts_connection.executescript(TS_DB_SCHEMA_SQL)
-        else:
-            try:
-                ts_connection.executescript(TS_DB_SCHEMA_SQL)
-            except sqlite3.DatabaseError as ts_error:
-                TSLogVerbose(
-                    "db.migration.additive_failed",
-                    database=str(self.ts_database_path),
-                    from_schema_version=ts_user_version,
-                    to_schema_version=TS_DB_SCHEMA_VERSION,
-                    error=str(ts_error),
-                )
-                self._TSRebuildSchema(ts_connection, ts_user_version, "additive_failed")
+        except sqlite3.DatabaseError as ts_error:
+            TSLogVerbose(
+                "db.migration.additive_failed",
+                database=str(self.ts_database_path),
+                from_schema_version=ts_user_version,
+                to_schema_version=TS_DB_SCHEMA_VERSION,
+                error=str(ts_error),
+            )
+            self._TSRebuildSchema(ts_connection, ts_user_version, "additive_failed")
+        if ts_user_version != TS_DB_SCHEMA_VERSION:
             ts_connection.execute(f"PRAGMA user_version = {TS_DB_SCHEMA_VERSION}")
         TSLogVerbose("db.migrated", database=str(self.ts_database_path), schema_version=TS_DB_SCHEMA_VERSION)
 

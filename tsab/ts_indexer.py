@@ -168,13 +168,6 @@ class TSIndexer:
                                 or int(ts_existing_row["size_bytes"] or 0) != ts_asset_stat.ts_size_bytes
                                 or str(ts_existing_row["type"] or "") != ts_handler.ts_kind
                             )
-                            ts_needs_index = (
-                                ts_stat_changed
-                                or ts_existing_row is None
-                                or not bool(ts_existing_row["is_indexed"])
-                                or not bool(ts_existing_row["has_preview"])
-                                or not bool(ts_existing_row["has_metadata"])
-                            )
                             if ts_stat_changed:
                                 ts_discovered_payload = ts_handler.TSBuildDiscoveredPayload(ts_asset_stat)
                                 ts_discovered_payload = TSCarryExistingRowValues(ts_discovered_payload, ts_existing_row, ts_reset_processing=True)

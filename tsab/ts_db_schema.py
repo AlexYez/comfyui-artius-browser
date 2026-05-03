@@ -136,6 +136,7 @@ LEFT JOIN asset_metadata ON asset_metadata.asset_id = assets.id;
 """
 
 TS_DB_RESET_INDEX_SQL = """
+DROP TABLE IF EXISTS asset_user_fields;
 DELETE FROM assets_fts;
 DELETE FROM asset_metadata;
 DELETE FROM assets;
