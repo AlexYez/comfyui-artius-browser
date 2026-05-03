@@ -55,6 +55,11 @@ def TSParseAssetIdList(ts_value) -> list[int]:
     return ts_asset_ids
 
 
+def TSRejectUnsupportedAssetQueryParams(ts_query) -> None:
+    if "metadata" in ts_query:
+        raise TSWeb.HTTPBadRequest(reason="Unsupported query param: metadata")
+
+
 def TSEnforceRequestContentLength(ts_request, ts_max_bytes: int) -> None:
     ts_headers = getattr(ts_request, "headers", {}) or {}
     ts_content_length = TSParsePositiveAssetId(ts_headers.get("Content-Length") or ts_headers.get("content-length"))
@@ -131,6 +136,7 @@ def TSRegisterRoutes(ts_runtime) -> None:
 
 async def TSHandleAssets(ts_runtime, ts_request):
     TSLogVerbose("route.assets.request", query=dict(ts_request.query), path=ts_request.path)
+    TSRejectUnsupportedAssetQueryParams(ts_request.query)
     ts_filters = {
         "types": TSParseQueryList(ts_request.query.get("types") or ts_request.query.get("filter")),
         "scopes": TSParseQueryList(ts_request.query.get("scope")),
@@ -144,7 +150,6 @@ async def TSHandleAssets(ts_runtime, ts_request):
         "max_height": TSParseMaybeInt(ts_request.query.get("max_height")),
         "min_rating": TSParseMaybeInt(ts_request.query.get("min_rating")),
         "max_rating": TSParseMaybeInt(ts_request.query.get("max_rating")),
-        "metadata_filter": ts_request.query.get("metadata"),
         "sort_key": ts_request.query.get("sort") or "created_at",
         "sort_direction": ts_request.query.get("order") or "desc",
     }
