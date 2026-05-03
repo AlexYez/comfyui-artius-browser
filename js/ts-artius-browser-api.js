@@ -242,15 +242,25 @@ export function tsEnsureSidebarIconStyle() {
     if (document.getElementById("ts-artius-sidebar-icon-style")) {
         return;
     }
+    const tsIconURL = new URL("./icons/ts-browser-icon.svg", import.meta.url).href;
     const tsStyle = document.createElement("style");
     tsStyle.id = "ts-artius-sidebar-icon-style";
     tsStyle.textContent = `
         .tsArtiusSidebarIcon::before {
-            content: 'TS';
-            font-size: 0.72rem;
-            color: currentColor;
-            font-weight: 700;
-            letter-spacing: 0.04em;
+            content: '';
+            display: inline-block;
+            width: 1.25em;
+            height: 1.25em;
+            background-color: currentColor;
+            -webkit-mask-image: url("${tsIconURL}");
+            mask-image: url("${tsIconURL}");
+            -webkit-mask-size: contain;
+            mask-size: contain;
+            -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+            -webkit-mask-position: center;
+            mask-position: center;
+            vertical-align: middle;
         }
     `;
     document.head.append(tsStyle);
