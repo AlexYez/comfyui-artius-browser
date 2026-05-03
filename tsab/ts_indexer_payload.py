@@ -15,12 +15,8 @@ def TSCarryExistingRowValues(
     if ts_existing_row is None:
         return ts_payload
     ts_created_at = int(ts_existing_row["created_at"] or 0) or ts_payload.ts_created_at
-    ts_tags = str(ts_existing_row["tags"] or "")
-    ts_rating = int(ts_existing_row["rating"] or 0)
-    ts_updates = {
+    ts_updates: dict[str, Any] = {
         "ts_created_at": ts_created_at,
-        "ts_tags": ts_tags,
-        "ts_rating": ts_rating,
     }
     if ts_reset_processing:
         ts_updates.update(

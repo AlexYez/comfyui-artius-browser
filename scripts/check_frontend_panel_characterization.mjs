@@ -267,14 +267,16 @@ function tsRunFormatTests(tsExports) {
 
 function tsRunSearchParamTests(tsPanelClass) {
     const tsDefaultProbe = tsBuildPanelProbe(tsPanelClass);
-    const tsDefaultParams = tsDefaultProbe.tsBuildSearchParams(-8);
+    const tsDefaultParams = tsDefaultProbe.tsBuildSearchParams(null);
     tsAssertParams(tsDefaultParams, {
-        offset: "0",
         limit: "60",
         view: "flat",
         sort: "created_at",
         order: "desc",
     });
+    tsEqual(tsDefaultParams.has("offset"), false, "offset is no longer sent");
+    tsEqual(tsDefaultParams.has("after_sort"), false, "first page omits cursor");
+    tsEqual(tsDefaultParams.has("after_id"), false, "first page omits cursor id");
     tsEqual(tsDefaultParams.has("q"), false, "empty search is omitted");
     tsEqual(tsDefaultParams.has("root_id"), false, "all roots are omitted");
     tsEqual(tsDefaultParams.has("types"), false, "empty type filter is omitted");
@@ -289,9 +291,8 @@ function tsRunSearchParamTests(tsPanelClass) {
         tsSortDirection: "asc",
         tsFolder: "renders/day one",
     });
-    const tsFilteredParams = tsFilteredProbe.tsBuildSearchParams(30);
+    const tsFilteredParams = tsFilteredProbe.tsBuildSearchParams({ sort_key: "filename", sort_value: "shot.png", id: 42 });
     tsAssertParams(tsFilteredParams, {
-        offset: "30",
         limit: "60",
         view: "tree",
         sort: "filename",
@@ -300,17 +301,19 @@ function tsRunSearchParamTests(tsPanelClass) {
         root_id: "output",
         types: "image,video",
         folder: "renders/day one",
+        after_sort: "shot.png",
+        after_id: "42",
     });
 
-    const tsOverrideParams = tsFilteredProbe.tsBuildSearchParams(1, {
+    const tsOverrideParams = tsFilteredProbe.tsBuildSearchParams(null, {
         limit: 5,
         search: "",
         rootId: "all",
         types: [],
         folder: "",
+        cursorAfter: null,
     });
     tsAssertParams(tsOverrideParams, {
-        offset: "1",
         limit: "5",
         view: "tree",
         sort: "filename",
@@ -320,6 +323,7 @@ function tsRunSearchParamTests(tsPanelClass) {
     tsEqual(tsOverrideParams.has("root_id"), false, "override can clear root");
     tsEqual(tsOverrideParams.has("types"), false, "override can clear types");
     tsEqual(tsOverrideParams.has("folder"), false, "override can clear folder");
+    tsEqual(tsOverrideParams.has("after_sort"), false, "override can clear cursor");
 }
 
 function tsRunWorkflowTests(tsPanelClass) {

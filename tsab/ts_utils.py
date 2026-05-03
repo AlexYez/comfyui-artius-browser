@@ -129,3 +129,20 @@ def TSParseDateToEpoch(ts_value: str | None, ts_end_of_day: bool = False) -> int
         ts_date = ts_date.replace(hour=23, minute=59, second=59)
     ts_date = ts_date.replace(tzinfo=timezone.utc)
     return int(ts_date.timestamp())
+
+
+def TSParseAssetCursor(ts_query: Any) -> dict[str, Any] | None:
+    ts_after_sort = ts_query.get("after_sort")
+    ts_after_id = ts_query.get("after_id")
+    if ts_after_sort is None or ts_after_id is None:
+        return None
+    ts_after_sort_text = str(ts_after_sort)
+    if ts_after_sort_text == "":
+        return None
+    try:
+        ts_id_value = int(ts_after_id)
+    except (TypeError, ValueError):
+        return None
+    if ts_id_value <= 0:
+        return None
+    return {"sort_value": ts_after_sort_text, "id": ts_id_value}

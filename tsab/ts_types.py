@@ -53,8 +53,6 @@ class TSAssetPayload:
     ts_is_indexed: bool = False
     ts_has_preview: bool = False
     ts_has_metadata: bool = False
-    ts_tags: str = ""
-    ts_rating: int = 0
 
 
 @dataclass(slots=True)

@@ -251,14 +251,14 @@ class TSAssetBrowserRuntime:
         self,
         ts_search_text: str,
         ts_filters: dict[str, Any],
-        ts_offset: int,
+        ts_cursor_after: dict[str, Any] | None,
         ts_limit: int,
         ts_view: str = "flat",
     ) -> dict[str, Any]:
         return self.ts_asset_catalog.TSQueryAssets(
             ts_search_text=ts_search_text,
             ts_filters=ts_filters,
-            ts_offset=ts_offset,
+            ts_cursor_after=ts_cursor_after,
             ts_limit=ts_limit,
             ts_view=ts_view,
         )

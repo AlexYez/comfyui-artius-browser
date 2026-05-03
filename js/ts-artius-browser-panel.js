@@ -70,6 +70,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsState = {
             tsItems: [],
             tsHasMore: false,
+            tsNextCursor: null,
             tsLoading: false,
             tsSection: "assets",
             tsSearch: "",
@@ -1810,6 +1811,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsState.tsSelection.clear();
         this.tsState.tsLastSelectedIndex = -1;
         this.tsState.tsHasMore = false;
+        this.tsState.tsNextCursor = null;
         this.tsState.tsFolders = [];
         this.ts3DThumbnailPending.clear();
         this.ts3DThumbnailInFlight.clear();
@@ -1851,9 +1853,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         await this.tsRequestRescan({ root_id: "output" });
     }
 
-    tsBuildSearchParams(tsOffset, tsOverrides = {}) {
+    tsBuildSearchParams(tsCursorAfter, tsOverrides = {}) {
         return tsBuildAssetSearchParams({
-            offset: tsOffset,
+            cursorAfter: tsCursorAfter,
             defaultLimit: tsDefaultLimit,
             view: this.tsState.tsMode,
             sortKey: this.tsState.tsSortKey,
@@ -1866,8 +1868,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         });
     }
 
-    tsBuildRequestPath(tsOffset) {
-        const tsParams = this.tsBuildSearchParams(tsOffset);
+    tsBuildRequestPath(tsCursorAfter) {
+        const tsParams = this.tsBuildSearchParams(tsCursorAfter);
         return `${tsRouteBase}/search?${tsParams.toString()}`;
     }
 
@@ -1883,23 +1885,25 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsFetchPromise = (async () => {
             let tsDidMutate = false;
             this.tsState.tsLoading = true;
-            const tsOffset = tsReset ? 0 : this.tsState.tsItems.length;
+            const tsWorkflowOffset = tsReset ? 0 : this.tsState.tsItems.length;
+            const tsCursorForFetch = tsReset ? null : this.tsState.tsNextCursor;
             try {
                 let tsPayload;
                 if (this.tsIsWorkflowSection()) {
                     await this.tsEnsureWorkflowLibrary(false);
                     const tsWorkflowQuery = this.tsBuildWorkflowQueryResult();
-                    const tsWindowItems = tsWorkflowQuery.items.slice(tsOffset, tsOffset + tsDefaultLimit);
+                    const tsWindowItems = tsWorkflowQuery.items.slice(tsWorkflowOffset, tsWorkflowOffset + tsDefaultLimit);
                     tsPayload = {
                         items: tsWindowItems,
-                        has_more: tsOffset + tsWindowItems.length < tsWorkflowQuery.items.length,
+                        has_more: tsWorkflowOffset + tsWindowItems.length < tsWorkflowQuery.items.length,
+                        next_cursor: null,
                         roots: tsWorkflowQuery.roots,
                         folders: tsWorkflowQuery.folders,
                         health: [],
                         scan_status: null,
                     };
                 } else {
-                    tsPayload = await tsFetchJSON(this.tsBuildRequestPath(tsOffset));
+                    tsPayload = await tsFetchJSON(this.tsBuildRequestPath(tsCursorForFetch));
                 }
                 const tsIncomingItems = Array.isArray(tsPayload.items) ? tsPayload.items : [];
                 if (tsReset) {
@@ -1925,6 +1929,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 }
                 this.tsRebuildItemIndex();
                 this.tsState.tsHasMore = Boolean(tsPayload.has_more);
+                this.tsState.tsNextCursor = tsPayload.next_cursor || null;
                 const tsIncomingRoots = Array.isArray(tsPayload.roots) ? tsPayload.roots : [];
                 const tsRootsKey = JSON.stringify(tsIncomingRoots);
                 const tsRootsChanged = tsRootsKey !== this.tsLastRootsKey;

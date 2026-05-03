@@ -39,16 +39,16 @@ class TSAssetCatalogService:
         self,
         ts_search_text: str,
         ts_filters: dict[str, Any],
-        ts_offset: int,
+        ts_cursor_after: dict[str, Any] | None,
         ts_limit: int,
         ts_view: str = "flat",
     ) -> dict[str, Any]:
-        TSLogVerbose("runtime.assets.query", search_text=ts_search_text, filters=ts_filters, offset=ts_offset, limit=ts_limit, view=ts_view)
+        TSLogVerbose("runtime.assets.query", search_text=ts_search_text, filters=ts_filters, cursor_after=ts_cursor_after, limit=ts_limit, view=ts_view)
         self.ts_scan_service.TSMaybeStartInitialAutoscan()
-        ts_rows, ts_has_more = self.ts_database.TSQueryAssetsPage(
+        ts_rows, ts_has_more, ts_next_cursor = self.ts_database.TSQueryAssetsPage(
             ts_search_text=ts_search_text,
             ts_filters=ts_filters,
-            ts_offset=ts_offset,
+            ts_cursor_after=ts_cursor_after,
             ts_limit=ts_limit,
         )
         ts_roots = self._TSRootMap()
@@ -60,9 +60,9 @@ class TSAssetCatalogService:
             ts_root_id_for_tree = ts_filters["root_ids"][0]
         ts_response = {
             "items": [TSBuildAssetCard(ts_row, ts_roots, self.ts_preview_cache) for ts_row in ts_rows],
-            "offset": ts_offset,
             "limit": ts_limit,
             "has_more": ts_has_more,
+            "next_cursor": ts_next_cursor,
             "view": ts_view,
             "scan_status": self.ts_scan_service.TSGetScanStatus(),
             "health": self._TSHealthPayload(),

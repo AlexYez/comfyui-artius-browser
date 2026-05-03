@@ -17,7 +17,9 @@ export function tsBuildAssetSearchParams(tsOptions = {}) {
     const tsFolder = Object.prototype.hasOwnProperty.call(tsOverrides, "folder")
         ? tsOverrides.folder
         : (tsOptions.view === "tree" ? tsOptions.folder : "");
-    tsParams.set("offset", String(Math.max(0, Number(tsOptions.offset) || 0)));
+    const tsCursorAfter = Object.prototype.hasOwnProperty.call(tsOverrides, "cursorAfter")
+        ? tsOverrides.cursorAfter
+        : tsOptions.cursorAfter;
     tsParams.set("limit", String(Math.max(1, tsLimit || tsOptions.defaultLimit)));
     tsParams.set("view", tsView || "flat");
     tsParams.set("sort", tsSortKey || "created_at");
@@ -33,6 +35,14 @@ export function tsBuildAssetSearchParams(tsOptions = {}) {
     }
     if (tsFolder) {
         tsParams.set("folder", String(tsFolder));
+    }
+    if (tsCursorAfter
+        && tsCursorAfter.sort_value !== undefined
+        && tsCursorAfter.sort_value !== null
+        && tsCursorAfter.id !== undefined
+        && tsCursorAfter.id !== null) {
+        tsParams.set("after_sort", String(tsCursorAfter.sort_value));
+        tsParams.set("after_id", String(tsCursorAfter.id));
     }
     return tsParams;
 }

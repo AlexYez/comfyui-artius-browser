@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from .ts_companion import TSComputeCompanionStemFromFilename
 from .ts_db_payload import TSBuildUpdatedAssetPayload, TSComputeAssetStatus, TSPayloadFromAssetRow
-from .ts_db_query import TSBuildAssetQueryParts
+from .ts_db_query import TSBuildAssetQueryParts, TSResolveSortKey
 from .ts_db_schema import TS_DB_DROP_SCHEMA_SQL, TS_DB_RESET_INDEX_SQL, TS_DB_SCHEMA_SQL, TS_DB_SCHEMA_VERSION
 from .ts_logging import TSLogVerbose
 from .ts_types import TSAssetPayload
@@ -48,14 +47,9 @@ class TSDatabase:
         ts_user_version = int(ts_connection.execute("PRAGMA user_version").fetchone()[0] or 0)
         if ts_user_version == TS_DB_SCHEMA_VERSION:
             ts_connection.executescript(TS_DB_SCHEMA_SQL)
-            self._TSBackfillAssetUserFields()
-        elif ts_user_version > TS_DB_SCHEMA_VERSION:
-            self._TSRebuildSchemaPreservingUserFields(ts_connection, ts_user_version, "future_schema")
-            ts_connection.execute(f"PRAGMA user_version = {TS_DB_SCHEMA_VERSION}")
         else:
             try:
                 ts_connection.executescript(TS_DB_SCHEMA_SQL)
-                self._TSBackfillAssetUserFields()
             except sqlite3.DatabaseError as ts_error:
                 TSLogVerbose(
                     "db.migration.additive_failed",
@@ -64,94 +58,24 @@ class TSDatabase:
                     to_schema_version=TS_DB_SCHEMA_VERSION,
                     error=str(ts_error),
                 )
-                self._TSRebuildSchemaPreservingUserFields(ts_connection, ts_user_version, "additive_failed")
+                self._TSRebuildSchema(ts_connection, ts_user_version, "additive_failed")
             ts_connection.execute(f"PRAGMA user_version = {TS_DB_SCHEMA_VERSION}")
         TSLogVerbose("db.migrated", database=str(self.ts_database_path), schema_version=TS_DB_SCHEMA_VERSION)
 
-    def _TSTableExists(self, ts_table_name: str) -> bool:
-        ts_row = self.TSGetConnection().execute(
-            "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name = ?",
-            (ts_table_name,),
-        ).fetchone()
-        return ts_row is not None
-
-    def _TSReadMigrationUserFields(self) -> list[dict[str, Any]]:
-        ts_connection = self.TSGetConnection()
-        ts_rows: list[sqlite3.Row] = []
-        if self._TSTableExists("assets"):
-            try:
-                ts_rows.extend(ts_connection.execute("SELECT path, tags, rating, created_at FROM assets").fetchall())
-            except sqlite3.DatabaseError as ts_error:
-                TSLogVerbose(
-                    "db.migration.user_fields.read_failed",
-                    database=str(self.ts_database_path),
-                    error=str(ts_error),
-                )
-        if self._TSTableExists("asset_user_fields"):
-            ts_rows.extend(
-                ts_connection.execute("SELECT path, tags, rating, created_at FROM asset_user_fields").fetchall()
-            )
-        ts_user_fields: dict[str, dict[str, Any]] = {}
-        for ts_row in ts_rows:
-            ts_path = str(ts_row["path"] or "")
-            if not ts_path:
-                continue
-            ts_user_fields[ts_path] = {
-                "path": ts_path,
-                "tags": str(ts_row["tags"] or ""),
-                "rating": int(ts_row["rating"] or 0),
-                "created_at": int(ts_row["created_at"] or 0),
-            }
-        return list(ts_user_fields.values())
-
-    def _TSRestoreMigrationUserFields(self, ts_user_fields: list[dict[str, Any]]) -> None:
-        if not ts_user_fields:
-            return
-        ts_connection = self.TSGetConnection()
-        ts_connection.executemany(
-            """
-            INSERT INTO asset_user_fields(path, tags, rating, created_at)
-            VALUES (:path, :tags, :rating, :created_at)
-            ON CONFLICT(path) DO UPDATE SET
-                tags = excluded.tags,
-                rating = excluded.rating,
-                created_at = excluded.created_at
-            """,
-            ts_user_fields,
-        )
-        TSLogVerbose("db.migration.user_fields.restored", count=len(ts_user_fields))
-
-    def _TSBackfillAssetUserFields(self) -> None:
-        if not self._TSTableExists("assets"):
-            return
-        self.TSGetConnection().execute(
-            """
-            INSERT INTO asset_user_fields(path, tags, rating, created_at)
-            SELECT path, tags, rating, created_at
-            FROM assets
-            WHERE 1 = 1
-            ON CONFLICT(path) DO NOTHING
-            """
-        )
-
-    def _TSRebuildSchemaPreservingUserFields(
+    def _TSRebuildSchema(
         self,
         ts_connection: sqlite3.Connection,
         ts_user_version: int,
         ts_reason: str,
     ) -> None:
-        ts_user_fields = self._TSReadMigrationUserFields()
         ts_connection.executescript(TS_DB_DROP_SCHEMA_SQL)
-        ts_connection.execute("DROP TABLE IF EXISTS asset_user_fields")
         ts_connection.executescript(TS_DB_SCHEMA_SQL)
-        self._TSRestoreMigrationUserFields(ts_user_fields)
         TSLogVerbose(
             "db.migration.rebuilt",
             database=str(self.ts_database_path),
             from_schema_version=ts_user_version,
             to_schema_version=TS_DB_SCHEMA_VERSION,
             reason=ts_reason,
-            preserved_user_fields=len(ts_user_fields),
         )
 
     def TSResetIndex(self) -> None:
@@ -266,7 +190,6 @@ class TSDatabase:
 
     def _TSDoUpsertAsset(self, ts_payload: TSAssetPayload) -> tuple[int, int, int]:
         ts_connection = self.TSGetConnection()
-        ts_payload = self._TSApplyStoredUserFields(ts_payload)
         ts_root_lookup_id = self._TSEnsureRootLookupId(ts_payload.ts_root_id, ts_payload.ts_scope)
         ts_type_lookup_id = self._TSEnsureLookupId("asset_types", "type_key", ts_payload.ts_type)
         ts_extension_lookup_id = self._TSEnsureLookupId("asset_extensions", "extension_key", ts_payload.ts_extension)
@@ -280,19 +203,17 @@ class TSDatabase:
         ts_connection.execute(
             """
             INSERT INTO assets (
-                path, filename, preview_path, mtime_ns, size_bytes, hash, tags, rating, created_at,
+                path, filename, preview_path, mtime_ns, size_bytes, hash, created_at,
                 duration, width, height, fps, technical_json,
                 type_lookup_id, extension_lookup_id, root_lookup_id, folder_lookup_id,
                 is_indexed, has_preview, has_metadata, companion_stem, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET
                 filename = excluded.filename,
                 preview_path = excluded.preview_path,
                 mtime_ns = excluded.mtime_ns,
                 size_bytes = excluded.size_bytes,
                 hash = excluded.hash,
-                tags = excluded.tags,
-                rating = excluded.rating,
                 created_at = excluded.created_at,
                 duration = excluded.duration,
                 width = excluded.width,
@@ -316,8 +237,6 @@ class TSDatabase:
                 ts_payload.ts_mtime_ns,
                 ts_payload.ts_size_bytes,
                 ts_payload.ts_hash,
-                ts_payload.ts_tags,
-                ts_payload.ts_rating,
                 ts_payload.ts_created_at,
                 ts_payload.ts_duration,
                 ts_payload.ts_width,
@@ -367,7 +286,6 @@ class TSDatabase:
         else:
             ts_connection.execute("DELETE FROM asset_metadata WHERE asset_id = ?", (ts_asset_id,))
         self._TSSyncFTSRow(ts_asset_id, ts_payload.ts_filename)
-        self._TSSyncUserFields(ts_payload.ts_path, ts_payload.ts_tags, ts_payload.ts_rating, ts_payload.ts_created_at)
         return ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id
 
     def TSUpsertAsset(self, ts_payload: TSAssetPayload) -> sqlite3.Row:
@@ -458,33 +376,6 @@ class TSDatabase:
 
     def TSBuildUpdatedPayload(self, ts_row: sqlite3.Row, **ts_overrides: Any) -> TSAssetPayload:
         return TSBuildUpdatedAssetPayload(ts_row, **ts_overrides)
-
-    def _TSApplyStoredUserFields(self, ts_payload: TSAssetPayload) -> TSAssetPayload:
-        ts_user_row = self.TSGetConnection().execute(
-            "SELECT tags, rating, created_at FROM asset_user_fields WHERE path = ?",
-            (ts_payload.ts_path,),
-        ).fetchone()
-        if ts_user_row is None:
-            return ts_payload
-        return replace(
-            ts_payload,
-            ts_tags=str(ts_user_row["tags"] or ""),
-            ts_rating=int(ts_user_row["rating"] or 0),
-            ts_created_at=int(ts_user_row["created_at"] or 0) or ts_payload.ts_created_at,
-        )
-
-    def _TSSyncUserFields(self, ts_path: str, ts_tags: str, ts_rating: int, ts_created_at: int) -> None:
-        self.TSGetConnection().execute(
-            """
-            INSERT INTO asset_user_fields(path, tags, rating, created_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(path) DO UPDATE SET
-                tags = excluded.tags,
-                rating = excluded.rating,
-                created_at = excluded.created_at
-            """,
-            (ts_path, ts_tags or "", int(ts_rating or 0), int(ts_created_at or 0)),
-        )
 
     def _TSSyncFTSRow(self, ts_asset_id: int, ts_filename: str) -> None:
         ts_connection = self.TSGetConnection()
@@ -579,46 +470,16 @@ class TSDatabase:
         TSLogVerbose("db.assets.counted_by_type", root_ids=ts_root_ids, counts=ts_result)
         return ts_result
 
-    def TSQueryAssets(
-        self,
-        ts_search_text: str = "",
-        ts_filters: dict[str, Any] | None = None,
-        ts_offset: int = 0,
-        ts_limit: int = 120,
-    ) -> tuple[list[sqlite3.Row], int]:
-        ts_from_sql, ts_where_sql, ts_parameters, ts_order_by_sql = TSBuildAssetQueryParts(ts_search_text, ts_filters)
-
-        ts_connection = self.TSGetConnection()
-        ts_count_query = f"SELECT COUNT(*) FROM {ts_from_sql}{ts_where_sql}"
-        ts_total = int(ts_connection.execute(ts_count_query, ts_parameters).fetchone()[0])
-
-        ts_list_query = f"""
-            SELECT assets_view.*
-            FROM {ts_from_sql}
-            {ts_where_sql}
-            {ts_order_by_sql}
-            LIMIT ? OFFSET ?
-        """
-        ts_rows = ts_connection.execute(ts_list_query, [*ts_parameters, ts_limit, ts_offset]).fetchall()
-        TSLogVerbose(
-            "db.assets.queried",
-            search_text=ts_search_text,
-            filters=ts_filters,
-            offset=ts_offset,
-            limit=ts_limit,
-            total=ts_total,
-            returned=len(ts_rows),
-        )
-        return ts_rows, ts_total
-
     def TSQueryAssetsPage(
         self,
         ts_search_text: str = "",
         ts_filters: dict[str, Any] | None = None,
-        ts_offset: int = 0,
+        ts_cursor_after: dict[str, Any] | None = None,
         ts_limit: int = 120,
-    ) -> tuple[list[sqlite3.Row], bool]:
-        ts_from_sql, ts_where_sql, ts_parameters, ts_order_by_sql = TSBuildAssetQueryParts(ts_search_text, ts_filters)
+    ) -> tuple[list[sqlite3.Row], bool, dict[str, Any] | None]:
+        ts_from_sql, ts_where_sql, ts_parameters, ts_order_by_sql = TSBuildAssetQueryParts(
+            ts_search_text, ts_filters, ts_cursor_after,
+        )
         ts_connection = self.TSGetConnection()
         ts_page_limit = max(1, int(ts_limit)) + 1
         ts_list_query = f"""
@@ -626,21 +487,44 @@ class TSDatabase:
             FROM {ts_from_sql}
             {ts_where_sql}
             {ts_order_by_sql}
-            LIMIT ? OFFSET ?
+            LIMIT ?
         """
-        ts_rows = ts_connection.execute(ts_list_query, [*ts_parameters, ts_page_limit, ts_offset]).fetchall()
+        ts_rows = ts_connection.execute(ts_list_query, [*ts_parameters, ts_page_limit]).fetchall()
         ts_has_more = len(ts_rows) > ts_limit
         ts_page_rows = ts_rows[:ts_limit] if ts_has_more else ts_rows
+        ts_next_cursor = self._TSBuildNextCursor(ts_page_rows, ts_filters) if ts_has_more else None
         TSLogVerbose(
             "db.assets.page_queried",
             search_text=ts_search_text,
             filters=ts_filters,
-            offset=ts_offset,
+            cursor_after=ts_cursor_after,
             limit=ts_limit,
             returned=len(ts_page_rows),
             has_more=ts_has_more,
         )
-        return ts_page_rows, ts_has_more
+        return ts_page_rows, ts_has_more, ts_next_cursor
+
+    def _TSBuildNextCursor(
+        self,
+        ts_rows: list[sqlite3.Row],
+        ts_filters: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if not ts_rows:
+            return None
+        ts_last_row = ts_rows[-1]
+        ts_sort_key = TSResolveSortKey((ts_filters or {}).get("sort_key"))
+        ts_column_to_row_field = {
+            "created_at": "created_at",
+            "mtime": "mtime_ns",
+            "filename": "filename",
+            "size_bytes": "size_bytes",
+        }
+        ts_field = ts_column_to_row_field.get(ts_sort_key, "created_at")
+        return {
+            "sort_key": ts_sort_key,
+            "sort_value": ts_last_row[ts_field],
+            "id": int(ts_last_row["id"]),
+        }
 
     def TSListFolders(
         self,

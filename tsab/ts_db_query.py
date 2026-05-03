@@ -4,10 +4,35 @@ from typing import Any
 
 from .ts_utils import TSBuildFTSQuery
 
+TS_SORT_KEY_MAP: dict[str, dict[str, Any]] = {
+    "created_at": {"column": "assets_view.created_at", "type": int, "collate": ""},
+    "mtime": {"column": "assets_view.mtime_ns", "type": int, "collate": ""},
+    "filename": {"column": "assets_view.filename", "type": str, "collate": "COLLATE NOCASE"},
+    "size_bytes": {"column": "assets_view.size_bytes", "type": int, "collate": ""},
+}
+
+TS_DEFAULT_SORT_KEY = "created_at"
+
+
+def TSResolveSortKey(ts_sort_key: str | None) -> str:
+    return ts_sort_key if ts_sort_key in TS_SORT_KEY_MAP else TS_DEFAULT_SORT_KEY
+
+
+def TSCoerceSortValue(ts_sort_key: str, ts_value: Any) -> Any:
+    ts_descriptor = TS_SORT_KEY_MAP.get(TSResolveSortKey(ts_sort_key))
+    if ts_descriptor is None:
+        return ts_value
+    ts_python_type = ts_descriptor["type"]
+    try:
+        return ts_python_type(ts_value)
+    except (TypeError, ValueError):
+        return None
+
 
 def TSBuildAssetQueryParts(
     ts_search_text: str = "",
     ts_filters: dict[str, Any] | None = None,
+    ts_cursor_after: dict[str, Any] | None = None,
 ) -> tuple[str, str, list[Any], str]:
     ts_filters = ts_filters or {}
     ts_where_clauses: list[str] = []
@@ -60,24 +85,36 @@ def TSBuildAssetQueryParts(
     if ts_filters.get("max_height") is not None:
         ts_where_clauses.append("assets_view.height <= ?")
         ts_parameters.append(int(ts_filters["max_height"]))
-    if ts_filters.get("min_rating") is not None:
-        ts_where_clauses.append("assets_view.rating >= ?")
-        ts_parameters.append(int(ts_filters["min_rating"]))
-    if ts_filters.get("max_rating") is not None:
-        ts_where_clauses.append("assets_view.rating <= ?")
-        ts_parameters.append(int(ts_filters["max_rating"]))
-
     ts_where_clauses.append("assets_view.is_companion_image = 0")
-    ts_where_sql = f" WHERE {' AND '.join(ts_where_clauses)}" if ts_where_clauses else ""
-    ts_sort_key = str(ts_filters.get("sort_key") or "created_at")
+
+    ts_sort_key = TSResolveSortKey(ts_filters.get("sort_key"))
+    ts_sort_descriptor = TS_SORT_KEY_MAP[ts_sort_key]
+    ts_sort_column = ts_sort_descriptor["column"]
+    ts_sort_collate = ts_sort_descriptor["collate"]
     ts_sort_direction = "ASC" if str(ts_filters.get("sort_direction")).lower() == "asc" else "DESC"
-    ts_sort_map = {
-        "created_at": "assets_view.created_at",
-        "mtime": "assets_view.mtime_ns",
-        "filename": "assets_view.filename COLLATE NOCASE",
-        "size_bytes": "assets_view.size_bytes",
-        "rating": "assets_view.rating",
-    }
-    ts_sort_sql = ts_sort_map.get(ts_sort_key, "assets_view.created_at")
-    ts_order_by_sql = f" ORDER BY {ts_sort_sql} {ts_sort_direction}, assets_view.id DESC"
+
+    if ts_cursor_after is not None:
+        ts_cursor_value = TSCoerceSortValue(ts_sort_key, ts_cursor_after.get("sort_value"))
+        ts_cursor_id = ts_cursor_after.get("id")
+        try:
+            ts_cursor_id = int(ts_cursor_id) if ts_cursor_id is not None else None
+        except (TypeError, ValueError):
+            ts_cursor_id = None
+        if ts_cursor_value is not None and ts_cursor_id is not None:
+            ts_strict_op = "<" if ts_sort_direction == "DESC" else ">"
+            ts_id_op = "<" if ts_sort_direction == "DESC" else ">"
+            ts_collate_clause = f" {ts_sort_collate}" if ts_sort_collate else ""
+            ts_where_clauses.append(
+                f"({ts_sort_column} {ts_strict_op} ?{ts_collate_clause} "
+                f"OR ({ts_sort_column} = ?{ts_collate_clause} AND assets_view.id {ts_id_op} ?))"
+            )
+            ts_parameters.extend([ts_cursor_value, ts_cursor_value, ts_cursor_id])
+
+    ts_where_sql = f" WHERE {' AND '.join(ts_where_clauses)}" if ts_where_clauses else ""
+    ts_id_direction = "DESC" if ts_sort_direction == "DESC" else "ASC"
+    ts_collate_for_order = f" {ts_sort_collate}" if ts_sort_collate else ""
+    ts_order_by_sql = (
+        f" ORDER BY {ts_sort_column}{ts_collate_for_order} {ts_sort_direction}, "
+        f"assets_view.id {ts_id_direction}"
+    )
     return ts_from_sql, ts_where_sql, ts_parameters, ts_order_by_sql

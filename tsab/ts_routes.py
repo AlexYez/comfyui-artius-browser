@@ -4,7 +4,7 @@ from aiohttp import web as TSWeb
 from .ts_settings import TS_DEFAULT_PAGE_SIZE, TS_MAX_3D_CAPTURE_DATA_URL_LENGTH
 from .ts_logging import TSLogVerbose
 from .ts_load3d_stage import TSPrepare3DAssetForLoad3D
-from .ts_utils import TSParseDateToEpoch, TSParseMaybeInt, TSParseQueryList
+from .ts_utils import TSParseAssetCursor, TSParseDateToEpoch, TSParseMaybeInt, TSParseQueryList
 
 TSRoutesRegistered = False
 
@@ -148,27 +148,25 @@ async def TSHandleAssets(ts_runtime, ts_request):
         "max_width": TSParseMaybeInt(ts_request.query.get("max_width")),
         "min_height": TSParseMaybeInt(ts_request.query.get("min_height")),
         "max_height": TSParseMaybeInt(ts_request.query.get("max_height")),
-        "min_rating": TSParseMaybeInt(ts_request.query.get("min_rating")),
-        "max_rating": TSParseMaybeInt(ts_request.query.get("max_rating")),
         "sort_key": ts_request.query.get("sort") or "created_at",
         "sort_direction": ts_request.query.get("order") or "desc",
     }
-    ts_offset = max(0, TSParseMaybeInt(ts_request.query.get("offset")) or 0)
     ts_limit = min(500, max(1, TSParseMaybeInt(ts_request.query.get("limit")) or TS_DEFAULT_PAGE_SIZE))
     ts_view = ts_request.query.get("view") or "flat"
     ts_query = ts_request.query.get("q") or ""
+    ts_cursor_after = TSParseAssetCursor(ts_request.query)
     ts_response_payload = ts_runtime.TSQueryAssets(
         ts_search_text=ts_query,
         ts_filters=ts_filters,
-        ts_offset=ts_offset,
+        ts_cursor_after=ts_cursor_after,
         ts_limit=ts_limit,
         ts_view=ts_view,
     )
     TSLogVerbose(
         "route.assets.response",
         path=ts_request.path,
-        total=ts_response_payload.get("total"),
         returned=len(ts_response_payload.get("items", [])),
+        has_more=ts_response_payload.get("has_more"),
     )
     return TSWeb.json_response(ts_response_payload)
 

@@ -41,8 +41,6 @@ def TSPayloadFromAssetRow(ts_row: Any) -> TSAssetPayload:
         ts_is_indexed=bool(ts_row["is_indexed"]),
         ts_has_preview=bool(ts_row["has_preview"]),
         ts_has_metadata=bool(ts_row["has_metadata"]),
-        ts_tags=str(ts_row["tags"] or ""),
-        ts_rating=int(ts_row["rating"] or 0),
     )
 
 
