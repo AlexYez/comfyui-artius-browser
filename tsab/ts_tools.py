@@ -271,7 +271,7 @@ class TSToolLocator:
             ))
         if ts_ffmpeg_path:
             ts_waveform_output_path.parent.mkdir(parents=True, exist_ok=True)
-            ts_filter = f"aformat=channel_layouts=mono,showwavespic=s={ts_width}x{ts_height}:colors=8B7FC4"
+            ts_filter = f"aformat=channel_layouts=mono,showwavespic=s={ts_width}x{ts_height}:colors=7FB069"
             ts_specs.append((
                 self.ts_ffmpeg_semaphore,
                 [
@@ -376,7 +376,7 @@ class TSToolLocator:
         if not ts_executable:
             return False
         ts_output_path.parent.mkdir(parents=True, exist_ok=True)
-        ts_filter = f"aformat=channel_layouts=mono,showwavespic=s={ts_width}x{ts_height}:colors=8B7FC4"
+        ts_filter = f"aformat=channel_layouts=mono,showwavespic=s={ts_width}x{ts_height}:colors=7FB069"
         ts_result = self._TSRunBoundedCommand(
             self.ts_ffmpeg_semaphore,
             [

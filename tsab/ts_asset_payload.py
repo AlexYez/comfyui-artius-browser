@@ -63,13 +63,19 @@ def TSBuildAssetCard(ts_row, ts_roots: dict[str, dict[str, Any]], ts_preview_cac
     ts_root = ts_roots.get(str(ts_row["root_id"]), {})
     ts_preview_path = str(ts_row["preview_path"] or "")
     ts_preview_exists = False
+    ts_preview_mtime_ns = 0
     if ts_preview_path:
         try:
-            ts_preview_exists = ts_preview_cache.TSResolvePreviewPath(ts_preview_path).exists()
-        except ValueError:
+            ts_preview_stat = ts_preview_cache.TSResolvePreviewPath(ts_preview_path).stat()
+            ts_preview_exists = True
+            ts_preview_mtime_ns = int(ts_preview_stat.st_mtime_ns)
+        except (OSError, ValueError):
             ts_preview_exists = False
+            ts_preview_mtime_ns = 0
     ts_file_cache_token = str(ts_row["hash"] or ts_row["mtime_ns"] or ts_row["id"])
-    ts_preview_cache_token = str(ts_preview_path if ts_preview_exists else f"placeholder-{ts_row['id']}")
+    ts_preview_cache_token = (
+        str(ts_preview_mtime_ns) if ts_preview_exists else f"placeholder-{ts_row['id']}"
+    )
     ts_preview_url = f"/asset_browser/preview/{ts_row['id']}?v={ts_preview_cache_token}"
     ts_file_url = f"/asset_browser/file?id={ts_row['id']}&v={ts_file_cache_token}"
     ts_technical_info = TSResolveTechnicalInfo(ts_row) if str(ts_row["type"] or "") in {"video", "audio"} else {}
