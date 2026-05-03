@@ -124,6 +124,11 @@ class TSConfigStore:
             ts_ui = ts_result.setdefault("ui", {})
             ts_ui.setdefault("browser_section", "assets")
             ts_result["version"] = 13
+        if TSCurrentVersion() < 14:
+            ts_tools = ts_result.setdefault("tools", {})
+            ts_tools["ffprobe_workers"] = ts_default["tools"]["ffprobe_workers"]
+            ts_tools["ffmpeg_workers"] = ts_default["tools"]["ffmpeg_workers"]
+            ts_result["version"] = 14
         self._TSNormalizeTopLevelSections(ts_result, ts_default)
         return ts_result
 

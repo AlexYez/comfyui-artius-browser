@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import copy
+import os
+
+_TS_AUTO_MEDIA_WORKERS = max(1, min(4, (os.cpu_count() or 4) // 2))
 
 TS_BACKEND_SETTINGS = {
     "project": {
@@ -44,8 +47,8 @@ TS_BACKEND_SETTINGS = {
         ),
     },
     "tools": {
-        "ffprobe_workers": 1,
-        "ffmpeg_workers": 1,
+        "ffprobe_workers": _TS_AUTO_MEDIA_WORKERS,
+        "ffmpeg_workers": _TS_AUTO_MEDIA_WORKERS,
     },
     "preview": {
         "thumbnail_size": 104,
@@ -123,7 +126,7 @@ TS_EVENT_ASSET_REMOVE = f"{TS_EVENT_PREFIX}:asset-remove"
 TS_EVENT_HEALTH = f"{TS_EVENT_PREFIX}:health"
 
 TS_DEFAULT_CONFIG = {
-    "version": 13,
+    "version": 14,
     "roots": {
         "output": {"enabled": True, "allow_delete": True},
         "input": {"enabled": True, "allow_delete": True},

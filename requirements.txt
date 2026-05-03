@@ -1,3 +1,8 @@
 blake3>=1.0.5
 send2trash>=1.8.3
 typing_extensions>=4.8.0
+
+# Optional accelerator (NOT auto-installed):
+#   pip uninstall pillow && pip install pillow-simd
+# Drop-in replacement for Pillow on x86_64 with SSE/AVX. The backend logs
+# "Pillow-SIMD detected" at startup when active. See README.

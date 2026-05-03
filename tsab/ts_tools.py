@@ -111,6 +111,203 @@ class TSToolLocator:
         with ts_semaphore:
             return self.TSRunCommand(ts_arguments, ts_timeout=ts_timeout)
 
+    def TSRunCommandsParallel(
+        self,
+        ts_specs: list[tuple[threading.BoundedSemaphore | None, list[str], int]],
+    ) -> list[subprocess.CompletedProcess[str] | None]:
+        if not ts_specs:
+            return []
+        ts_acquired_semaphores: list[threading.BoundedSemaphore] = []
+        for ts_semaphore, _, _ in ts_specs:
+            if ts_semaphore is not None:
+                ts_semaphore.acquire()
+                ts_acquired_semaphores.append(ts_semaphore)
+        try:
+            ts_processes: list[tuple[subprocess.Popen[str] | None, list[str], int]] = []
+            for _, ts_arguments, ts_timeout in ts_specs:
+                if not ts_arguments or not ts_arguments[0]:
+                    ts_processes.append((None, ts_arguments, ts_timeout))
+                    continue
+                try:
+                    ts_process = subprocess.Popen(
+                        ts_arguments,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                    )
+                    ts_processes.append((ts_process, ts_arguments, ts_timeout))
+                except OSError as ts_error:
+                    TSLogVerbose("tools.popen.spawn.failed", arguments=ts_arguments, error=str(ts_error))
+                    ts_processes.append((None, ts_arguments, ts_timeout))
+            ts_results: list[subprocess.CompletedProcess[str] | None] = []
+            for ts_process, ts_arguments, ts_timeout in ts_processes:
+                if ts_process is None:
+                    ts_results.append(None)
+                    continue
+                try:
+                    ts_stdout, ts_stderr = ts_process.communicate(timeout=ts_timeout)
+                    ts_results.append(
+                        subprocess.CompletedProcess(
+                            args=ts_arguments,
+                            returncode=ts_process.returncode,
+                            stdout=ts_stdout,
+                            stderr=ts_stderr,
+                        )
+                    )
+                except subprocess.TimeoutExpired:
+                    ts_process.kill()
+                    try:
+                        ts_process.communicate(timeout=5)
+                    except (subprocess.SubprocessError, OSError):
+                        pass
+                    TSLogVerbose("tools.popen.timeout", arguments=ts_arguments, timeout=ts_timeout)
+                    ts_results.append(None)
+                except (subprocess.SubprocessError, OSError) as ts_error:
+                    TSLogVerbose("tools.popen.wait.failed", arguments=ts_arguments, error=str(ts_error))
+                    ts_results.append(None)
+            return ts_results
+        finally:
+            for ts_semaphore in reversed(ts_acquired_semaphores):
+                ts_semaphore.release()
+
+    def _TSParseProbeJson(self, ts_completed: subprocess.CompletedProcess[str] | None, ts_source_path: Path) -> dict[str, Any]:
+        if not ts_completed or ts_completed.returncode != 0 or not ts_completed.stdout.strip():
+            return {}
+        try:
+            ts_payload = json.loads(ts_completed.stdout)
+        except json.JSONDecodeError:
+            TSLogVerbose("tools.ffprobe.invalid_json", path=str(ts_source_path))
+            return {}
+        return ts_payload if isinstance(ts_payload, dict) else {}
+
+    def TSRunFFProbeAndExtractFrameParallel(
+        self,
+        ts_source_path: Path,
+        ts_frame_output_path: Path,
+        ts_seconds: float,
+        ts_max_output_dim: int | None = None,
+    ) -> tuple[dict[str, Any], bool]:
+        ts_ffprobe_path = self.TSResolveTool("ffprobe")
+        ts_ffmpeg_path = self.TSResolveTool("ffmpeg")
+        if not ts_ffprobe_path and not ts_ffmpeg_path:
+            return {}, False
+        ts_specs: list[tuple[threading.BoundedSemaphore | None, list[str], int]] = []
+        if ts_ffprobe_path:
+            ts_specs.append((
+                self.ts_ffprobe_semaphore,
+                [
+                    ts_ffprobe_path,
+                    "-v", "error",
+                    "-print_format", "json",
+                    "-show_streams", "-show_format",
+                    str(ts_source_path),
+                ],
+                120,
+            ))
+        if ts_ffmpeg_path:
+            ts_frame_output_path.parent.mkdir(parents=True, exist_ok=True)
+            ts_ffmpeg_arguments = [
+                ts_ffmpeg_path,
+                "-y",
+                "-ss", str(ts_seconds),
+                "-i", str(ts_source_path),
+                "-frames:v", "1",
+            ]
+            if ts_max_output_dim and ts_max_output_dim > 0:
+                ts_ffmpeg_arguments.extend([
+                    "-vf",
+                    f"scale='min({ts_max_output_dim},iw)':'min({ts_max_output_dim},ih)':force_original_aspect_ratio=decrease",
+                ])
+            ts_ffmpeg_arguments.append(str(ts_frame_output_path))
+            ts_specs.append((self.ts_ffmpeg_semaphore, ts_ffmpeg_arguments, 180))
+        ts_results = self.TSRunCommandsParallel(ts_specs)
+        ts_index = 0
+        ts_probe_dict: dict[str, Any] = {}
+        if ts_ffprobe_path:
+            ts_probe_dict = self._TSParseProbeJson(ts_results[ts_index], ts_source_path)
+            ts_index += 1
+        ts_frame_success = False
+        if ts_ffmpeg_path:
+            ts_frame_result = ts_results[ts_index]
+            ts_frame_success = bool(
+                ts_frame_result
+                and ts_frame_result.returncode == 0
+                and ts_frame_output_path.exists()
+            )
+            TSLogVerbose(
+                "tools.ffmpeg.video_frame",
+                source_path=str(ts_source_path),
+                output_path=str(ts_frame_output_path),
+                seconds=ts_seconds,
+                success=ts_frame_success,
+            )
+        return ts_probe_dict, ts_frame_success
+
+    def TSRunFFProbeAndExtractWaveformParallel(
+        self,
+        ts_source_path: Path,
+        ts_waveform_output_path: Path,
+        ts_width: int,
+        ts_height: int,
+    ) -> tuple[dict[str, Any], bool]:
+        ts_ffprobe_path = self.TSResolveTool("ffprobe")
+        ts_ffmpeg_path = self.TSResolveTool("ffmpeg")
+        if not ts_ffprobe_path and not ts_ffmpeg_path:
+            return {}, False
+        ts_specs: list[tuple[threading.BoundedSemaphore | None, list[str], int]] = []
+        if ts_ffprobe_path:
+            ts_specs.append((
+                self.ts_ffprobe_semaphore,
+                [
+                    ts_ffprobe_path,
+                    "-v", "error",
+                    "-print_format", "json",
+                    "-show_streams", "-show_format",
+                    str(ts_source_path),
+                ],
+                120,
+            ))
+        if ts_ffmpeg_path:
+            ts_waveform_output_path.parent.mkdir(parents=True, exist_ok=True)
+            ts_filter = f"aformat=channel_layouts=mono,showwavespic=s={ts_width}x{ts_height}:colors=8B7FC4"
+            ts_specs.append((
+                self.ts_ffmpeg_semaphore,
+                [
+                    ts_ffmpeg_path,
+                    "-y",
+                    "-i", str(ts_source_path),
+                    "-filter_complex", ts_filter,
+                    "-frames:v", "1",
+                    str(ts_waveform_output_path),
+                ],
+                180,
+            ))
+        ts_results = self.TSRunCommandsParallel(ts_specs)
+        ts_index = 0
+        ts_probe_dict: dict[str, Any] = {}
+        if ts_ffprobe_path:
+            ts_probe_dict = self._TSParseProbeJson(ts_results[ts_index], ts_source_path)
+            ts_index += 1
+        ts_waveform_success = False
+        if ts_ffmpeg_path:
+            ts_waveform_result = ts_results[ts_index]
+            ts_waveform_success = bool(
+                ts_waveform_result
+                and ts_waveform_result.returncode == 0
+                and ts_waveform_output_path.exists()
+            )
+            TSLogVerbose(
+                "tools.ffmpeg.waveform",
+                source_path=str(ts_source_path),
+                output_path=str(ts_waveform_output_path),
+                width=ts_width,
+                height=ts_height,
+                success=ts_waveform_success,
+            )
+        return ts_probe_dict, ts_waveform_success
+
     def TSRunFFProbe(self, ts_path: Path) -> dict[str, Any]:
         ts_executable = self.TSResolveTool("ffprobe")
         if not ts_executable:
@@ -179,7 +376,7 @@ class TSToolLocator:
         if not ts_executable:
             return False
         ts_output_path.parent.mkdir(parents=True, exist_ok=True)
-        ts_filter = f"aformat=channel_layouts=mono,showwavespic=s={ts_width}x{ts_height}:colors=F4A261"
+        ts_filter = f"aformat=channel_layouts=mono,showwavespic=s={ts_width}x{ts_height}:colors=8B7FC4"
         ts_result = self._TSRunBoundedCommand(
             self.ts_ffmpeg_semaphore,
             [

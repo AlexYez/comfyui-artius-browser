@@ -1,5 +1,7 @@
 {
     "panel.title": "Artius Browser",
+    "button.donate": "Donate",
+    "tooltip.donate": "Support the project.",
 
     "button.assets": "Assets",
     "tooltip.section.assets": "Browse indexed assets.",

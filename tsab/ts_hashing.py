@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import hashlib
+import logging
 from pathlib import Path
 from typing import Literal
 
@@ -15,6 +16,10 @@ try:
     from blake3 import blake3 as TSBlake3Factory
 except ImportError:
     TSBlake3Factory = None
+    logging.getLogger("TSArtiusBrowser").warning(
+        "blake3 not installed; falling back to slower blake2b for asset hashing. "
+        "Install with: pip install blake3"
+    )
 
 
 def TSComputeFileHash(ts_path: Path, ts_chunk_size: int = 1024 * 1024) -> str:

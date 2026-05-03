@@ -22,19 +22,23 @@ class TSVideoHandler:
         )
 
     def TSBuildIndexedPayload(self, ts_asset_stat: TSAssetStat, ts_asset_hash: str) -> TSAssetPayload:
-        ts_probe = self.ts_tools.TSRunFFProbe(ts_asset_stat.ts_path)
+        ts_preview_key = self.ts_preview_cache.TSBuildAssetPreviewKey(ts_asset_hash, ts_asset_stat.ts_path)
+        ts_probe, ts_preview_path = self.ts_preview_cache.TSGenerateVideoPosterParallel(
+            ts_asset_stat.ts_path, ts_preview_key, self.ts_tools
+        )
         ts_technical = TSBuildVideoTechnicalInfo(ts_probe, ts_asset_stat.ts_extension)
+        ts_has_preview = bool(ts_preview_path) and not self.ts_preview_cache.TSIsPlaceholderPreview(ts_preview_path)
         return TSBuildIndexedPayload(
             ts_asset_stat,
             self.ts_kind,
-            self.ts_preview_cache.TSGetTypePlaceholderPreview(self.ts_kind),
+            ts_preview_path or self.ts_preview_cache.TSGetTypePlaceholderPreview(self.ts_kind),
             ts_asset_hash,
             ts_technical_json=TSJsonDumps(ts_technical),
             ts_duration=ts_technical.get("duration"),
             ts_width=ts_technical.get("width"),
             ts_height=ts_technical.get("height"),
             ts_fps=ts_technical.get("fps"),
-            ts_has_preview=False,
+            ts_has_preview=ts_has_preview,
             ts_has_metadata=True,
         )
 
