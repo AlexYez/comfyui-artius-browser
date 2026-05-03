@@ -196,9 +196,13 @@ class TSAssetBrowserRuntime:
     def _TSResolvePreviewFilePath(self, ts_row) -> Path:
         ts_preview_path = str(ts_row["preview_path"] or "")
         if ts_preview_path:
-            ts_preview_file_path = self.ts_preview_cache.TSResolvePreviewPath(ts_preview_path)
-            if ts_preview_file_path.exists():
-                return ts_preview_file_path
+            try:
+                ts_preview_file_path = self.ts_preview_cache.TSResolvePreviewPath(ts_preview_path)
+            except ValueError as ts_error:
+                TSLogVerbose("runtime.preview.outside_root", asset_id=int(ts_row["id"]), preview_path=ts_preview_path, error=str(ts_error))
+            else:
+                if ts_preview_file_path.exists():
+                    return ts_preview_file_path
         ts_placeholder_path = self.ts_preview_cache.TSGetTypePlaceholderPreview(str(ts_row["type"] or "image"))
         return self.ts_preview_cache.TSResolvePreviewPath(ts_placeholder_path)
 
@@ -282,7 +286,12 @@ class TSAssetBrowserRuntime:
         if ts_row is None:
             raise TSWeb.HTTPNotFound()
         ts_preview_path_value = str(ts_row["preview_path"] or "")
-        ts_preview_file_path = self.ts_preview_cache.TSResolvePreviewPath(ts_preview_path_value) if ts_preview_path_value else None
+        ts_preview_file_path = None
+        if ts_preview_path_value:
+            try:
+                ts_preview_file_path = self.ts_preview_cache.TSResolvePreviewPath(ts_preview_path_value)
+            except ValueError as ts_error:
+                TSLogVerbose("runtime.preview.outside_root", asset_id=ts_asset_id, preview_path=ts_preview_path_value, error=str(ts_error))
         if ts_preview_path_value and not self.ts_preview_cache.TSIsPlaceholderPreview(ts_preview_path_value) and (ts_preview_file_path is None or not ts_preview_file_path.exists()):
             ts_row = self._TSEnsurePreview(ts_row) or ts_row
         ts_preview_path = self._TSResolvePreviewFilePath(ts_row)

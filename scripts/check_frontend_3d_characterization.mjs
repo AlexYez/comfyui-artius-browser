@@ -135,8 +135,10 @@ function tsRun3DHelperTests() {
 async function tsRun3DWorkerTests() {
     const tsWorkerExports = tsBuildWorkerHarness();
     const tsWorker = new tsWorkerExports.TSGlobal3DThumbnailWorker();
-    tsEqual(tsWorker.tsBuildSearchPath(12), "/asset_browser/search?offset=12&limit=8&view=flat&sort=created_at&order=desc&types=3d", "3D worker search path preserves query contract");
-    tsEqual(tsWorker.tsBuildSearchPath(-10), "/asset_browser/search?offset=0&limit=8&view=flat&sort=created_at&order=desc&types=3d", "3D worker search offset is clamped to zero");
+    tsEqual(tsWorker.tsBuildSearchPath(), "/asset_browser/search?limit=8&view=flat&sort=created_at&order=desc&types=3d", "3D worker search path omits cursor on first page");
+    tsEqual(tsWorker.tsBuildSearchPath(null), "/asset_browser/search?limit=8&view=flat&sort=created_at&order=desc&types=3d", "3D worker search path omits cursor when null");
+    tsEqual(tsWorker.tsBuildSearchPath({ sort_value: 1700000000, id: 42 }), "/asset_browser/search?limit=8&view=flat&sort=created_at&order=desc&types=3d&after_sort=1700000000&after_id=42", "3D worker search path forwards keyset cursor");
+    tsEqual(tsWorker.tsBuildSearchPath({ sort_value: 1700000000 }), "/asset_browser/search?limit=8&view=flat&sort=created_at&order=desc&types=3d", "3D worker search path drops partial cursor without id");
 
     const tsScheduledReasons = [];
     tsWorker.tsScheduleRun = async (tsReason) => {
@@ -177,6 +179,33 @@ async function tsRun3DWorkerTests() {
     }), true, "3D worker captures missing 3D thumbnail");
     tsEqual(tsCaptureCalls, [["/view?filename=a.glb", { width: 320, height: 320, warmFrames: 2 }]], "3D worker passes thumbnail capture settings");
     tsEqual(tsSaveCalls, [[7, "data:image/png;base64,thumb"]], "3D worker saves captured thumbnail");
+
+    const tsRequestedURLs = [];
+    const tsCompletedAsset = {
+        type: "3d",
+        viewer_3d_url: "/view?filename=a.glb",
+        preview_is_3d_capture: true,
+        preview_is_placeholder: false,
+    };
+    const tsPaginatedHarness = tsBuildWorkerHarness({
+        fetchJSON: async (tsURL) => {
+            tsRequestedURLs.push(tsURL);
+            if (tsRequestedURLs.length === 1) {
+                return {
+                    items: [tsCompletedAsset],
+                    has_more: true,
+                    next_cursor: { sort_value: 1700000000, id: 99 },
+                };
+            }
+            return { items: [tsCompletedAsset], has_more: false, next_cursor: null };
+        },
+    });
+    const tsPaginatedWorker = new tsPaginatedHarness.TSGlobal3DThumbnailWorker();
+    await tsPaginatedWorker.tsRun("test");
+    tsEqual(tsRequestedURLs, [
+        "/asset_browser/search?limit=8&view=flat&sort=created_at&order=desc&types=3d",
+        "/asset_browser/search?limit=8&view=flat&sort=created_at&order=desc&types=3d&after_sort=1700000000&after_id=99",
+    ], "3D worker walks pages via next_cursor and stops when has_more is false");
 }
 
 tsRun3DHelperTests();

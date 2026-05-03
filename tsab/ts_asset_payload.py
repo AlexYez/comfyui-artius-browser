@@ -62,7 +62,12 @@ def TSBuildNative3DViewerURL(ts_row, ts_root: dict[str, Any]) -> str:
 def TSBuildAssetCard(ts_row, ts_roots: dict[str, dict[str, Any]], ts_preview_cache) -> dict[str, Any]:
     ts_root = ts_roots.get(str(ts_row["root_id"]), {})
     ts_preview_path = str(ts_row["preview_path"] or "")
-    ts_preview_exists = bool(ts_preview_path) and ts_preview_cache.TSResolvePreviewPath(ts_preview_path).exists()
+    ts_preview_exists = False
+    if ts_preview_path:
+        try:
+            ts_preview_exists = ts_preview_cache.TSResolvePreviewPath(ts_preview_path).exists()
+        except ValueError:
+            ts_preview_exists = False
     ts_file_cache_token = str(ts_row["hash"] or ts_row["mtime_ns"] or ts_row["id"])
     ts_preview_cache_token = str(ts_preview_path if ts_preview_exists else f"placeholder-{ts_row['id']}")
     ts_preview_url = f"/asset_browser/preview/{ts_row['id']}?v={ts_preview_cache_token}"
