@@ -1194,6 +1194,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsSortDirection.addEventListener("click", () => {
             this.tsState.tsSortDirection = this.tsState.tsSortDirection === "asc" ? "desc" : "asc";
             this.tsSyncSectionSettingsFromActive();
+            this.tsRenderSortDirectionLabel();
             this.tsQueueSaveUISettings();
             this.tsFetchAssets(true);
         });
@@ -1701,6 +1702,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         this.tsRememberAssetLocation();
         this.tsSyncSectionSettingsFromActive();
+        this.tsRenderModeButtons();
         this.tsQueueSaveUISettings();
         this.tsFetchAssets(true);
     }
@@ -1923,12 +1925,19 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 }
                 this.tsRebuildItemIndex();
                 this.tsState.tsHasMore = Boolean(tsPayload.has_more);
-                this.tsState.tsRoots = Array.isArray(tsPayload.roots) ? tsPayload.roots : [];
+                const tsIncomingRoots = Array.isArray(tsPayload.roots) ? tsPayload.roots : [];
+                const tsRootsKey = JSON.stringify(tsIncomingRoots);
+                const tsRootsChanged = tsRootsKey !== this.tsLastRootsKey;
+                this.tsLastRootsKey = tsRootsKey;
+                this.tsState.tsRoots = tsIncomingRoots;
                 this.tsState.tsFolders = Array.isArray(tsPayload.folders) ? tsPayload.folders : [];
                 this.tsFoldersRevision += 1;
                 this.tsState.tsHealth = Array.isArray(tsPayload.health) ? tsPayload.health : [];
                 this.tsState.tsScanStatus = tsPayload.scan_status || null;
-                this.tsRenderAll();
+                if (tsRootsChanged) {
+                    this.tsRenderRootOptions();
+                }
+                this.tsRenderListOnly();
                 if (tsReset) {
                     void this.tsMaybeBootstrapScan();
                 }
@@ -1973,6 +1982,22 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRenderSelectionButtons();
     }
 
+    tsRenderListOnly() {
+        this.tsRenderProgress();
+        this.tsRenderHealth();
+        this.tsRenderSortDirectionLabel();
+        this.tsRenderModeButtons();
+        this.tsRenderTree(true);
+        this.tsRenderGrid(true);
+        this.tsRenderSelectionButtons();
+    }
+
+    tsRenderSortDirectionLabel() {
+        this.tsRefs.tsSortDirection.textContent = this.tsState.tsSortDirection === "asc"
+            ? this.tsT("button.sortAsc", "Asc")
+            : this.tsT("button.sortDesc", "Desc");
+    }
+
     tsRenderRootOptions() {
         const tsOptions = this.tsIsWorkflowSection()
             ? (this.tsState.tsRoots || []).map((tsRoot) => `<option value="${tsRoot.root_id}">${tsRoot.label}</option>`)
@@ -1989,9 +2014,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsQueueSaveUISettings();
         }
         this.tsRefs.tsRootSelect.value = this.tsState.tsRootId;
-        this.tsRefs.tsSortDirection.textContent = this.tsState.tsSortDirection === "asc"
-            ? this.tsT("button.sortAsc", "Asc")
-            : this.tsT("button.sortDesc", "Desc");
+        this.tsRenderSortDirectionLabel();
     }
 
     tsRenderModeButtons() {
