@@ -186,7 +186,8 @@ For 3D assets, files are staged into ComfyUI input storage so native 3D nodes lo
 
 - Drag-and-drop graph access is routed through a small Comfy adapter that prefers current canvas APIs and keeps legacy LiteGraph/private graph fallbacks isolated.
 - Asset search is filename-focused. Unsupported `metadata` query params return `400 Bad Request` instead of silently doing nothing.
-- Database migrations, rescans, and cache rebuilds preserve user fields such as `tags`, `rating`, and `created_at`.
+- Asset listing pagination is keyset-based (`after_sort` + `after_id`); deep pages stay O(1) regardless of library size.
+- Companion images (PNG sidecars whose stem matches a sibling video / audio / 3D asset) are suppressed via a stored flag computed at index time, not a query-time subquery.
 - Frontend viewer and worker listeners are explicitly torn down when stages close or workers stop.
 
 ### Performance notes
@@ -197,6 +198,8 @@ The project is intentionally conservative about performance:
 - compact metadata storage
 - compact preview cache
 - virtualized grid rendering
+- keyset pagination for asset listing
+- stale-while-revalidate response cache on the frontend (LRU 10, 30s TTL) for instant filter / sort re-toggles
 - frontend-only workflow browsing
 - frontend-generated true 3D thumbnails, persisted into cache
 
@@ -319,8 +322,10 @@ Then restart ComfyUI and scan again.
 
 - доступ к graph/canvas/LiteGraph проходит через adapter, чтобы новые API ComfyUI и legacy fallback не расползались по UI-коду
 - поиск ассетов остается поиском по имени файла; неподдерживаемый query param `metadata` возвращает `400 Bad Request`
-- миграции БД, rescan и `Rebuild Cache` сохраняют пользовательские поля `tags`, `rating` и `created_at`
+- пагинация ассетов keyset-based (`after_sort` + `after_id`) — глубокие страницы стоят столько же, сколько первая
+- companion-картинки (PNG-сайдкары к видео/аудио/3D с тем же stem) скрываются через сохранённый флаг, посчитанный на индексации — без подзапросов в query-time
 - временные frontend listeners у viewer/worker снимаются при закрытии stage или остановке worker
+- фронтенд держит небольшой stale-while-revalidate кэш ответов (LRU 10, TTL 30 сек) для мгновенного переключения между уже виденными фильтрами/сортировкой
 
 ### Установка
 
