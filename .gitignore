@@ -36,5 +36,6 @@ dist/
 *.tmp
 *.bak
 agents.md
+CLAUDE.md
 doc/
 tests/
