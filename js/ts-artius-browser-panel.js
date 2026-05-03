@@ -144,11 +144,24 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsSidebarRefreshTimer = 0;
         this.tsWorkflowLibrary = [];
         this.tsWorkflowLibraryLoaded = false;
+        this.tsApiEventsBound = false;
+        this.tsApiEventListeners = [
+            ["tsab:index-start", (tsEvent) => this.tsHandleScanEvent(tsEvent, false)],
+            ["tsab:index-progress", (tsEvent) => this.tsHandleScanEvent(tsEvent, false)],
+            ["tsab:index-complete", (tsEvent) => this.tsHandleScanEvent(tsEvent, true)],
+            ["tsab:health", (tsEvent) => this.tsHandleHealthEvent(tsEvent)],
+            ["tsab:asset-upsert", (tsEvent) => this.tsHandleAssetUpsertEvent(tsEvent)],
+            ["tsab:asset-remove", (tsEvent) => this.tsHandleAssetRemoveEvent(tsEvent)],
+        ];
         this.attachShadow({ mode: "open" });
     }
 
     connectedCallback() {
+        this.ts3DThumbnailDisposed = false;
         if (this.tsConnectedOnce) {
+            this.tsBindApiEvents();
+            this.tsStartWidthTracking();
+            this.tsScheduleSidebarRefresh(0);
             return;
         }
         this.tsConnectedOnce = true;
@@ -170,8 +183,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.ts3DThumbnailQueue = [];
         this.ts3DThumbnailPending.clear();
         window.clearTimeout(this.tsSidebarRefreshTimer);
+        if (this.tsGridRenderFrame) {
+            window.cancelAnimationFrame?.(this.tsGridRenderFrame);
+            this.tsGridRenderFrame = 0;
+        }
         this.tsResizeObserver?.disconnect?.();
         this.tsBrowserWidthObserver?.disconnect?.();
+        this.tsUnbindApiEvents();
     }
 
     async tsInitAsync() {
@@ -1202,16 +1220,35 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsGalleryScroll.addEventListener("scroll", () => this.tsHandleGalleryScroll(), { passive: true });
         this.tsRefs.tsGalleryContent.addEventListener("click", (tsEvent) => this.tsHandleGalleryClick(tsEvent));
         this.tsRefs.tsGalleryContent.addEventListener("dblclick", (tsEvent) => this.tsHandleGalleryDoubleClick(tsEvent));
-        this.tsRefs.tsGalleryContent.addEventListener("dragstart", (tsEvent) => this.tsHandleDragStart(tsEvent));
+        this.tsRefs.tsGalleryContent.addEventListener(
+            "dragstart",
+            (tsEvent) => this.tsHandleDragStart(tsEvent),
+        );
         this.tsRefs.tsTreePanel.addEventListener("click", (tsEvent) => this.tsHandleTreeClick(tsEvent));
         this.tsRefs.tsShell.addEventListener("keydown", (tsEvent) => this.tsHandleKeydown(tsEvent));
-        api.addEventListener("tsab:index-start", (tsEvent) => this.tsHandleScanEvent(tsEvent, false));
-        api.addEventListener("tsab:index-progress", (tsEvent) => this.tsHandleScanEvent(tsEvent, false));
-        api.addEventListener("tsab:index-complete", (tsEvent) => this.tsHandleScanEvent(tsEvent, true));
-        api.addEventListener("tsab:health", (tsEvent) => this.tsHandleHealthEvent(tsEvent));
-        api.addEventListener("tsab:asset-upsert", (tsEvent) => this.tsHandleAssetUpsertEvent(tsEvent));
-        api.addEventListener("tsab:asset-remove", (tsEvent) => this.tsHandleAssetRemoveEvent(tsEvent));
+        this.tsBindApiEvents();
     }
+
+    tsBindApiEvents() {
+        if (this.tsApiEventsBound) {
+            return;
+        }
+        for (const [tsEventName, tsListener] of this.tsApiEventListeners) {
+            api.addEventListener(tsEventName, tsListener);
+        }
+        this.tsApiEventsBound = true;
+    }
+
+    tsUnbindApiEvents() {
+        if (!this.tsApiEventsBound) {
+            return;
+        }
+        for (const [tsEventName, tsListener] of this.tsApiEventListeners) {
+            api.removeEventListener?.(tsEventName, tsListener);
+        }
+        this.tsApiEventsBound = false;
+    }
+
     tsReadEventDetail(tsEvent) {
         return tsEvent?.detail || {};
     }

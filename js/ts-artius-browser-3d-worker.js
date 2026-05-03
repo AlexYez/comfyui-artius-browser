@@ -22,6 +22,7 @@ class TSGlobal3DThumbnailWorker {
         this.tsScanRunning = false;
         this.tsLastWarmupKey = "";
         this.tsStartupTimer = 0;
+        this.tsBoundScanEvent = (tsEvent) => this.tsHandleScanEvent(tsEvent);
         this.tsBoundVisibilityChange = () => {
             if (!document.hidden) {
                 void this.tsScheduleRun("visibility");
@@ -37,9 +38,9 @@ class TSGlobal3DThumbnailWorker {
             return;
         }
         this.tsStarted = true;
-        api.addEventListener("tsab:index-start", (tsEvent) => this.tsHandleScanEvent(tsEvent));
-        api.addEventListener("tsab:index-progress", (tsEvent) => this.tsHandleScanEvent(tsEvent));
-        api.addEventListener("tsab:index-complete", (tsEvent) => this.tsHandleScanEvent(tsEvent));
+        api.addEventListener("tsab:index-start", this.tsBoundScanEvent);
+        api.addEventListener("tsab:index-progress", this.tsBoundScanEvent);
+        api.addEventListener("tsab:index-complete", this.tsBoundScanEvent);
         document.addEventListener("visibilitychange", this.tsBoundVisibilityChange);
         window.addEventListener("focus", this.tsBoundWindowFocus);
         const tsInitialDelay = Math.max(
@@ -52,11 +53,20 @@ class TSGlobal3DThumbnailWorker {
     }
 
     tsDispose() {
+        if (this.tsDisposed && !this.tsStarted) {
+            return;
+        }
         this.tsDisposed = true;
         this.tsRunToken += 1;
         window.clearTimeout(this.tsStartupTimer);
-        document.removeEventListener("visibilitychange", this.tsBoundVisibilityChange);
-        window.removeEventListener("focus", this.tsBoundWindowFocus);
+        if (this.tsStarted) {
+            api.removeEventListener?.("tsab:index-start", this.tsBoundScanEvent);
+            api.removeEventListener?.("tsab:index-progress", this.tsBoundScanEvent);
+            api.removeEventListener?.("tsab:index-complete", this.tsBoundScanEvent);
+            document.removeEventListener("visibilitychange", this.tsBoundVisibilityChange);
+            window.removeEventListener("focus", this.tsBoundWindowFocus);
+            this.tsStarted = false;
+        }
     }
 
     tsHandleScanEvent(tsEvent) {
