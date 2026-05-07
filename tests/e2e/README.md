@@ -26,8 +26,8 @@ TS_COMFY_URL=http://127.0.0.1:8188 npx playwright test
 
 The default `TS_COMFY_URL` is `http://127.0.0.1:8188`.
 
-## Run in CI
+## Notes
 
-`.github/workflows/e2e.yml` checks out a fresh ComfyUI, symlinks this pack
-into `custom_nodes/`, starts ComfyUI on CPU, waits for `/system_stats`,
-then runs `playwright test`.
+These tests are intentionally **local-only** — they require a running
+ComfyUI with this pack installed, which is not provisioned in CI. Run
+them on your dev machine before tagging a release.

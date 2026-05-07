@@ -24,7 +24,8 @@ TS_COMFY_URL=http://127.0.0.1:8188 pytest tests/integration -v
 
 Default `TS_COMFY_URL` is `http://127.0.0.1:8188`.
 
-## Run in CI
+## Notes
 
-`.github/workflows/e2e.yml` starts ComfyUI in CPU mode and runs both these
-tests and the Playwright suite from `tests/e2e/` against the same instance.
+These tests are intentionally **local-only** — they require a running
+ComfyUI with this pack installed, which is not provisioned in CI. Run
+them on your dev machine before tagging a release.
