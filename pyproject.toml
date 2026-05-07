@@ -1,9 +1,10 @@
 [project]
 name = "comfyui-artius-browser"
 description = "Timesaver Artius Browser: lightweight asset browser for modern ComfyUI workflows."
-version = "0.7"
+version = "0.7.0"
 requires-python = ">=3.10"
 license = { file = "LICENSE.txt" }
+readme = "README.md"
 dependencies = [
     "blake3>=1.0.5",
     "send2trash>=1.8.3",
@@ -12,8 +13,10 @@ dependencies = [
 
 [project.urls]
 Repository = "https://github.com/AlexYez/comfyui-artius-browser"
+"Bug Tracker" = "https://github.com/AlexYez/comfyui-artius-browser/issues"
 
 [tool.comfy]
 PublisherId = "timesaver"
 DisplayName = "Timesaver Artius Browser"
 Icon = "https://raw.githubusercontent.com/AlexYez/comfyui-artius-browser/refs/heads/main/icon.png"
+requires-comfyui = ">=0.19.0"

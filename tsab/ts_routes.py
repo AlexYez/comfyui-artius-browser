@@ -1,10 +1,13 @@
 ﻿from __future__ import annotations
 
+import asyncio
+
 from aiohttp import web as TSWeb
 from .ts_settings import TS_DEFAULT_PAGE_SIZE, TS_MAX_3D_CAPTURE_DATA_URL_LENGTH
 from .ts_logging import TSLogVerbose
 from .ts_load3d_stage import TSPrepare3DAssetForLoad3D
 from .ts_utils import TSParseAssetCursor, TSParseDateToEpoch, TSParseMaybeInt, TSParseQueryList
+from .ts_version import TSCollectVersionInfo
 
 TSRoutesRegistered = False
 
@@ -109,6 +112,8 @@ def TSRegisterRoutes(ts_runtime) -> None:
         ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandle3DThumbnail(ts_runtime, ts_request)))
     for ts_path in TSBuildRouteVariants("/asset_browser/3d/stage/{id}"):
         ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandle3DStage(ts_runtime, ts_request)))
+    for ts_path in TSBuildRouteVariants("/asset_browser/version"):
+        ts_routes.append(TSWeb.get(ts_path, lambda ts_request: TSHandleVersion(ts_runtime, ts_request)))
 
     ts_server.app.add_routes(ts_routes)
     TSRoutesRegistered = True
@@ -130,6 +135,7 @@ def TSRegisterRoutes(ts_runtime) -> None:
             "/asset_browser/3d/viewer",
             "/asset_browser/3d/thumbnail/{id}",
             "/asset_browser/3d/stage/{id}",
+            "/asset_browser/version",
         ],
     )
 
@@ -263,3 +269,10 @@ async def TSHandle3DStage(ts_runtime, ts_request):
     ts_asset_id = TSParseRouteAssetId(ts_request)
     TSLogVerbose("route.3d_stage.post", asset_id=ts_asset_id, path=ts_request.path)
     return TSWeb.json_response(TSPrepare3DAssetForLoad3D(ts_runtime, ts_asset_id))
+
+
+async def TSHandleVersion(ts_runtime, ts_request):
+    TSLogVerbose("route.version.get", path=ts_request.path)
+    ts_cache_dir = ts_runtime.ts_storage_paths.ts_asset_browser_directory
+    ts_payload = await asyncio.to_thread(TSCollectVersionInfo, ts_cache_dir)
+    return TSWeb.json_response(ts_payload)

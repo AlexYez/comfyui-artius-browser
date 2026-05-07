@@ -2,6 +2,8 @@
     "panel.title": "Artius Browser",
     "button.donate": "Donate",
     "tooltip.donate": "Support the project.",
+    "badge.newVersion": "New version available",
+    "tooltip.newVersion": "A newer release of Artius Browser is available on GitHub.",
 
     "button.assets": "Assets",
     "tooltip.section.assets": "Browse indexed assets.",
@@ -18,6 +20,7 @@
 
     "sort.created_at": "Date",
     "sort.filename": "Filename",
+    "sort.filename.workflow": "Names",
     "sort.size_bytes": "Size",
     "button.sortAsc": "Asc",
     "button.sortDesc": "Desc",
