@@ -5,7 +5,7 @@ try:
 except ImportError:
     from typing_extensions import override
 
-from comfy_api.latest import ComfyExtension as TSComfyExtension, IO as TSIO
+from comfy_api.v0_0_2 import ComfyExtension as TSComfyExtension, IO as TSIO
 
 
 class TSArtiusBrowserExtension(TSComfyExtension):

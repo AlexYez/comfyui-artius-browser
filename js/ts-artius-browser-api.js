@@ -128,6 +128,10 @@ export async function tsFetchBrowserSettings() {
     return tsFetchJSON(`${tsRouteBase}/settings`);
 }
 
+export async function tsFetchVersionInfo() {
+    return tsFetchJSON(`${tsRouteBase}/version`);
+}
+
 export async function tsSaveBrowserSettings(tsUISettings = {}) {
     return tsPostJSON(`${tsRouteBase}/settings`, { ui: tsUISettings });
 }
@@ -352,7 +356,7 @@ async function tsApplyNativeAssetToNode(tsNode, tsAsset, tsWidgetNames) {
 
 async function tsSyncNative3DNode(tsNode, tsAsset) {
     const tsNodeClass = String(tsNode?.comfyClass || tsNode?.constructor?.comfyClass || "");
-    if (!tsNode || tsNodeClass !== "Load3D" || tsAsset?.type !== "3d") {
+    if (!tsNode || tsNodeClass !== tsNativeWorkflowTargets["3d"]?.tsNodeType || tsAsset?.type !== "3d") {
         return false;
     }
     const tsStagePayload = await tsStage3DAssetForLoad3D(tsAsset.id).catch((tsError) => {

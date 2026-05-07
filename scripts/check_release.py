@@ -165,7 +165,9 @@ def TSCheckGitWhitespace() -> None:
     if not ts_git:
         print("git diff --check: skipped (git not found)")
         return
-    TSRunCommand([ts_git, "diff", "--check"])
+    # cr-at-eol allows CRLF without flagging the CR as trailing whitespace
+    # on Windows repos with core.autocrlf=true.
+    TSRunCommand([ts_git, "-c", "core.whitespace=cr-at-eol", "diff", "--check"])
 
 
 def TSRunUnitTests() -> None:

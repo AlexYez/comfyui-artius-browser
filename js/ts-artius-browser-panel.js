@@ -8,6 +8,7 @@ import {
     tsCopyText,
     tsDebounce,
     tsFetchAssetDetail,
+    tsFetchVersionInfo,
     tsFetchWorkflowBrowserLibrary,
     tsEnsureCanvasDropBridge,
     tsFetchBrowserSettings,
@@ -209,6 +210,47 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsHydrateText();
         await this.tsFetchAssets(true);
         void this.tsMaybeBootstrapScan();
+        void this.tsCheckForNewVersion();
+    }
+
+    tsApplyLocalVersion(tsLocal) {
+        const tsVersionEl = this.tsRefs?.tsVersion;
+        if (!tsVersionEl) {
+            return;
+        }
+        const tsTrimmed = typeof tsLocal === "string" ? tsLocal.trim() : "";
+        if (tsTrimmed) {
+            tsVersionEl.textContent = `v${tsTrimmed}`;
+            tsVersionEl.title = `Artius Browser v${tsTrimmed}`;
+            tsVersionEl.hidden = false;
+        } else {
+            tsVersionEl.textContent = "";
+            tsVersionEl.removeAttribute("title");
+            tsVersionEl.hidden = true;
+        }
+    }
+
+    async tsCheckForNewVersion() {
+        const tsBadge = this.tsRefs?.tsUpdateBadge;
+        if (!tsBadge) {
+            return;
+        }
+        try {
+            const tsInfo = await tsFetchVersionInfo();
+            this.tsApplyLocalVersion(tsInfo?.local);
+            if (!tsInfo?.update_available) {
+                tsBadge.hidden = true;
+                return;
+            }
+            const tsHref = tsInfo.release_url || tsInfo.repository_url;
+            if (typeof tsHref === "string" && tsHref) {
+                tsBadge.href = tsHref;
+            }
+            tsBadge.hidden = false;
+        } catch (tsError) {
+            tsConsoleWarn("Timesaver Artius Browser version check failed", tsError);
+            tsBadge.hidden = true;
+        }
     }
 
     tsT(tsKey, tsFallback) {
@@ -640,6 +682,49 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
                 .ts-donate:active {
                     transform: translateY(1px);
+                }
+
+                .ts-version {
+                    display: inline-flex;
+                    align-items: center;
+                    font-size: 10px;
+                    font-weight: 500;
+                    letter-spacing: 0.02em;
+                    color: inherit;
+                    opacity: 0.55;
+                    user-select: text;
+                }
+
+                .ts-version[hidden] {
+                    display: none;
+                }
+
+                .ts-update-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    padding: 1px 7px;
+                    border-radius: 6px;
+                    border: 1px solid transparent;
+                    background: #5fa14f;
+                    color: #ffffff;
+                    font-size: 10px;
+                    font-weight: 500;
+                    letter-spacing: 0.02em;
+                    text-decoration: none;
+                    transition: background 0.14s ease, transform 0.06s ease;
+                }
+
+                .ts-update-badge:hover {
+                    background: #4f8a40;
+                    text-decoration: none;
+                }
+
+                .ts-update-badge:active {
+                    transform: translateY(1px);
+                }
+
+                .ts-update-badge[hidden] {
+                    display: none;
                 }
 
                 .ts-toolbar-main,
@@ -1197,7 +1282,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             </style>
             <div class="ts-shell" tabindex="0">
                 <div class="ts-toolbar">
-                    <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a></div>
+                    <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a><span class="ts-version" hidden></span><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a><a class="ts-update-badge" href="https://github.com/AlexYez/comfyui-artius-browser/releases" target="_blank" rel="noreferrer noopener" hidden></a></div>
                     <div class="ts-toolbar-main">
                         <div class="ts-toolbar-cluster ts-section-group">
                             <button class="ts-section-button ts-section-assets" type="button"></button>
@@ -1250,7 +1335,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsShell: this.shadowRoot.querySelector(".ts-shell"),
             tsTitle: this.shadowRoot.querySelector(".ts-title"),
             tsTitleLink: this.shadowRoot.querySelector(".ts-title-link"),
+            tsVersion: this.shadowRoot.querySelector(".ts-version"),
             tsDonate: this.shadowRoot.querySelector(".ts-donate"),
+            tsUpdateBadge: this.shadowRoot.querySelector(".ts-update-badge"),
             tsSectionAssets: this.shadowRoot.querySelector(".ts-section-assets"),
             tsSectionWorkflows: this.shadowRoot.querySelector(".ts-section-workflows"),
             tsSearch: this.shadowRoot.querySelector(".ts-search"),
@@ -1750,6 +1837,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsTitleLink.textContent = this.tsT("panel.title", tsProjectSettings.title);
         this.tsRefs.tsDonate.textContent = this.tsT("button.donate", "Donate");
         this.tsRefs.tsDonate.title = this.tsT("tooltip.donate", "Support the project.");
+        this.tsRefs.tsUpdateBadge.textContent = this.tsT("badge.newVersion", "New version available");
+        this.tsRefs.tsUpdateBadge.title = this.tsT("tooltip.newVersion", "A newer release of Artius Browser is available on GitHub.");
         this.tsRefs.tsSectionAssets.textContent = this.tsT("button.assets", "Assets");
         this.tsRefs.tsSectionWorkflows.textContent = this.tsT("button.workflows", "Workflows");
         this.tsRefs.tsSortDirection.title = this.tsT("tooltip.sortDirection", "Toggle ascending and descending sorting.");
@@ -1808,8 +1897,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsRenderSortOptions() {
-        const tsFilenameLabel = String(this.tsT("sort.filename", "Names") || "Names").replace(/^Filename$/i, "Names");
-        const tsOptions = this.tsIsWorkflowSection()
+        const tsIsWorkflow = this.tsIsWorkflowSection();
+        const tsFilenameLabel = tsIsWorkflow
+            ? this.tsT("sort.filename.workflow", "Names")
+            : this.tsT("sort.filename", "Filename");
+        const tsOptions = tsIsWorkflow
             ? [
                 ["created_at", this.tsT("sort.created_at", "Date")],
                 ["filename", tsFilenameLabel],
@@ -2398,7 +2490,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 && (this.tsState.tsFolder || "") === (tsNode.tsFolderPath || "");
             const tsToggleLabel = tsExpanded ? "&#9662;" : "&#9656;";
             const tsToggleMarkup = tsHasChildren
-                ? `<button class="ts-tree-toggle" type="button" data-toggle-key="${tsNode.tsKey}">${tsToggleLabel}</button>` 
+                ? `<button class="ts-tree-toggle" type="button" data-toggle-key="${tsNode.tsKey}">${tsToggleLabel}</button>`
                 : `<span class="ts-tree-toggle-spacer"></span>`;
             return `
                 <div>
