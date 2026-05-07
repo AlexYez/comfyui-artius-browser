@@ -96,7 +96,7 @@ jobs:
       - name: Install Playwright browsers
         working-directory: pack/tests/e2e
         run: |
-          npm install --no-audit --no-fund
+          npm ci
           npx playwright install --with-deps chromium
 
       - name: Run integration tests (pytest)
