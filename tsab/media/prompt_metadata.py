@@ -114,6 +114,14 @@ def TSExtractPromptPartsFromPromptField(ts_prompt_value) -> tuple[str, str]:
         for ts_negative_text in TSCollectPromptTextsFromReference(ts_negative_reference):
             TSAddCandidate(ts_negative_candidates, ts_negative_text)
 
+    def TSIsNodeLinkTuple(ts_value) -> bool:
+        if not isinstance(ts_value, list) or len(ts_value) != 2:
+            return False
+        ts_link_target = ts_value[0]
+        if not isinstance(ts_link_target, (str, int)):
+            return False
+        return str(ts_link_target) in ts_prompt_payload
+
     if not ts_positive_candidates and not ts_negative_candidates and not ts_fallback_candidates:
         def TSWalkPromptPayload(ts_node, ts_key_hint: str = "") -> None:
             if isinstance(ts_node, dict):
@@ -121,6 +129,8 @@ def TSExtractPromptPartsFromPromptField(ts_prompt_value) -> tuple[str, str]:
                     TSWalkPromptPayload(ts_child, str(ts_key).lower())
                 return
             if isinstance(ts_node, list):
+                if TSIsNodeLinkTuple(ts_node):
+                    return
                 for ts_child in ts_node:
                     TSWalkPromptPayload(ts_child, ts_key_hint)
                 return

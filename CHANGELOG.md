@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-08
+
+### Fixed
+- Image lightbox no longer shows ComfyUI node IDs (e.g. `"28"`, `"39"`)
+  in place of prompts when the PNG `Prompt` chunk has no literal
+  `inputs.text` strings — the fallback walker in
+  `tsab/media/prompt_metadata.py` now skips ComfyUI link tuples
+  `[node_id, output_index]` instead of treating their string node ID as
+  a prompt value. Affects workflows where the prompt is produced
+  dynamically (Qwen-VL-style nodes, primitive-fed CLIP encoders, etc.).
+
+### Changed
+- `prompt_parts_version` bumped from `3` to `4`. `TSEnsureMetadata`
+  re-extracts image metadata for previously-indexed assets on the next
+  lightbox open, so users recover automatically without a manual
+  Rebuild Cache.
+
 ## [0.8.0] - 2026-05-07
 
 Modernization-plan landing, README rewrite, and re-publish on Comfy
@@ -94,6 +111,7 @@ Baseline release. See `git log` for prior commit-level history.
 - Tags, rating, `asset_user_fields` table (schema v10).
 - `exiftool` dependency from the image pipeline.
 
-[Unreleased]: https://github.com/AlexYez/comfyui-artius-browser/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/AlexYez/comfyui-artius-browser/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v0.9.0
 [0.8.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v0.8.0
 [0.7.0]: https://github.com/AlexYez/comfyui-artius-browser/blob/main/CHANGELOG.md#070---2026-05-03

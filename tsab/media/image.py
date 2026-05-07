@@ -87,7 +87,7 @@ class TSImageHandler:
         ts_metadata_payload = {}
         if ts_prompt_text or ts_negative_prompt_text or ts_workflow_text:
             ts_metadata_payload = {
-                "prompt_parts_version": 3,
+                "prompt_parts_version": 4,
                 "positive_prompt_text": ts_prompt_text,
                 "negative_prompt_text": ts_negative_prompt_text,
             }
