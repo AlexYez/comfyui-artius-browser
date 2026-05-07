@@ -400,10 +400,9 @@ def test_workflow_delete_rejects_traversal(comfy_url):
 - `js/ts-artius-browser-api.js:359` (шаг 3)
 - `tests/test_path_traversal_vectors.py` (шаг 4 — новый)
 - `tests/e2e/` (шаг 9 — новая директория)
-- `tests/integration/` (шаг 10 — новая директория)
+- `tests/integration/` (шаг 10 — новая директория, локально-only)
 - `.pre-commit-config.yaml` (шаг 5 — новый)
 - `.github/workflows/test.yml` (шаг 6 — новый)
-- `.github/workflows/e2e.yml` (шаг 9 — новый)
 - `.github/ISSUE_TEMPLATE/bug.yml` (шаг 7 — новый)
 - `CHANGELOG.md` (шаг 8 — новый)
 
