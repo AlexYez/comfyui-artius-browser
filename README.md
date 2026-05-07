@@ -59,6 +59,7 @@ It is designed to stay fast on large libraries, keep previews compact, and use n
 - drag-and-drop into native ComfyUI nodes
 - delete to the system trash instead of hard delete
 - `Autoscan`, `Rescan`, and full `Rebuild Cache`
+- current version label next to the sidebar title; checks GitHub once a day and surfaces a `New version available` badge when a newer release ships
 
 ### Supported formats
 
@@ -214,11 +215,30 @@ The project is intentionally conservative about performance:
 
 ### Installation
 
-1. Copy this repository into `ComfyUI/custom_nodes/`
+#### Recommended: Comfy Registry
+
+If you have the `comfy-cli` tool installed:
+
+```bash
+comfy node install timesaver-artius-browser
+```
+
+You can also install through the **ComfyUI Manager** UI by searching for `Timesaver Artius Browser` in the registry.
+
+After install, restart ComfyUI and hard refresh with `Ctrl+F5`. Make sure `ffmpeg` and `ffprobe` are on your PATH for full media metadata.
+
+#### Manual install
+
+1. Clone this repository into `ComfyUI/custom_nodes/`:
+
+```bash
+git clone https://github.com/AlexYez/comfyui-artius-browser ComfyUI/custom_nodes/comfyui-artius-browser
+```
+
 2. Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 ```
 
 3. Make sure `ffmpeg` and `ffprobe` are available
@@ -236,6 +256,11 @@ pip install pillow-simd
 
 The backend will log `Pillow-SIMD detected — accelerated image pipeline enabled` at startup when it is active. Pillow-SIMD is a drop-in API-compatible replacement, no code changes required.
 
+### Changelog
+
+Release history is tracked in [CHANGELOG.md](CHANGELOG.md), following the
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
+
 ### Release checks
 
 Before publishing a new version, run:
@@ -245,6 +270,13 @@ python scripts/check_release.py
 ```
 
 It validates Python syntax, JavaScript syntax, JSON files, localization keys, obvious dead top-level helpers, unit tests, and Git whitespace issues.
+
+Optional local tests against a running ComfyUI:
+
+```bash
+pytest tests/integration -v             # 18 HTTP route tests
+cd tests/e2e && npx playwright test     # 5 native node ID + version smoke tests
+```
 
 ### Runtime storage
 
@@ -309,6 +341,7 @@ Then restart ComfyUI and scan again.
 - для `2` или `4` выбранных видео есть синхронный режим сравнения
 - 3D открывается через нативный viewer ComfyUI
 - удаление идет в системную корзину, а не навсегда
+- текущая версия показывается рядом с заголовком sidebar; раз в сутки проверяется GitHub, и появляется бейдж `New version available`, если вышел новый релиз
 
 ### Вкладка Assets
 
@@ -359,15 +392,38 @@ Then restart ComfyUI and scan again.
 
 ### Установка
 
-1. Скопируйте репозиторий в `ComfyUI/custom_nodes/`
+#### Через Comfy Registry (рекомендуется)
+
+С установленным `comfy-cli`:
+
+```bash
+comfy node install timesaver-artius-browser
+```
+
+Также можно установить через **ComfyUI Manager** — найдите `Timesaver Artius Browser` в реестре.
+
+После установки перезапустите ComfyUI и сделайте hard refresh `Ctrl+F5`. Убедитесь, что `ffmpeg` и `ffprobe` доступны в PATH.
+
+#### Ручная установка
+
+1. Склонируйте репозиторий в `ComfyUI/custom_nodes/`:
+
+```bash
+git clone https://github.com/AlexYez/comfyui-artius-browser ComfyUI/custom_nodes/comfyui-artius-browser
+```
+
 2. Установите зависимости:
 
 ```bash
-pip install -r requirements.txt
+pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 ```
 
 3. Убедитесь, что доступны `ffmpeg` и `ffprobe`
 4. Перезапустите ComfyUI
+
+### Changelog
+
+История релизов — в [CHANGELOG.md](CHANGELOG.md), формат [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
@@ -387,13 +443,15 @@ Puntos clave:
 - integración 3D nativa con `Load 3D & Animation`
 - borrado a la papelera del sistema
 
-Instalación rápida:
+Instalación recomendada (Comfy Registry):
 
 ```bash
-pip install -r requirements.txt
+comfy node install timesaver-artius-browser
 ```
 
-Reinicia ComfyUI y asegúrate de tener `ffmpeg` y `ffprobe`.
+O manualmente con `pip install -r requirements.txt`. Reinicia ComfyUI y asegúrate de tener `ffmpeg` y `ffprobe`.
+
+Historial de versiones: [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -414,13 +472,15 @@ Reinicia ComfyUI y asegúrate de tener `ffmpeg` y `ffprobe`.
 - 3D 使用 ComfyUI 原生查看器
 - 删除会进入系统回收站
 
-安装：
+推荐通过 Comfy Registry 安装：
 
 ```bash
-pip install -r requirements.txt
+comfy node install timesaver-artius-browser
 ```
 
-然后重启 ComfyUI，并确保系统中可用 `ffmpeg` 与 `ffprobe`。
+也可以手动 `pip install -r requirements.txt`。然后重启 ComfyUI，并确保系统中可用 `ffmpeg` 与 `ffprobe`。
+
+版本历史：[CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -441,13 +501,15 @@ Wichtige Funktionen:
 - native 3D-Integration mit ComfyUI
 - Löschen in den System-Papierkorb
 
-Installation:
+Empfohlen über Comfy Registry:
 
 ```bash
-pip install -r requirements.txt
+comfy node install timesaver-artius-browser
 ```
 
-Danach ComfyUI neu starten und `ffmpeg` sowie `ffprobe` bereitstellen.
+Alternativ manuell mit `pip install -r requirements.txt`. Danach ComfyUI neu starten und `ffmpeg` sowie `ffprobe` bereitstellen.
+
+Versionshistorie: [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -468,13 +530,15 @@ In breve:
 - viewer 3D nativo di ComfyUI
 - eliminazione nel cestino di sistema
 
-Installazione:
+Installazione consigliata tramite Comfy Registry:
 
 ```bash
-pip install -r requirements.txt
+comfy node install timesaver-artius-browser
 ```
 
-Riavvia ComfyUI e verifica che `ffmpeg` e `ffprobe` siano disponibili.
+In alternativa manualmente con `pip install -r requirements.txt`. Riavvia ComfyUI e verifica che `ffmpeg` e `ffprobe` siano disponibili.
+
+Storico delle versioni: [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -495,13 +559,15 @@ Fonctions principales :
 - intégration 3D native avec ComfyUI
 - suppression vers la corbeille système
 
-Installation :
+Installation recommandée via Comfy Registry :
 
 ```bash
-pip install -r requirements.txt
+comfy node install timesaver-artius-browser
 ```
 
-Redémarrez ensuite ComfyUI et assurez-vous que `ffmpeg` et `ffprobe` sont disponibles.
+Ou manuellement avec `pip install -r requirements.txt`. Redémarrez ensuite ComfyUI et assurez-vous que `ffmpeg` et `ffprobe` sont disponibles.
+
+Historique des versions : [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -522,13 +588,15 @@ Resumo:
 - viewer 3D nativo do ComfyUI
 - exclusão para a lixeira do sistema
 
-Instalação:
+Instalação recomendada via Comfy Registry:
 
 ```bash
-pip install -r requirements.txt
+comfy node install timesaver-artius-browser
 ```
 
-Depois reinicie o ComfyUI e garanta que `ffmpeg` e `ffprobe` estejam disponíveis.
+Ou manualmente com `pip install -r requirements.txt`. Depois reinicie o ComfyUI e garanta que `ffmpeg` e `ffprobe` estejam disponíveis.
+
+Histórico de versões: [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -550,13 +618,15 @@ Depois reinicie o ComfyUI e garanta que `ffmpeg` e `ffprobe` estejam disponívei
 - ComfyUI ネイティブの 3D viewer と連携
 - 削除は完全削除ではなくシステムのゴミ箱へ移動
 
-インストール:
+推奨インストール方法（Comfy Registry）:
 
 ```bash
-pip install -r requirements.txt
+comfy node install timesaver-artius-browser
 ```
 
-ComfyUI を再起動し、`ffmpeg` と `ffprobe` が利用できることを確認してください。
+または手動で `pip install -r requirements.txt`。ComfyUI を再起動し、`ffmpeg` と `ffprobe` が利用できることを確認してください。
+
+リリース履歴: [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -578,10 +648,12 @@ ComfyUI を再起動し、`ffmpeg` と `ffprobe` が利用できることを確�
 - ComfyUI 네이티브 3D viewer 통합
 - 삭제 시 영구 삭제가 아니라 시스템 휴지통으로 이동
 
-설치:
+권장 설치 방법 (Comfy Registry):
 
 ```bash
-pip install -r requirements.txt
+comfy node install timesaver-artius-browser
 ```
 
-ComfyUI를 다시 시작하고 `ffmpeg`와 `ffprobe`를 사용할 수 있는지 확인하세요.
+또는 수동으로 `pip install -r requirements.txt`. ComfyUI를 다시 시작하고 `ffmpeg`와 `ffprobe`를 사용할 수 있는지 확인하세요.
+
+릴리스 기록: [CHANGELOG.md](CHANGELOG.md).
