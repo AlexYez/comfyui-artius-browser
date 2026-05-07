@@ -7,40 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-07
+
+Modernization-plan landing, README rewrite, and re-publish on Comfy
+Registry with a clean commit history (the earlier `v0.7.0` tag was
+withdrawn).
+
 ### Added
-- Current pack version label (`v0.7.0`) rendered next to the sidebar title.
-- `GET /asset_browser/version` endpoint and `tsab/ts_version.py` module that
-  reads the local pack version from `pyproject.toml`, fetches the remote
-  `pyproject.toml` from `main` (24h cache), and reports `update_available`.
-- `.pre-commit-config.yaml` with project-specific guards: no `torch*` in
-  `requirements.txt`, no runtime `print()` in `tsab/`, no `LiteGraph` /
-  `app.canvas` / `app.graph` access outside the workflow adapter, no
+- Sidebar **version label** rendered next to the title (e.g. `v0.8.0`),
+  with a daily `New version available` chip when a newer release ships.
+- `GET /asset_browser/version` endpoint and `tsab/ts_version.py`: reads
+  the local pack version from `pyproject.toml`, fetches the remote
+  `pyproject.toml` from `main` (24 h cache), reports `update_available`.
+- `.pre-commit-config.yaml` with six project-specific guards: no `torch*`
+  in `requirements.txt`, no runtime `print()` in `tsab/`, no `LiteGraph`
+  / `app.canvas` / `app.graph` access outside the workflow adapter, no
   `comfy_api.latest` import, no native node ID literals outside
-  `js/ts-artius-browser-settings.js`, no `os.getcwd` outside `tsab/ts_storage.py`.
-- `.github/workflows/test.yml` that runs `scripts/check_release.py` on every
-  push and pull request across Linux + Windows on Python 3.10 / 3.12.
+  `js/ts-artius-browser-settings.js`, no `os.getcwd` outside
+  `tsab/ts_storage.py`.
+- `.github/workflows/test.yml` that runs `scripts/check_release.py` on
+  every push and pull request across Linux + Windows on Python
+  3.10 / 3.12.
 - `.github/ISSUE_TEMPLATE/bug.yml` with structured bug-report fields
-  (versions, install type, OS, browser, ffmpeg, repro, server log, devtools log).
-- `MODERNIZATION_PLAN.md` capturing the prioritized solo-dev audit plan.
+  (versions, install type, OS, browser, ffmpeg, repro, server log,
+  DevTools log).
+- Local-only test suites: `tests/integration/` (pytest, 18 HTTP route
+  tests against a live ComfyUI) and `tests/e2e/` (Playwright, 5 native
+  node ID + version smoke tests).
 
 ### Changed
-- Pinned `comfy_api` import to the versioned subpackage `comfy_api.v0_0_2`
-  (was `comfy_api.latest`, which is officially marked unstable). Available
-  since ComfyUI v0.19.0.
-- `pyproject.toml`: bumped `version` to `0.7.0` (semver), added `readme`,
-  `[project.urls]` `"Bug Tracker"`, and `[tool.comfy] requires-comfyui = ">=0.19.0"`.
+- Pinned `comfy_api` import to the versioned subpackage
+  `comfy_api.v0_0_2` (was `comfy_api.latest`, which is officially marked
+  unstable). Available since ComfyUI v0.19.0.
+- `pyproject.toml`: bumped `version` to `0.8.0` (semver), added `readme`,
+  `[project.urls]` `"Bug Tracker"`, and
+  `[tool.comfy] requires-comfyui = ">=0.19.0"`.
 - `js/ts-artius-browser-api.js`: replaced literal `"Load3D"` in
-  `tsSyncNative3DNode` with `tsNativeWorkflowTargets["3d"]?.tsNodeType`,
-  keeping `js/ts-artius-browser-settings.js` as the single source of truth
-  for native node IDs.
+  `tsSyncNative3DNode` with
+  `tsNativeWorkflowTargets["3d"]?.tsNodeType`, keeping
+  `js/ts-artius-browser-settings.js` as the single source of truth for
+  native node IDs.
 - `scripts/check_release.py`: `git diff --check` now passes
-  `core.whitespace=cr-at-eol` so CRLF working trees on Windows stop tripping
-  the trailing-whitespace rule.
+  `core.whitespace=cr-at-eol` so CRLF working trees on Windows stop
+  tripping the trailing-whitespace rule.
+- **README**: rewritten with a friendlier tone, badges, emoji-tagged
+  sections, collapsible feature blocks, and a hero-style header.
+  Multilingual short sections kept (es / zh / de / it / fr / pt / ja /
+  ko) but unified in style.
 
 ### Fixed
-- `tests/test_asset_payload.py` and `tests/test_asset_catalog.py` now assert
-  the current `preview_url` cache-busting contract (`?v=<preview mtime_ns>`)
-  instead of the legacy `?v=<preview_path>` format.
+- `tests/test_asset_payload.py` and `tests/test_asset_catalog.py` now
+  assert the current `preview_url` cache-busting contract
+  (`?v=<preview mtime_ns>`) instead of the legacy `?v=<preview_path>`
+  format.
 
 ## [0.7.0] - 2026-05-03
 
@@ -75,5 +94,6 @@ Baseline release. See `git log` for prior commit-level history.
 - Tags, rating, `asset_user_fields` table (schema v10).
 - `exiftool` dependency from the image pipeline.
 
-[Unreleased]: https://github.com/AlexYez/comfyui-artius-browser/compare/v0.7.0...HEAD
-[0.7.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v0.7.0
+[Unreleased]: https://github.com/AlexYez/comfyui-artius-browser/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v0.8.0
+[0.7.0]: https://github.com/AlexYez/comfyui-artius-browser/blob/main/CHANGELOG.md#070---2026-05-03
