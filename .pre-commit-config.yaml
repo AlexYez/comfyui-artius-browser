@@ -1,0 +1,54 @@
+# Local pre-commit hooks that turn the conventions in CLAUDE.md into
+# enforceable rules. Install with:
+#   pip install pre-commit && pre-commit install
+# Run on the whole repo:
+#   pre-commit run --all-files
+#
+# Notes:
+# - Hooks use bash; on Windows pre-commit invokes Git for Windows bash.
+# - Each hook is a single grep that fails if a forbidden pattern is found.
+
+repos:
+  - repo: local
+    hooks:
+      - id: no-torch-in-requirements
+        name: No torch* hard-pinned in requirements.txt
+        entry: bash -c '! grep -nE "^(torch|torchvision|torchaudio)([<>=!~]|$)" requirements.txt'
+        language: system
+        pass_filenames: false
+        files: ^requirements\.txt$
+
+      - id: no-print-in-tsab
+        name: No print() in tsab/ runtime code (use logging)
+        entry: bash -c '! grep -rnE "^[^#]*\bprint\(" --include="*.py" tsab/'
+        language: system
+        pass_filenames: false
+        files: ^tsab/.*\.py$
+
+      - id: no-comfy-internals-outside-adapter
+        name: LiteGraph/canvas/graph access only in ts-artius-browser-api-workflow.js
+        entry: bash -c '! grep -rnE "(LiteGraph\.|app\.canvas\.|app\.graph\.)" --include="*.js" js/ | grep -v "ts-artius-browser-api-workflow\.js"'
+        language: system
+        pass_filenames: false
+        files: ^js/.*\.js$
+
+      - id: no-comfy-api-latest
+        name: comfy_api.latest is unstable; use a versioned subpackage
+        entry: bash -c '! grep -rnE "from comfy_api\.latest|import comfy_api\.latest" --include="*.py" tsab/'
+        language: system
+        pass_filenames: false
+        files: ^tsab/.*\.py$
+
+      - id: no-native-node-id-literals
+        name: Native node IDs only in ts-artius-browser-settings.js
+        entry: bash -c '! grep -rnE "\"(LoadImage|LoadVideo|LoadAudio|Load3D)\"" --include="*.js" js/ | grep -v "ts-artius-browser-settings\.js"'
+        language: system
+        pass_filenames: false
+        files: ^js/.*\.js$
+
+      - id: no-os-getcwd-in-tsab
+        name: os.getcwd / hardcoded ComfyUI paths only via tsab/ts_storage.py
+        entry: bash -c '! grep -rnE "(os\.getcwd|user/default/workflows)" --include="*.py" tsab/ | grep -v "tsab/ts_storage\.py"'
+        language: system
+        pass_filenames: false
+        files: ^tsab/.*\.py$
