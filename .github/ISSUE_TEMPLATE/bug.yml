@@ -1,0 +1,125 @@
+name: Bug report
+description: Report a bug in Timesaver Artius Browser
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. The fields marked **required** below are the ones that usually decide whether the bug can be reproduced. Without them the report cannot be acted on.
+
+  - type: input
+    id: pack-version
+    attributes:
+      label: Artius Browser version
+      description: Shown next to the title in the sidebar (e.g. `v0.7.0`). Also visible in `pyproject.toml`.
+      placeholder: "v0.7.0"
+    validations:
+      required: true
+
+  - type: input
+    id: comfyui-version
+    attributes:
+      label: ComfyUI version
+      description: Commit hash from `git -C ComfyUI rev-parse HEAD`, or the version printed in the ComfyUI startup log.
+      placeholder: "0.20.1 (or commit hash)"
+    validations:
+      required: true
+
+  - type: input
+    id: frontend-version
+    attributes:
+      label: comfyui-frontend-package version
+      description: Found in `pip show comfyui-frontend-package` or in the ComfyUI startup log.
+      placeholder: "1.x.x"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: ComfyUI install type
+      options:
+        - Portable Windows
+        - Manual Linux/macOS
+        - Docker
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system + version
+      placeholder: "Windows 11 23H2 / Ubuntu 24.04 / macOS 14.5"
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser + version
+      placeholder: "Chrome 130 / Firefox 131 / Edge 130"
+    validations:
+      required: true
+
+  - type: input
+    id: ffmpeg
+    attributes:
+      label: ffmpeg / ffprobe
+      description: Output of `ffmpeg -version` (first line). If not installed, write "not installed".
+      placeholder: "ffmpeg version 7.x ... | not installed"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Numbered list of steps that reproduces the bug from a fresh ComfyUI start.
+      placeholder: |
+        1. Start ComfyUI.
+        2. Open the Artius Browser sidebar.
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: server-log
+    attributes:
+      label: ComfyUI server console log
+      description: The relevant slice of the terminal/log output (from the failing operation). Wrap in a fenced code block.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: devtools-log
+    attributes:
+      label: Browser DevTools console log
+      description: Open DevTools (F12) → Console tab. Paste the relevant errors/warnings.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Screenshots, screen recordings, related issues, anything else that helps.
+    validations:
+      required: false
