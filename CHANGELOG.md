@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-13
+
+### Added
+- `.comfyignore` at the repository root. Excludes `tests/`, `scripts/`,
+  `.github/`, and `.pre-commit-config.yaml` from the published archive
+  so the Comfy Registry security scanner stops flagging Playwright /
+  subprocess usage in dev-only tooling. Pack size shrinks too. No
+  runtime change for end users.
+
 ## [0.9.0] - 2026-05-08
 
 ### Fixed
@@ -111,7 +120,8 @@ Baseline release. See `git log` for prior commit-level history.
 - Tags, rating, `asset_user_fields` table (schema v10).
 - `exiftool` dependency from the image pipeline.
 
-[Unreleased]: https://github.com/AlexYez/comfyui-artius-browser/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/AlexYez/comfyui-artius-browser/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v1.0.0
 [0.9.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v0.9.0
 [0.8.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v0.8.0
 [0.7.0]: https://github.com/AlexYez/comfyui-artius-browser/blob/main/CHANGELOG.md#070---2026-05-03
