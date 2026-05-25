@@ -11,6 +11,8 @@
 export const tsBrowserRuntimeSettings = Object.freeze({
     initialRescanDelayMs: 600,
     executionRescanDelayMs: 1200,
+    executionRescanMaxDeferralMs: 5000,
+    executionRescanIdleRetryMs: 250,
     executionRescanRootId: "output",
     enableConsoleDebug: false,
 });

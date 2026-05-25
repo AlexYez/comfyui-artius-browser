@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-05-14
+
+### Fixed
+- Autoscan no longer gets stuck when ComfyUI runs a tight queue of
+  short prompts. The execution-end debounce in
+  `js/ts-artius-browser.js` was a pure trailing-edge debounce: every
+  `execution_success` cleared the pending 1200 ms timer and started a
+  new one, so a stream of executions with inter-prompt gaps below
+  1200 ms could starve the rescan indefinitely. Added a maximum
+  deferral cap (`executionRescanMaxDeferralMs`, default 5000 ms) so
+  the timer is guaranteed to fire even during a continuous burst.
+
+### Added
+- Execution-state idle gate around the rescan POST. The frontend now
+  tracks `execution_start` / `execution_success` / `execution_error`
+  and only fires `/asset_browser/rescan` when ComfyUI is idle. If the
+  debounce timer expires mid-execution, it re-arms on a short retry
+  interval (`executionRescanIdleRetryMs`, default 250 ms) instead of
+  hitting the backend during sampling. Net effect: zero rescan
+  traffic while a workflow is actively running; one rescan ~1.2 s
+  after the queue settles. Degrades to the prior debounce behaviour
+  on ComfyUI builds that do not emit `execution_start`.
+
 ## [1.0.0] - 2026-05-13
 
 ### Added
@@ -120,7 +143,8 @@ Baseline release. See `git log` for prior commit-level history.
 - Tags, rating, `asset_user_fields` table (schema v10).
 - `exiftool` dependency from the image pipeline.
 
-[Unreleased]: https://github.com/AlexYez/comfyui-artius-browser/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/AlexYez/comfyui-artius-browser/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v1.1.0
 [1.0.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v1.0.0
 [0.9.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v0.9.0
 [0.8.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v0.8.0

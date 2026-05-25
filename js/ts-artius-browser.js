@@ -17,28 +17,58 @@ import { tsEnsurePanelElement, tsGetPanelSingleton } from "./ts-artius-browser-p
 import { tsStartGlobal3DThumbnailWorker } from "./ts-artius-browser-3d-worker.js";
 
 let tsExecutionRescanTimer = 0;
+let tsExecutionRescanFirstEventAt = 0;
 let tsAutoscanEnabled = true;
+let tsIsComfyExecuting = false;
 
 function tsSetAutoscanEnabled(tsEnabled) {
     tsAutoscanEnabled = Boolean(tsEnabled);
     if (!tsAutoscanEnabled) {
         window.clearTimeout(tsExecutionRescanTimer);
+        tsExecutionRescanFirstEventAt = 0;
     }
+}
+
+function tsAttemptRescanNow() {
+    if (!tsAutoscanEnabled) {
+        tsExecutionRescanFirstEventAt = 0;
+        return;
+    }
+    if (tsIsComfyExecuting) {
+        const tsRetryMs = Number(tsBrowserRuntimeSettings.executionRescanIdleRetryMs) || 250;
+        window.clearTimeout(tsExecutionRescanTimer);
+        tsExecutionRescanTimer = window.setTimeout(tsAttemptRescanNow, tsRetryMs);
+        return;
+    }
+    tsExecutionRescanFirstEventAt = 0;
+    tsPostJSON(`${tsApiSettings.routeBase}/rescan`, { root_id: tsBrowserRuntimeSettings.executionRescanRootId }).catch((tsError) => {
+        tsConsoleWarn("Timesaver Artius Browser execution rescan failed", tsError);
+    });
 }
 
 function tsDebouncedExecutionRescan() {
     if (!tsAutoscanEnabled) {
         return;
     }
+    const tsNow = Date.now();
+    if (!tsExecutionRescanFirstEventAt) {
+        tsExecutionRescanFirstEventAt = tsNow;
+    }
+    const tsElapsed = tsNow - tsExecutionRescanFirstEventAt;
+    const tsBaseDelay = Number(tsBrowserRuntimeSettings.executionRescanDelayMs) || 0;
+    const tsMaxDeferral = Number(tsBrowserRuntimeSettings.executionRescanMaxDeferralMs) || tsBaseDelay;
+    const tsDelay = Math.max(0, Math.min(tsBaseDelay, tsMaxDeferral - tsElapsed));
     window.clearTimeout(tsExecutionRescanTimer);
-    tsExecutionRescanTimer = window.setTimeout(() => {
-        if (!tsAutoscanEnabled) {
-            return;
-        }
-        tsPostJSON(`${tsApiSettings.routeBase}/rescan`, { root_id: tsBrowserRuntimeSettings.executionRescanRootId }).catch((tsError) => {
-            tsConsoleWarn("Timesaver Artius Browser execution rescan failed", tsError);
-        });
-    }, tsBrowserRuntimeSettings.executionRescanDelayMs);
+    tsExecutionRescanTimer = window.setTimeout(tsAttemptRescanNow, tsDelay);
+}
+
+function tsHandleExecutionStart() {
+    tsIsComfyExecuting = true;
+}
+
+function tsHandleExecutionEnd() {
+    tsIsComfyExecuting = false;
+    tsDebouncedExecutionRescan();
 }
 
 app.registerExtension({
@@ -99,6 +129,8 @@ app.registerExtension({
             }, tsBrowserRuntimeSettings.initialRescanDelayMs);
         }
 
-        api.addEventListener("execution_success", () => tsDebouncedExecutionRescan());
+        api.addEventListener("execution_start", () => tsHandleExecutionStart());
+        api.addEventListener("execution_success", () => tsHandleExecutionEnd());
+        api.addEventListener("execution_error", () => tsHandleExecutionEnd());
     },
 });
