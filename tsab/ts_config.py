@@ -144,6 +144,18 @@ class TSConfigStore:
             if "workflow_tree_panel_width" not in ts_user_ui:
                 ts_ui["workflow_tree_panel_width"] = ts_seed_width
             ts_result["version"] = 16
+        if TSCurrentVersion() < 17:
+            # v17 raises preview quality defaults (thumbnail_size 104→256,
+            # image_quality 42→82, waveform 384×200→768×320). Old configs
+            # had these baked in by the v8 migration, so we overwrite them
+            # unconditionally. Existing cached previews stay at the old
+            # quality until the user hits Rebuild Cache.
+            ts_preview = ts_result.setdefault("preview", {})
+            ts_preview["thumbnail_size"] = ts_default["preview"]["thumbnail_size"]
+            ts_preview["image_quality"] = ts_default["preview"]["image_quality"]
+            ts_preview["waveform_width"] = ts_default["preview"]["waveform_width"]
+            ts_preview["waveform_height"] = ts_default["preview"]["waveform_height"]
+            ts_result["version"] = 17
         self._TSNormalizeTopLevelSections(ts_result, ts_default)
         return ts_result
 

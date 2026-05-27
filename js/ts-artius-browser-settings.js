@@ -13,6 +13,7 @@ export const tsBrowserRuntimeSettings = Object.freeze({
     executionRescanDelayMs: 1200,
     executionRescanMaxDeferralMs: 5000,
     executionRescanIdleRetryMs: 250,
+    executionRescanIdleWindowMs: 800,
     executionRescanRootId: "output",
     enableConsoleDebug: false,
 });
@@ -57,7 +58,7 @@ export const tsPanelSettings = Object.freeze({
     threeDThumbnails: {
         concurrency: 1,
         visibleLimit: 4,
-        captureSize: 320,
+        captureSize: 480,
         warmFrames: 2,
         backgroundPageSize: 8,
         idlePollMs: 120,

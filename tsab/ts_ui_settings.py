@@ -26,6 +26,18 @@ def TSClampInt(ts_value: Any, ts_minimum: int, ts_maximum: int, ts_default: int)
     return ts_clamped_value if ts_clamped_value is not None else ts_default
 
 
+def TSParseClampedFloat(ts_value: Any, ts_minimum: float, ts_maximum: float) -> float | None:
+    try:
+        return max(ts_minimum, min(ts_maximum, float(ts_value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def TSClampFloat(ts_value: Any, ts_minimum: float, ts_maximum: float, ts_default: float) -> float:
+    ts_clamped_value = TSParseClampedFloat(ts_value if ts_value is not None else ts_default, ts_minimum, ts_maximum)
+    return ts_clamped_value if ts_clamped_value is not None else ts_default
+
+
 def TSNormalizeChoice(ts_value: Any, ts_allowed_values: set[str], ts_default: str) -> str:
     ts_text_value = str(ts_value or ts_default)
     return ts_text_value if ts_text_value in ts_allowed_values else ts_default
@@ -61,6 +73,7 @@ def TSNormalizeUISettings(ts_ui: dict[str, Any] | None) -> dict[str, Any]:
         "browser_width": TSClampInt(ts_ui.get("browser_width"), 0, 1600, 0),
         "asset_tree_panel_width": TSClampInt(ts_ui.get("asset_tree_panel_width"), 120, 700, 220),
         "workflow_tree_panel_width": TSClampInt(ts_ui.get("workflow_tree_panel_width"), 120, 700, 220),
+        "toolbar_scale": TSClampFloat(ts_ui.get("toolbar_scale"), 0.6, 1.0, 1.0),
     }
 
 
@@ -122,3 +135,7 @@ def TSApplyUISettingsUpdates(ts_ui: dict[str, Any], ts_ui_updates: dict[str, Any
         ts_workflow_tree_panel_width = TSParseClampedInt(ts_updates.get("workflow_tree_panel_width"), 120, 700)
         if ts_workflow_tree_panel_width is not None:
             ts_ui["workflow_tree_panel_width"] = ts_workflow_tree_panel_width
+    if "toolbar_scale" in ts_updates:
+        ts_toolbar_scale = TSParseClampedFloat(ts_updates.get("toolbar_scale"), 0.6, 1.0)
+        if ts_toolbar_scale is not None:
+            ts_ui["toolbar_scale"] = ts_toolbar_scale

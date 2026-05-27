@@ -51,17 +51,17 @@ TS_BACKEND_SETTINGS = {
         "ffmpeg_workers": _TS_AUTO_MEDIA_WORKERS,
     },
     "preview": {
-        "thumbnail_size": 104,
+        "thumbnail_size": 256,
         "default_preview_size": 120,
         "max_3d_capture_data_url_length": 8 * 1024 * 1024,
         "max_3d_capture_decoded_bytes": 6 * 1024 * 1024,
         "max_3d_capture_pixels": 4096 * 4096,
         "allowed_3d_capture_mime_types": {"image/png", "image/jpeg", "image/webp"},
         "video_frame_time": 0.5,
-        "waveform_width": 384,
-        "waveform_height": 200,
+        "waveform_width": 768,
+        "waveform_height": 320,
         "image_format": "webp",
-        "image_quality": 42,
+        "image_quality": 82,
         "placeholder_width": 384,
         "placeholder_height": 240,
     },
@@ -126,7 +126,7 @@ TS_EVENT_ASSET_REMOVE = f"{TS_EVENT_PREFIX}:asset-remove"
 TS_EVENT_HEALTH = f"{TS_EVENT_PREFIX}:health"
 
 TS_DEFAULT_CONFIG = {
-    "version": 16,
+    "version": 17,
     "roots": {
         "output": {"enabled": True, "allow_delete": True},
         "input": {"enabled": True, "allow_delete": True},
@@ -160,6 +160,7 @@ TS_DEFAULT_CONFIG = {
         "browser_width": 0,
         "asset_tree_panel_width": 220,
         "workflow_tree_panel_width": 220,
+        "toolbar_scale": 1.0,
     },
     "indexing": {
         "batch_size": TS_DEFAULT_SCAN_BATCH,

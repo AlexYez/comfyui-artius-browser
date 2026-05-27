@@ -30,6 +30,7 @@
     "tooltip.mode.flat": "Switch to the flat feed.",
     "button.tree": "Tree",
     "tooltip.mode.tree": "Switch to the folder tree.",
+    "tooltip.toolbarResize": "Drag to resize the toolbar.",
 
     "type.image": "Image",
     "tooltip.type.image": "Toggle image assets.",

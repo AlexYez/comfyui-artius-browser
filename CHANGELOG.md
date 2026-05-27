@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-27
+
+### Added
+- Resizable toolbar with proportional scaling. A thin drag handle
+  along the toolbar's bottom edge lets you compress the entire top
+  bar — when dragged up, every control (filters, search, buttons,
+  fonts, gaps) scales down uniformly via a single CSS variable
+  `--ts-toolbar-scale`. The asset grid below grows to fill the
+  reclaimed vertical room. Scale is clamped to `[0.6, 1.0]` and
+  persists per install via a new `ui.toolbar_scale` config key
+  (additive, no schema bump). Default: `1.0` (unchanged from
+  pre-existing layout).
+
+### Fixed
+- Asset deletion no longer scrolls the grid back to the top. The old
+  flow called `tsFetchAssets(true)` after the `/delete` POST, which
+  reset the virtualized grid and lost scroll position. Replaced with
+  in-place removal from the cached items array via a new
+  `tsRemoveItemsByIds` helper. Selection set and last-selected index
+  are kept in sync; the response-cache invalidates so a later
+  refetch from filter / sort change still gets fresh data. Workflow
+  delete (`tsDeleteWorkflowById`) was switched to the same helper
+  and additionally prunes the deleted entry from the in-memory
+  workflow library so folder switches do not re-show it.
+- Autoscan no longer goes silent after a cancelled / interrupted
+  workflow. The 1.1.0 idle gate used a sticky `tsIsComfyExecuting`
+  boolean that was set on `execution_start` and only cleared on
+  `execution_success` / `execution_error`. If anything ended the
+  prompt through a different path (`execution_interrupted` from the
+  Cancel button, WebSocket reconnect mid-execution, ComfyUI builds
+  that emit a different terminal event), the flag stayed `true` and
+  every subsequent rescan attempt looped forever in the 250 ms
+  idle-retry. Replaced the flag with a "last execution activity"
+  timestamp: any of `execution_start`, `executing`,
+  `execution_success`, `execution_error`, `execution_interrupted`
+  updates it; the gate fires `/rescan` once the timestamp is older
+  than `executionRescanIdleWindowMs` (default 800 ms). Self-healing
+  — if events stop arriving for any reason, the gate opens
+  automatically after 800 ms of silence instead of staying stuck.
+
+### Changed
+- Preview quality defaults raised. Thumbnails are now 256 px (was
+  104 px), WebP `quality` is `82` (was `42`), WebP `method` is `4`
+  (was `0`), waveforms are 768×320 px (was 384×200 px), 3D capture
+  is 480 px (was 320 px). Visible difference on HiDPI / retina
+  displays — previous numbers were sized for non-retina screens and
+  were noticeably soft on modern monitors. Cache footprint grows
+  roughly 5–8× per image (still small in absolute terms — a typical
+  256×256 WebP at quality 82 is ~12–25 KB). Hit **Rebuild Cache**
+  once to regenerate existing previews at the new quality; new
+  assets pick it up automatically.
+- Config schema bumped to v17. The v17 migration overwrites the four
+  preview keys (`thumbnail_size`, `image_quality`, `waveform_width`,
+  `waveform_height`) with the new defaults so existing installs
+  actually receive the bump (the v8 migration had baked the old
+  values into every config file).
+
 ## [1.1.0] - 2026-05-14
 
 ### Fixed
@@ -143,7 +200,8 @@ Baseline release. See `git log` for prior commit-level history.
 - Tags, rating, `asset_user_fields` table (schema v10).
 - `exiftool` dependency from the image pipeline.
 
-[Unreleased]: https://github.com/AlexYez/comfyui-artius-browser/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/AlexYez/comfyui-artius-browser/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v1.2.0
 [1.1.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v1.1.0
 [1.0.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v1.0.0
 [0.9.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v0.9.0

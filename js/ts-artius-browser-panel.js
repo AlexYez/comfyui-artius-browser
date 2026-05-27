@@ -108,6 +108,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsTreeWidth: 220,
             tsAssetTreeWidth: 220,
             tsWorkflowTreeWidth: 220,
+            tsToolbarScale: 1,
             tsSettingsHydrated: false,
             tsQueuedFetchReset: false,
             tsQueuedFetchAppend: false,
@@ -200,6 +201,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsGridRenderFrame = 0;
         }
         this.tsResizeObserver?.disconnect?.();
+        this.tsToolbarResizeObserver?.disconnect?.();
         this.tsBrowserWidthObserver?.disconnect?.();
         this.tsUnbindApiEvents();
     }
@@ -415,6 +417,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             if (typeof tsUI.autoscan === "boolean") {
                 this.tsState.tsAutoscan = tsUI.autoscan;
             }
+            const tsToolbarScale = Number(tsUI.toolbar_scale);
+            if (Number.isFinite(tsToolbarScale) && tsToolbarScale > 0) {
+                this.tsState.tsToolbarScale = Math.max(0.6, Math.min(1, tsToolbarScale));
+            }
             this.tsState.tsAssetSortKey = tsNormalizeAssetSortKey(tsUI.asset_sort_key, tsPanelSettings.defaultSort.key);
             this.tsState.tsAssetSortDirection = tsNormalizeSortDirection(tsUI.asset_sort_direction, tsPanelSettings.defaultSort.direction);
             this.tsState.tsWorkflowSortKey = tsNormalizeWorkflowSortKey(tsUI.workflow_sort_key, tsPanelSettings.defaultSort.key);
@@ -519,6 +525,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 browser_width: this.tsState.tsBrowserWidth,
                 asset_tree_panel_width: this.tsState.tsAssetTreeWidth,
                 workflow_tree_panel_width: this.tsState.tsWorkflowTreeWidth,
+                toolbar_scale: Number(this.tsState.tsToolbarScale) || 1,
             });
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser settings save failed", tsError);
@@ -544,6 +551,66 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             lastAssetFolder: this.tsLastAssetFolder,
         });
         this.tsApplyTreeWidth();
+    }
+
+    tsApplyToolbarScale() {
+        const tsShell = this.tsRefs?.tsShell;
+        const tsMain = this.tsRefs?.tsToolbarMain;
+        const tsWrap = this.tsRefs?.tsToolbarMainWrap;
+        if (!tsShell || !tsMain || !tsWrap) {
+            return;
+        }
+        const tsScale = Math.max(0.6, Math.min(1, Number(this.tsState.tsToolbarScale) || 1));
+        tsShell.style.setProperty("--ts-toolbar-scale", String(tsScale));
+        const tsNaturalHeight = tsMain.scrollHeight || tsMain.offsetHeight || 60;
+        tsWrap.style.height = `${Math.round(tsNaturalHeight * tsScale)}px`;
+    }
+
+    tsBindToolbarResizer() {
+        const tsResizer = this.tsRefs?.tsToolbarResizer;
+        const tsMain = this.tsRefs?.tsToolbarMain;
+        if (!tsResizer || !tsMain) {
+            return;
+        }
+        let tsDragStartY = 0;
+        let tsDragStartScale = 1;
+        let tsDragNaturalHeight = 60;
+        let tsActivePointerId = null;
+        const tsOnPointerMove = (tsEvent) => {
+            if (tsEvent.pointerId !== tsActivePointerId) {
+                return;
+            }
+            const tsDeltaY = tsEvent.clientY - tsDragStartY;
+            const tsHeightFactor = tsDragNaturalHeight > 0 ? tsDragNaturalHeight : 60;
+            const tsRawScale = tsDragStartScale + tsDeltaY / tsHeightFactor;
+            const tsClampedScale = Math.max(0.6, Math.min(1, tsRawScale));
+            this.tsState.tsToolbarScale = tsClampedScale;
+            this.tsApplyToolbarScale();
+        };
+        const tsOnPointerUp = (tsEvent) => {
+            if (tsEvent.pointerId !== tsActivePointerId) {
+                return;
+            }
+            tsActivePointerId = null;
+            tsResizer.dataset.dragging = "false";
+            tsResizer.releasePointerCapture?.(tsEvent.pointerId);
+            tsResizer.removeEventListener("pointermove", tsOnPointerMove);
+            tsResizer.removeEventListener("pointerup", tsOnPointerUp);
+            tsResizer.removeEventListener("pointercancel", tsOnPointerUp);
+            this.tsQueueSaveUISettings();
+        };
+        tsResizer.addEventListener("pointerdown", (tsEvent) => {
+            tsEvent.preventDefault();
+            tsActivePointerId = tsEvent.pointerId;
+            tsDragStartY = tsEvent.clientY;
+            tsDragStartScale = Math.max(0.6, Math.min(1, Number(this.tsState.tsToolbarScale) || 1));
+            tsDragNaturalHeight = tsMain.scrollHeight || tsMain.offsetHeight || 60;
+            tsResizer.dataset.dragging = "true";
+            tsResizer.setPointerCapture?.(tsEvent.pointerId);
+            tsResizer.addEventListener("pointermove", tsOnPointerMove);
+            tsResizer.addEventListener("pointerup", tsOnPointerUp);
+            tsResizer.addEventListener("pointercancel", tsOnPointerUp);
+        });
     }
 
     tsEmitAutoscanChanged() {
@@ -745,6 +812,47 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     border: 1px solid var(--ts-border);
                     border-radius: 10px;
                     background: color-mix(in srgb, var(--ts-bg-2) 78%, transparent);
+                }
+
+                .ts-toolbar-main-wrap {
+                    overflow: hidden;
+                }
+
+                .ts-toolbar-main-wrap > .ts-toolbar-main {
+                    transform: scale(var(--ts-toolbar-scale, 1));
+                    transform-origin: top left;
+                    width: calc(100% / var(--ts-toolbar-scale, 1));
+                }
+
+                .ts-toolbar-resizer {
+                    position: relative;
+                    height: 6px;
+                    margin-top: -2px;
+                    cursor: row-resize;
+                    background: transparent;
+                    transition: background 0.14s ease;
+                    touch-action: none;
+                    user-select: none;
+                }
+
+                .ts-toolbar-resizer::after {
+                    content: "";
+                    position: absolute;
+                    left: 50%;
+                    top: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 32px;
+                    height: 2px;
+                    border-radius: 999px;
+                    background: var(--ts-border);
+                    opacity: 0;
+                    transition: opacity 0.14s ease, background 0.14s ease;
+                }
+
+                .ts-toolbar-resizer:hover::after,
+                .ts-toolbar-resizer[data-dragging="true"]::after {
+                    opacity: 1;
+                    background: var(--ts-accent);
                 }
 
                 .ts-type-chips {
@@ -1283,6 +1391,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             <div class="ts-shell" tabindex="0">
                 <div class="ts-toolbar">
                     <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a><span class="ts-version" hidden></span><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a><a class="ts-update-badge" href="https://github.com/AlexYez/comfyui-artius-browser/releases" target="_blank" rel="noreferrer noopener" hidden></a></div>
+                    <div class="ts-toolbar-main-wrap">
                     <div class="ts-toolbar-main">
                         <div class="ts-toolbar-cluster ts-section-group">
                             <button class="ts-section-button ts-section-assets" type="button"></button>
@@ -1311,6 +1420,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         <button class="ts-delete-selected" type="button"></button>
                         <button class="ts-rebuild-cache" type="button"></button>
                     </div>
+                    </div>
+                    <div class="ts-toolbar-resizer" role="separator" aria-orientation="horizontal" title=""></div>
                     <div class="ts-progress" data-visible="false" data-indeterminate="false">
                         <div class="ts-progress-track"><div class="ts-progress-fill"></div></div>
                         <div class="ts-progress-caption"></div>
@@ -1333,6 +1444,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
         this.tsRefs = {
             tsShell: this.shadowRoot.querySelector(".ts-shell"),
+            tsToolbar: this.shadowRoot.querySelector(".ts-toolbar"),
+            tsToolbarMainWrap: this.shadowRoot.querySelector(".ts-toolbar-main-wrap"),
+            tsToolbarMain: this.shadowRoot.querySelector(".ts-toolbar-main"),
+            tsToolbarResizer: this.shadowRoot.querySelector(".ts-toolbar-resizer"),
             tsTitle: this.shadowRoot.querySelector(".ts-title"),
             tsTitleLink: this.shadowRoot.querySelector(".ts-title-link"),
             tsVersion: this.shadowRoot.querySelector(".ts-version"),
@@ -1379,6 +1494,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsScheduleGridRender(true, true);
         });
         this.tsResizeObserver.observe(this.tsRefs.tsGalleryScroll);
+
+        this.tsToolbarResizeObserver = new ResizeObserver(() => {
+            this.tsApplyToolbarScale();
+        });
+        this.tsToolbarResizeObserver.observe(this.tsRefs.tsToolbarMain);
     }
 
     tsInvalidateGridMetrics() {
@@ -1462,6 +1582,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRescan.addEventListener("click", () => this.tsRequestRescan());
         this.tsRefs.tsRebuildCache.addEventListener("click", () => this.tsRequestRebuildCache());
         this.tsRefs.tsDeleteSelected.addEventListener("click", () => this.tsDeleteSelected());
+        this.tsBindToolbarResizer();
         this.tsRefs.tsGalleryScroll.addEventListener("scroll", () => this.tsHandleGalleryScroll(), { passive: true });
         this.tsRefs.tsGalleryContent.addEventListener("click", (tsEvent) => this.tsHandleGalleryClick(tsEvent));
         this.tsRefs.tsGalleryContent.addEventListener("dblclick", (tsEvent) => this.tsHandleGalleryDoubleClick(tsEvent));
@@ -1855,6 +1976,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRebuildCache.title = this.tsT("tooltip.rebuildCache", "Delete the current browser cache and rebuild it from scratch.");
         this.tsRefs.tsDeleteSelected.textContent = this.tsT("button.deleteSelected", "Delete Selected");
         this.tsRefs.tsDeleteSelected.title = this.tsT("tooltip.deleteSelected", "Delete selected assets from allowed roots.");
+        this.tsRefs.tsToolbarResizer.title = this.tsT("tooltip.toolbarResize", "Drag to resize the toolbar.");
+        this.tsApplyToolbarScale();
         this.tsRenderSectionButtons();
         this.tsRenderToolbarForSection();
         this.tsRenderTypeChips();
@@ -2959,13 +3082,20 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         try {
             await tsDeleteWorkflowFile(tsWorkflow.relative_path);
-            this.tsState.tsSelection.delete(tsWorkflowId);
-            this.tsState.tsLastSelectedIndex = -1;
-            await this.tsEnsureWorkflowLibrary(true);
-            await this.tsFetchAssets(true);
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser failed to delete workflow", tsError);
+            return;
         }
+        // Surgically remove from the workflow library cache so re-entering the
+        // section / folder does not re-show the deleted entry.
+        const tsLibraryIndex = this.tsWorkflowLibrary.findIndex(
+            (tsEntry) => tsEntry?.relative_path === tsWorkflow.relative_path,
+        );
+        if (tsLibraryIndex >= 0) {
+            this.tsWorkflowLibrary.splice(tsLibraryIndex, 1);
+        }
+        // Drop from current list without refetching — preserves scroll position.
+        this.tsRemoveItemsByIds([tsWorkflowId]);
     }
 
     async tsDeleteAssets(tsAssets) {
@@ -2973,8 +3103,41 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (tsDeletableAssets.length === 0) {
             return;
         }
-        await tsPostJSON(`${tsRouteBase}/delete`, { ids: tsDeletableAssets.map((tsAsset) => tsAsset.id) });
-        this.tsFetchAssets(true);
+        const tsDeletedIds = tsDeletableAssets.map((tsAsset) => tsAsset.id);
+        try {
+            await tsPostJSON(`${tsRouteBase}/delete`, { ids: tsDeletedIds });
+        } catch (tsError) {
+            tsConsoleWarn("Timesaver Artius Browser failed to delete assets", tsError);
+            return;
+        }
+        // Surgical removal instead of `tsFetchAssets(true)` — preserves scroll
+        // position. Backend also emits tsab:asset-remove events; the existing
+        // event handler is a safety net but does nothing on already-empty state.
+        this.tsRemoveItemsByIds(tsDeletedIds);
+    }
+
+    tsRemoveItemsByIds(tsIds) {
+        if (!Array.isArray(tsIds) || tsIds.length === 0) {
+            return;
+        }
+        const tsRemovalSet = new Set(tsIds.map((tsId) => Number(tsId)));
+        const tsBeforeLength = this.tsState.tsItems.length;
+        this.tsState.tsItems = this.tsState.tsItems.filter(
+            (tsItem) => !tsRemovalSet.has(Number(tsItem.id)),
+        );
+        if (this.tsState.tsItems.length === tsBeforeLength) {
+            return;
+        }
+        this.tsItemsRevision += 1;
+        this.tsRebuildItemIndex();
+        for (const tsId of tsRemovalSet) {
+            this.tsState.tsSelection.delete(tsId);
+        }
+        if (this.tsState.tsLastSelectedIndex >= this.tsState.tsItems.length) {
+            this.tsState.tsLastSelectedIndex = this.tsState.tsItems.length - 1;
+        }
+        this.tsInvalidateResponseCache();
+        this.tsDebouncedAssetEventRefresh();
     }
 
     tsDeleteSelected() {

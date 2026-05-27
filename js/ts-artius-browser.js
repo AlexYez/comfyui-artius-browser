@@ -19,7 +19,7 @@ import { tsStartGlobal3DThumbnailWorker } from "./ts-artius-browser-3d-worker.js
 let tsExecutionRescanTimer = 0;
 let tsExecutionRescanFirstEventAt = 0;
 let tsAutoscanEnabled = true;
-let tsIsComfyExecuting = false;
+let tsLastExecutionActivityAt = 0;
 
 function tsSetAutoscanEnabled(tsEnabled) {
     tsAutoscanEnabled = Boolean(tsEnabled);
@@ -34,7 +34,9 @@ function tsAttemptRescanNow() {
         tsExecutionRescanFirstEventAt = 0;
         return;
     }
-    if (tsIsComfyExecuting) {
+    const tsNow = Date.now();
+    const tsIdleWindowMs = Number(tsBrowserRuntimeSettings.executionRescanIdleWindowMs) || 800;
+    if (tsLastExecutionActivityAt && (tsNow - tsLastExecutionActivityAt) < tsIdleWindowMs) {
         const tsRetryMs = Number(tsBrowserRuntimeSettings.executionRescanIdleRetryMs) || 250;
         window.clearTimeout(tsExecutionRescanTimer);
         tsExecutionRescanTimer = window.setTimeout(tsAttemptRescanNow, tsRetryMs);
@@ -62,12 +64,12 @@ function tsDebouncedExecutionRescan() {
     tsExecutionRescanTimer = window.setTimeout(tsAttemptRescanNow, tsDelay);
 }
 
-function tsHandleExecutionStart() {
-    tsIsComfyExecuting = true;
+function tsNoteExecutionActivity() {
+    tsLastExecutionActivityAt = Date.now();
 }
 
 function tsHandleExecutionEnd() {
-    tsIsComfyExecuting = false;
+    tsLastExecutionActivityAt = Date.now();
     tsDebouncedExecutionRescan();
 }
 
@@ -129,8 +131,10 @@ app.registerExtension({
             }, tsBrowserRuntimeSettings.initialRescanDelayMs);
         }
 
-        api.addEventListener("execution_start", () => tsHandleExecutionStart());
+        api.addEventListener("execution_start", () => tsNoteExecutionActivity());
+        api.addEventListener("executing", () => tsNoteExecutionActivity());
         api.addEventListener("execution_success", () => tsHandleExecutionEnd());
         api.addEventListener("execution_error", () => tsHandleExecutionEnd());
+        api.addEventListener("execution_interrupted", () => tsHandleExecutionEnd());
     },
 });

@@ -88,7 +88,7 @@ function tsBuildWorkerHarness(tsOptions = {}) {
         tsPanelSettings: {
             threeDThumbnails: {
                 backgroundPageSize: 8,
-                captureSize: 320,
+                captureSize: 480,
                 warmFrames: 2,
             },
         },
@@ -177,7 +177,7 @@ async function tsRun3DWorkerTests() {
         preview_is_3d_capture: false,
         preview_is_placeholder: true,
     }), true, "3D worker captures missing 3D thumbnail");
-    tsEqual(tsCaptureCalls, [["/view?filename=a.glb", { width: 320, height: 320, warmFrames: 2 }]], "3D worker passes thumbnail capture settings");
+    tsEqual(tsCaptureCalls, [["/view?filename=a.glb", { width: 480, height: 480, warmFrames: 2 }]], "3D worker passes thumbnail capture settings");
     tsEqual(tsSaveCalls, [[7, "data:image/png;base64,thumb"]], "3D worker saves captured thumbnail");
 
     const tsRequestedURLs = [];
