@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Toolbar resizer polish (findings #7-#11):
+  - `tsApplyToolbarScale` no longer locks the wrap height at
+    `60 × scale` when the toolbar hasn't been laid out yet
+    (`scrollHeight === 0`). It now skips and lets the `ResizeObserver`
+    re-fire once the toolbar paints with a real size.
+  - The toolbar `ResizeObserver` now skips before
+    `tsState.tsSettingsHydrated` and dedupes against the last observed
+    natural height, eliminating the open-sidebar flash from default
+    `scale=1` to the persisted scale and the `width: calc(100%/scale)`
+    feedback loop that produced sporadic
+    `ResizeObserver loop completed` warnings.
+  - Drag sensitivity is now a fixed `0.005 scale-units/pixel`
+    constant. A full `0.6 → 1.0` range takes ~80 px of drag regardless
+    of the current scale, instead of the 1.2.0 behaviour where the
+    captured `scrollHeight` shrank with the inverse-scale width and
+    the slider felt ~2× more sensitive when growing the toolbar.
+  - The `pointerdown` listener on `.ts-toolbar-resizer` is now stored
+    and removed in `disconnectedCallback`, matching the
+    AGENTS.md §8 teardown rule for new listeners.
+
 ### Changed
 - `tsHandleAssetRemoveEvent` now delegates to `tsRemoveItemsByIds`
   instead of duplicating the splice / revision / selection / anchor

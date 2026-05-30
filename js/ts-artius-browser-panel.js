@@ -203,6 +203,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsResizeObserver?.disconnect?.();
         this.tsToolbarResizeObserver?.disconnect?.();
         this.tsBrowserWidthObserver?.disconnect?.();
+        if (this.tsToolbarResizerPointerDownHandler && this.tsRefs?.tsToolbarResizer) {
+            this.tsRefs.tsToolbarResizer.removeEventListener(
+                "pointerdown",
+                this.tsToolbarResizerPointerDownHandler,
+            );
+            this.tsToolbarResizerPointerDownHandler = null;
+        }
         this.tsUnbindApiEvents();
     }
 
@@ -562,27 +569,40 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         const tsScale = Math.max(0.6, Math.min(1, Number(this.tsState.tsToolbarScale) || 1));
         tsShell.style.setProperty("--ts-toolbar-scale", String(tsScale));
-        const tsNaturalHeight = tsMain.scrollHeight || tsMain.offsetHeight || 60;
-        tsWrap.style.height = `${Math.round(tsNaturalHeight * tsScale)}px`;
+        const tsRawNaturalHeight = tsMain.scrollHeight || tsMain.offsetHeight || 0;
+        if (tsRawNaturalHeight <= 0) {
+            // Layout has not produced a measurable size yet (typically the
+            // first paint with a hidden sidebar). Skip rather than locking
+            // the wrap to a misleading hard-coded fallback — the
+            // ResizeObserver below will re-fire as soon as the toolbar
+            // gets laid out and call us again with a real height.
+            return;
+        }
+        this.tsToolbarNaturalHeight = tsRawNaturalHeight;
+        tsWrap.style.height = `${Math.round(tsRawNaturalHeight * tsScale)}px`;
     }
 
     tsBindToolbarResizer() {
         const tsResizer = this.tsRefs?.tsToolbarResizer;
-        const tsMain = this.tsRefs?.tsToolbarMain;
-        if (!tsResizer || !tsMain) {
+        if (!tsResizer) {
             return;
         }
         let tsDragStartY = 0;
         let tsDragStartScale = 1;
-        let tsDragNaturalHeight = 60;
         let tsActivePointerId = null;
+        // Fixed sensitivity (scale units per drag pixel). A full 0.4-unit
+        // range (0.6 → 1.0) takes ~100 px of drag regardless of the
+        // current toolbar layout. Using a constant avoids the
+        // 1.2.0 bug where scrollHeight (captured at drag start) shrank
+        // with the inverse-scale width hack, making the slider feel
+        // ~2× more sensitive when the user dragged toward larger scale.
+        const tsSensitivity = 0.005;
         const tsOnPointerMove = (tsEvent) => {
             if (tsEvent.pointerId !== tsActivePointerId) {
                 return;
             }
             const tsDeltaY = tsEvent.clientY - tsDragStartY;
-            const tsHeightFactor = tsDragNaturalHeight > 0 ? tsDragNaturalHeight : 60;
-            const tsRawScale = tsDragStartScale + tsDeltaY / tsHeightFactor;
+            const tsRawScale = tsDragStartScale + tsDeltaY * tsSensitivity;
             const tsClampedScale = Math.max(0.6, Math.min(1, tsRawScale));
             this.tsState.tsToolbarScale = tsClampedScale;
             this.tsApplyToolbarScale();
@@ -599,18 +619,22 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsResizer.removeEventListener("pointercancel", tsOnPointerUp);
             this.tsQueueSaveUISettings();
         };
-        tsResizer.addEventListener("pointerdown", (tsEvent) => {
+        const tsOnPointerDown = (tsEvent) => {
             tsEvent.preventDefault();
             tsActivePointerId = tsEvent.pointerId;
             tsDragStartY = tsEvent.clientY;
             tsDragStartScale = Math.max(0.6, Math.min(1, Number(this.tsState.tsToolbarScale) || 1));
-            tsDragNaturalHeight = tsMain.scrollHeight || tsMain.offsetHeight || 60;
             tsResizer.dataset.dragging = "true";
             tsResizer.setPointerCapture?.(tsEvent.pointerId);
             tsResizer.addEventListener("pointermove", tsOnPointerMove);
             tsResizer.addEventListener("pointerup", tsOnPointerUp);
             tsResizer.addEventListener("pointercancel", tsOnPointerUp);
-        });
+        };
+        // Stash the handler so disconnectedCallback can remove it; required
+        // by AGENTS.md §8 ("every transient ... listener must have
+        // teardown") for new listeners added in this code path.
+        this.tsToolbarResizerPointerDownHandler = tsOnPointerDown;
+        tsResizer.addEventListener("pointerdown", tsOnPointerDown);
     }
 
     tsEmitAutoscanChanged() {
@@ -1495,7 +1519,26 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         });
         this.tsResizeObserver.observe(this.tsRefs.tsGalleryScroll);
 
+        this.tsLastObservedToolbarHeight = 0;
         this.tsToolbarResizeObserver = new ResizeObserver(() => {
+            // Don't fire before the persisted scale has been hydrated from
+            // settings — otherwise the first observer tick applies the
+            // constructor-default scale (1) and the user sees the toolbar
+            // snap from full-size to their saved scale a beat later.
+            if (!this.tsState.tsSettingsHydrated) {
+                return;
+            }
+            // Dedup against same-height re-fires. Inner .ts-toolbar-main
+            // has width: calc(100% / scale), so changing scale also
+            // changes its layout width and re-triggers this observer; the
+            // natural unscaled height is the only signal we actually care
+            // about, and skipping when it hasn't moved breaks the
+            // would-be feedback cycle.
+            const tsNaturalHeight = this.tsRefs.tsToolbarMain.scrollHeight || 0;
+            if (tsNaturalHeight === this.tsLastObservedToolbarHeight) {
+                return;
+            }
+            this.tsLastObservedToolbarHeight = tsNaturalHeight;
             this.tsApplyToolbarScale();
         });
         this.tsToolbarResizeObserver.observe(this.tsRefs.tsToolbarMain);
