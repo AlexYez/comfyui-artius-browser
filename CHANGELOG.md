@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Tree-mode folder counts now decrement immediately after deletion.
+  Previously `tsRemoveItemsByIds` updated only `tsState.tsItems`, so
+  the sidebar tree kept showing the pre-delete count
+  (e.g. "output/foo (12)" stayed at 12 after deleting 3 of them)
+  until the next full fetch. Now the helper partitions the removed
+  items, buckets them by `(root_id, folder_path)`, decrements the
+  matching `asset_count` entries on `tsState.tsFolders`, bumps
+  `tsFoldersRevision`, and force-renders the tree panel. Aggregate
+  counts on ancestor folders update for free because
+  `tsBuildFolderTree` rolls up direct counts at build time.
 - Bulk-deleting every currently-loaded asset no longer leaves the
   gallery permanently blank when more rows exist server-side.
   Previously `tsRemoveItemsByIds` drained `tsState.tsItems` to length

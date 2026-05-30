@@ -3121,13 +3121,22 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return;
         }
         const tsRemovalSet = new Set(tsIds.map((tsId) => Number(tsId)));
-        const tsBeforeLength = this.tsState.tsItems.length;
-        this.tsState.tsItems = this.tsState.tsItems.filter(
-            (tsItem) => !tsRemovalSet.has(Number(tsItem.id)),
-        );
-        if (this.tsState.tsItems.length === tsBeforeLength) {
+        // Partition the current items into removed / kept so the folder-
+        // count decrement step can read root_id / folder_path off the
+        // removed entries before they are dropped.
+        const tsRemovedItems = [];
+        const tsNextItems = [];
+        for (const tsItem of this.tsState.tsItems) {
+            if (tsRemovalSet.has(Number(tsItem.id))) {
+                tsRemovedItems.push(tsItem);
+            } else {
+                tsNextItems.push(tsItem);
+            }
+        }
+        if (tsRemovedItems.length === 0) {
             return;
         }
+        this.tsState.tsItems = tsNextItems;
         this.tsItemsRevision += 1;
         this.tsRebuildItemIndex();
         for (const tsId of tsRemovalSet) {
@@ -3136,6 +3145,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (this.tsState.tsLastSelectedIndex >= this.tsState.tsItems.length) {
             this.tsState.tsLastSelectedIndex = this.tsState.tsItems.length - 1;
         }
+        this.tsApplyFolderCountDecrements(tsRemovedItems);
         this.tsInvalidateResponseCache();
         this.tsDebouncedAssetEventRefresh();
         // If removal drained the visible page but the backend still has
@@ -3147,6 +3157,45 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             && this.tsState.tsItems.length === 0
             && !this.tsIsWorkflowSection()) {
             this.tsFetchAssets(false);
+        }
+    }
+
+    tsApplyFolderCountDecrements(tsRemovedItems) {
+        if (!Array.isArray(this.tsState.tsFolders) || this.tsState.tsFolders.length === 0) {
+            return;
+        }
+        const tsNormalizeFolderPath = (tsValue) =>
+            String(tsValue || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+        const tsBuckets = new Map();
+        for (const tsItem of tsRemovedItems) {
+            const tsRootId = String(tsItem?.root_id || "");
+            if (!tsRootId) {
+                continue;
+            }
+            const tsKey = `${tsRootId}::${tsNormalizeFolderPath(tsItem?.folder_path)}`;
+            tsBuckets.set(tsKey, (tsBuckets.get(tsKey) || 0) + 1);
+        }
+        if (tsBuckets.size === 0) {
+            return;
+        }
+        let tsChanged = false;
+        for (const tsFolder of this.tsState.tsFolders) {
+            const tsRootId = String(tsFolder?.root_id || "");
+            const tsKey = `${tsRootId}::${tsNormalizeFolderPath(tsFolder?.folder_path)}`;
+            const tsDelta = tsBuckets.get(tsKey);
+            if (!tsDelta) {
+                continue;
+            }
+            const tsCurrent = Number(tsFolder.asset_count || 0);
+            tsFolder.asset_count = Math.max(0, tsCurrent - tsDelta);
+            tsChanged = true;
+        }
+        if (tsChanged) {
+            this.tsFoldersRevision += 1;
+            // Debounced asset refresh only re-renders the grid; the tree
+            // panel needs its own kick so counts in the sidebar move in
+            // lockstep with the gallery.
+            this.tsRenderTree(true);
         }
     }
 
