@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- `tsHandleAssetRemoveEvent` now delegates to `tsRemoveItemsByIds`
+  instead of duplicating the splice / revision / selection / anchor
+  bookkeeping inline. Both code paths (explicit Delete button + the
+  backend `tsab:asset-remove` push event) now share one canonical
+  removal helper, so folder counts decrement and pagination
+  back-fills happen on both paths. Guards stay at the call site:
+  the event handler still skips workflow-section and in-flight-scan
+  cases.
 - Autoscan idle gate switched from event-timing heuristic to
   ComfyUI's `status` event with `exec_info.queue_remaining`.
   Previously the gate used `tsLastExecutionActivityAt` plus an

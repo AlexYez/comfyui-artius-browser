@@ -1932,27 +1932,21 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (this.tsIsWorkflowSection()) {
             return;
         }
+        // Backend remove events during an active scan would be redundant
+        // with the scan's own item churn — let the scan's refresh do the
+        // work so we don't compete on revisions.
         if (this.tsState.tsScanStatus?.running) {
             return;
         }
-        this.tsInvalidateResponseCache();
         const tsDetail = this.tsReadEventDetail(tsEvent);
         const tsAssetId = Number(tsDetail?.id || 0);
         if (!tsAssetId) {
             return;
         }
-        const tsIndex = this.tsItemIndexById.get(tsAssetId);
-        if (tsIndex === undefined || tsIndex < 0) {
-            return;
-        }
-        this.tsState.tsItems.splice(tsIndex, 1);
-        this.tsItemsRevision += 1;
-        this.tsRebuildItemIndex();
-        this.tsState.tsSelection.delete(tsAssetId);
-        if (this.tsState.tsLastSelectedIndex >= this.tsState.tsItems.length) {
-            this.tsState.tsLastSelectedIndex = this.tsState.tsItems.length - 1;
-        }
-        this.tsDebouncedAssetEventRefresh();
+        // Single canonical removal path — folder-count decrement, selection
+        // cleanup, anchor reset, cache invalidation, and the
+        // empty-page-pagination fallback all live in tsRemoveItemsByIds.
+        this.tsRemoveItemsByIds([tsAssetId]);
     }
     tsHydrateText() {
         this.tsRefs.tsTitleLink.textContent = this.tsT("panel.title", tsProjectSettings.title);
