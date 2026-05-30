@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Shift-click after delete no longer extends from a stale anchor.
+  `tsRemoveItemsByIds` previously only clamped `tsLastSelectedIndex`
+  to the new length; if items before the anchor were removed it
+  stayed pointing at a different item than the one the user had
+  clicked. Now the anchor is reset to `-1` whenever the items array
+  changes shape — matching the pre-1.2.0 path
+  (`tsFetchAssets(true)`) which also reset it.
 - Workflow ids are now derived from a djb2 hash of the workflow's
   relative path instead of the workflow's position in the sorted
   library array. Before this change, deleting one workflow renumbered

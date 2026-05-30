@@ -3142,9 +3142,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         for (const tsId of tsRemovalSet) {
             this.tsState.tsSelection.delete(tsId);
         }
-        if (this.tsState.tsLastSelectedIndex >= this.tsState.tsItems.length) {
-            this.tsState.tsLastSelectedIndex = this.tsState.tsItems.length - 1;
-        }
+        // Reset the shift-click anchor whenever the array changes shape.
+        // Items before the previous anchor may have been removed, shifting
+        // it to a different item; the pre-1.2.0 path (tsFetchAssets(true))
+        // also reset the anchor to -1, so this matches that behavior and
+        // avoids next-shift-click selecting a wrong range.
+        this.tsState.tsLastSelectedIndex = -1;
         this.tsApplyFolderCountDecrements(tsRemovedItems);
         this.tsInvalidateResponseCache();
         this.tsDebouncedAssetEventRefresh();
