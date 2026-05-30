@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Bulk-deleting every currently-loaded asset no longer leaves the
+  gallery permanently blank when more rows exist server-side.
+  Previously `tsRemoveItemsByIds` drained `tsState.tsItems` to length
+  0 while `tsHasMore` stayed `true`; `tsHandleGalleryScroll`
+  short-circuits on empty items so the infinite-scroll trigger
+  never fired. Now we pull the next page automatically when removal
+  empties the visible list and the backend still has more.
+
 ### Changed
 - Preview encoding fast-path restored. `image_quality` 82 → 60 and
   WebP `method` 4 → 0 (the 1.2.0 settings were 4–5× slower per encode

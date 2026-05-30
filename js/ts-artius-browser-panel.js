@@ -3138,6 +3138,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         this.tsInvalidateResponseCache();
         this.tsDebouncedAssetEventRefresh();
+        // If removal drained the visible page but the backend still has
+        // more rows, pull the next page so the gallery doesn't get stuck
+        // showing the empty state despite tsHasMore=true (the scroll
+        // handler short-circuits when tsItems is empty).
+        if (this.tsState.tsHasMore
+            && !this.tsState.tsLoading
+            && this.tsState.tsItems.length === 0
+            && !this.tsIsWorkflowSection()) {
+            this.tsFetchAssets(false);
+        }
     }
 
     tsDeleteSelected() {
