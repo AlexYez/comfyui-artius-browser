@@ -222,7 +222,7 @@ Delete `ComfyUI/output/.ts_artius_browser/`, restart ComfyUI, scan again. All pr
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # asset index
-├── config.json        # UI + tools settings (schema v17)
+├── config.json        # UI + tools settings (schema v18)
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -556,7 +556,7 @@ Borra `ComfyUI/output/.ts_artius_browser/`, reinicia ComfyUI, escanea de nuevo. 
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # índice de assets
-├── config.json        # ajustes de UI + herramientas (schema v17)
+├── config.json        # ajustes de UI + herramientas (schema v18)
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -772,7 +772,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # 资产索引
-├── config.json        # UI + 工具设置 (schema v17)
+├── config.json        # UI + 工具设置 (schema v18)
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -989,7 +989,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # アセットインデックス
-├── config.json        # UI + ツール設定 (schema v17)
+├── config.json        # UI + ツール設定 (schema v18)
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -1206,7 +1206,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # 에셋 인덱스
-├── config.json        # UI + 도구 설정 (schema v17)
+├── config.json        # UI + 도구 설정 (schema v18)
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -1423,7 +1423,7 @@ Lösche `ComfyUI/output/.ts_artius_browser/`, starte ComfyUI neu, scanne erneut.
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # Asset-Index
-├── config.json        # UI- + Tool-Einstellungen (Schema v17)
+├── config.json        # UI- + Tool-Einstellungen (Schema v18)
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -1640,7 +1640,7 @@ Elimina `ComfyUI/output/.ts_artius_browser/`, riavvia ComfyUI, esegui di nuovo l
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # indice asset
-├── config.json        # impostazioni UI + strumenti (schema v17)
+├── config.json        # impostazioni UI + strumenti (schema v18)
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -1858,7 +1858,7 @@ Supprimez `ComfyUI/output/.ts_artius_browser/`, redémarrez ComfyUI, scannez à 
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # index des assets
-├── config.json        # paramètres UI + outils (schéma v17)
+├── config.json        # paramètres UI + outils (schéma v18)
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -2076,7 +2076,7 @@ Apaga `ComfyUI/output/.ts_artius_browser/`, reinicia o ComfyUI, scaneia outra ve
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # índice de assets
-├── config.json        # definições de UI + ferramentas (schema v17)
+├── config.json        # definições de UI + ferramentas (schema v18)
 └── cache/
     ├── thumbnails/
     ├── video_frames/

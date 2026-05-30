@@ -364,7 +364,7 @@ class TSPreviewCache:
             ts_save_kwargs = {
                 "format": "WEBP",
                 "quality": ts_quality,
-                "method": 4,
+                "method": 0,
             }
         ts_image.save(ts_output_path, **ts_save_kwargs)
 

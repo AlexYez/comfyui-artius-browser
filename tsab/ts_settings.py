@@ -61,7 +61,7 @@ TS_BACKEND_SETTINGS = {
         "waveform_width": 768,
         "waveform_height": 320,
         "image_format": "webp",
-        "image_quality": 82,
+        "image_quality": 60,
         "placeholder_width": 384,
         "placeholder_height": 240,
     },
@@ -126,7 +126,7 @@ TS_EVENT_ASSET_REMOVE = f"{TS_EVENT_PREFIX}:asset-remove"
 TS_EVENT_HEALTH = f"{TS_EVENT_PREFIX}:health"
 
 TS_DEFAULT_CONFIG = {
-    "version": 17,
+    "version": 18,
     "roots": {
         "output": {"enabled": True, "allow_delete": True},
         "input": {"enabled": True, "allow_delete": True},

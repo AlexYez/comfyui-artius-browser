@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Preview encoding fast-path restored. `image_quality` 82 → 60 and
+  WebP `method` 4 → 0 (the 1.2.0 settings were 4–5× slower per encode
+  and ~2× larger on disk than necessary for thumbnail readability).
+  The HiDPI win came from `thumbnail_size` 104 → 256, which stays.
+  Net: Rebuild Cache on a 30k-image library drops back from ~10–15 min
+  to roughly the pre-1.2.0 1–2 min while keeping the sharper 256 px
+  thumbnails. Visual quality at 256×256 is essentially indistinguishable
+  from q82 because the artifact regions are far below pixel resolution
+  on a typical card.
+- Config schema v17 → v18 with smarter migration logic. v17 now
+  overwrites preview keys *only* when they still hold the v8 baked-in
+  defaults (104 / 384 / 200) — any deliberate user customization is
+  preserved. v18 corrects `image_quality` for installs already touched
+  by the original v17 migration: rewrites 42 (v8) or 82 (v17) to 60,
+  leaves anything else alone.
+
 ## [1.2.0] - 2026-05-27
 
 ### Added

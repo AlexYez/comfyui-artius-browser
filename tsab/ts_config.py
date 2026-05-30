@@ -146,16 +146,30 @@ class TSConfigStore:
             ts_result["version"] = 16
         if TSCurrentVersion() < 17:
             # v17 raises preview quality defaults (thumbnail_size 104→256,
-            # image_quality 42→82, waveform 384×200→768×320). Old configs
-            # had these baked in by the v8 migration, so we overwrite them
-            # unconditionally. Existing cached previews stay at the old
-            # quality until the user hits Rebuild Cache.
+            # waveform 384×200→768×320). Old configs had these baked in by
+            # the v8 migration, so we replace them only if they still hold
+            # the v8 defaults — any deliberate user customization is left
+            # alone. (image_quality is handled in v18 below.)
             ts_preview = ts_result.setdefault("preview", {})
-            ts_preview["thumbnail_size"] = ts_default["preview"]["thumbnail_size"]
-            ts_preview["image_quality"] = ts_default["preview"]["image_quality"]
-            ts_preview["waveform_width"] = ts_default["preview"]["waveform_width"]
-            ts_preview["waveform_height"] = ts_default["preview"]["waveform_height"]
+            _TS_V17_OLD_DEFAULTS = {
+                "thumbnail_size": 104,
+                "waveform_width": 384,
+                "waveform_height": 200,
+            }
+            for ts_key, ts_old_default in _TS_V17_OLD_DEFAULTS.items():
+                if ts_preview.get(ts_key) == ts_old_default:
+                    ts_preview[ts_key] = ts_default["preview"][ts_key]
             ts_result["version"] = 17
+        if TSCurrentVersion() < 18:
+            # v18 corrects the v17 image_quality bump (82) which was too
+            # aggressive for a thumbnail cache — encode time rose 4-5×.
+            # New default is 60. We rewrite the key only if it currently
+            # holds either the v8 default (42) or the v17 overshoot (82);
+            # any other value is a deliberate user choice and is preserved.
+            ts_preview = ts_result.setdefault("preview", {})
+            if ts_preview.get("image_quality") in (42, 82):
+                ts_preview["image_quality"] = ts_default["preview"]["image_quality"]
+            ts_result["version"] = 18
         self._TSNormalizeTopLevelSections(ts_result, ts_default)
         return ts_result
 
