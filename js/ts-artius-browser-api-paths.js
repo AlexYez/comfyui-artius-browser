@@ -2,6 +2,21 @@ const tsWorkflowUserdataRoot = "workflows";
 const tsWorkflowPreviewImageExtensions = new Set([".png", ".jpg", ".jpeg", ".webp", ".avif", ".gif"]);
 const tsWorkflowPreviewVideoExtensions = new Set([".mp4", ".webm", ".mov", ".m4v"]);
 
+// djb2 hash of the workflow's relative path, projected into the negative
+// integer range so a workflow id stays stable across library re-fetches
+// even when entries are added/removed. Negative range avoids collisions
+// with positive DB-backed asset ids; the +1 offset prevents a path whose
+// hash is 0 from producing id 0 (a "no item" sentinel).
+function tsHashWorkflowRelativePathToId(tsRelativePath) {
+    const tsText = String(tsRelativePath || "");
+    let tsHash = 5381;
+    for (let tsIndex = 0; tsIndex < tsText.length; tsIndex += 1) {
+        tsHash = ((tsHash << 5) + tsHash) + tsText.charCodeAt(tsIndex);
+        tsHash = tsHash | 0;
+    }
+    return -(Math.abs(tsHash) + 1);
+}
+
 export function tsNormalizeRelativePath(tsPath) {
     return String(tsPath || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
 }
@@ -127,7 +142,7 @@ export function tsBuildWorkflowBrowserLibraryItems(tsEntries, tsBuildUserdataURL
         const tsPreview = tsPickWorkflowPreview(tsPreviewsByKey.get(tsPreviewKey));
         const tsModifiedAt = tsParseModifiedEpoch(tsEntry.modified);
         return {
-            id: -(tsIndex + 1),
+            id: tsHashWorkflowRelativePathToId(tsEntry.path),
             type: "workflow",
             filename: tsEntry.name,
             extension: ".json",

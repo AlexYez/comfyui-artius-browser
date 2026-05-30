@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Workflow ids are now derived from a djb2 hash of the workflow's
+  relative path instead of the workflow's position in the sorted
+  library array. Before this change, deleting one workflow renumbered
+  all positions; a section round-trip rebuilt the library with the
+  same numeric ids pointing at different files. Path-based ids are
+  stable across re-fetches so a pending reference (selection, drag
+  source, deferred load) always resolves to the same file.
 - Tree-mode folder counts now decrement immediately after deletion.
   Previously `tsRemoveItemsByIds` updated only `tsState.tsItems`, so
   the sidebar tree kept showing the pre-delete count
