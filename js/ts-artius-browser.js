@@ -19,7 +19,12 @@ import { tsStartGlobal3DThumbnailWorker } from "./ts-artius-browser-3d-worker.js
 let tsExecutionRescanTimer = 0;
 let tsExecutionRescanFirstEventAt = 0;
 let tsAutoscanEnabled = true;
-let tsLastExecutionActivityAt = 0;
+// Authoritative "is ComfyUI busy?" signal sourced from the WebSocket
+// `status` event's exec_info.queue_remaining counter. Falls back to 0 if
+// ComfyUI never emits a status update (older builds, broken socket),
+// which makes the gate degrade to the plain debounce path instead of
+// hanging forever.
+let tsComfyQueueRemaining = 0;
 
 function tsSetAutoscanEnabled(tsEnabled) {
     tsAutoscanEnabled = Boolean(tsEnabled);
@@ -34,9 +39,11 @@ function tsAttemptRescanNow() {
         tsExecutionRescanFirstEventAt = 0;
         return;
     }
-    const tsNow = Date.now();
-    const tsIdleWindowMs = Number(tsBrowserRuntimeSettings.executionRescanIdleWindowMs) || 800;
-    if (tsLastExecutionActivityAt && (tsNow - tsLastExecutionActivityAt) < tsIdleWindowMs) {
+    if (tsComfyQueueRemaining > 0) {
+        // Queue still has prompts. Re-arm a short retry instead of
+        // POSTing /rescan — the backend scan would contend with whatever
+        // ComfyUI is currently sampling. The next status event with
+        // queue_remaining=0 unblocks this branch.
         const tsRetryMs = Number(tsBrowserRuntimeSettings.executionRescanIdleRetryMs) || 250;
         window.clearTimeout(tsExecutionRescanTimer);
         tsExecutionRescanTimer = window.setTimeout(tsAttemptRescanNow, tsRetryMs);
@@ -64,12 +71,27 @@ function tsDebouncedExecutionRescan() {
     tsExecutionRescanTimer = window.setTimeout(tsAttemptRescanNow, tsDelay);
 }
 
-function tsNoteExecutionActivity() {
-    tsLastExecutionActivityAt = Date.now();
+function tsHandleStatusEvent(tsEvent) {
+    // ComfyUI emits: { detail: { status: { exec_info: { queue_remaining: N } } } }
+    // — sometimes wrapped one level (older builds), sometimes flat.
+    // Walk both shapes and keep the most recent non-NaN reading.
+    const tsDetail = tsEvent?.detail || {};
+    const tsStatus = tsDetail.status || tsDetail;
+    const tsExecInfo = tsStatus?.exec_info || {};
+    const tsRaw = Number(tsExecInfo.queue_remaining);
+    if (Number.isFinite(tsRaw)) {
+        tsComfyQueueRemaining = Math.max(0, tsRaw);
+        // If the queue just drained and we were retrying, fire the next
+        // tick immediately so users see new assets right after the queue
+        // settles instead of waiting another debounce cycle.
+        if (tsComfyQueueRemaining === 0 && tsExecutionRescanTimer) {
+            window.clearTimeout(tsExecutionRescanTimer);
+            tsExecutionRescanTimer = window.setTimeout(tsAttemptRescanNow, 0);
+        }
+    }
 }
 
 function tsHandleExecutionEnd() {
-    tsLastExecutionActivityAt = Date.now();
     tsDebouncedExecutionRescan();
 }
 
@@ -131,8 +153,7 @@ app.registerExtension({
             }, tsBrowserRuntimeSettings.initialRescanDelayMs);
         }
 
-        api.addEventListener("execution_start", () => tsNoteExecutionActivity());
-        api.addEventListener("executing", () => tsNoteExecutionActivity());
+        api.addEventListener("status", (tsEvent) => tsHandleStatusEvent(tsEvent));
         api.addEventListener("execution_success", () => tsHandleExecutionEnd());
         api.addEventListener("execution_error", () => tsHandleExecutionEnd());
         api.addEventListener("execution_interrupted", () => tsHandleExecutionEnd());

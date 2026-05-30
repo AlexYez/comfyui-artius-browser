@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Autoscan idle gate switched from event-timing heuristic to
+  ComfyUI's `status` event with `exec_info.queue_remaining`.
+  Previously the gate used `tsLastExecutionActivityAt` plus an
+  800 ms idle window — heuristic that false-fired during long
+  sampling between progress events (rescan triggered mid-workflow)
+  and false-deferred during very rapid event chains. Now the gate
+  reads queue length directly: rescan runs only when
+  `queue_remaining === 0`. When the queue drains, the timer also
+  fires immediately on the next tick instead of waiting another
+  debounce cycle. Removed: `executionRescanIdleWindowMs` setting,
+  `tsLastExecutionActivityAt` state, and the `executing` /
+  `execution_start` activity-noting listeners that fed it. Old
+  installs with the setting in their config silently ignore it.
+
 ### Fixed
 - Shift-click after delete no longer extends from a stale anchor.
   `tsRemoveItemsByIds` previously only clamped `tsLastSelectedIndex`
