@@ -5,13 +5,14 @@ from PIL import Image
 from .common import TSBuildDiscoveredPayload, TSBuildIndexedPayload
 from .prompt_metadata import TSExtractPromptPartsFromPromptField
 from ..ts_metadata_extract import TSExtractWorkflowText
+from ..ts_settings import TS_IMAGE_EXTENSIONS
 from ..ts_types import TSAssetPayload, TSAssetStat
 from ..ts_utils import TSJsonDumps
 
 
 class TSImageHandler:
     ts_kind = "image"
-    ts_extensions = {".png", ".jpg", ".jpeg", ".webp", ".avif"}
+    ts_extensions = TS_IMAGE_EXTENSIONS
 
     def __init__(self, ts_preview_cache, ts_tools) -> None:
         self.ts_preview_cache = ts_preview_cache

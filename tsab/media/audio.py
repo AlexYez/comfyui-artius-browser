@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from .common import TSBuildDiscoveredPayload, TSBuildIndexedPayload
 from .probe import TSBuildAudioTechnicalInfo
+from ..ts_settings import TS_AUDIO_EXTENSIONS
 from ..ts_types import TSAssetPayload, TSAssetStat
 from ..ts_utils import TSJsonDumps
 
 
 class TSAudioHandler:
     ts_kind = "audio"
-    ts_extensions = {".mp3", ".wav", ".flac", ".opus", ".ogg"}
+    ts_extensions = TS_AUDIO_EXTENSIONS
 
     def __init__(self, ts_preview_cache, ts_tools) -> None:
         self.ts_preview_cache = ts_preview_cache

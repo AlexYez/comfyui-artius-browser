@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from .common import TSBuildDiscoveredPayload, TSBuildIndexedPayload
+from ..ts_settings import TS_3D_EXTENSIONS
 from ..ts_types import TSAssetPayload, TSAssetStat
 from ..ts_utils import TSJsonDumps
 
 
 class TS3DHandler:
     ts_kind = "3d"
-    ts_extensions = {".glb", ".obj"}
+    ts_extensions = TS_3D_EXTENSIONS
 
     def __init__(self, ts_preview_cache) -> None:
         self.ts_preview_cache = ts_preview_cache

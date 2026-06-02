@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from .common import TSBuildDiscoveredPayload, TSBuildIndexedPayload
 from .probe import TSBuildVideoTechnicalInfo
+from ..ts_settings import TS_VIDEO_EXTENSIONS
 from ..ts_types import TSAssetPayload, TSAssetStat
 from ..ts_utils import TSJsonDumps
 
 
 class TSVideoHandler:
     ts_kind = "video"
-    ts_extensions = {".mp4", ".mov", ".webm", ".prores"}
+    ts_extensions = TS_VIDEO_EXTENSIONS
 
     def __init__(self, ts_preview_cache, ts_tools) -> None:
         self.ts_preview_cache = ts_preview_cache
