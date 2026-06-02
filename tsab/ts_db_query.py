@@ -5,10 +5,10 @@ from typing import Any
 from .ts_utils import TSBuildFTSQuery
 
 TS_SORT_KEY_MAP: dict[str, dict[str, Any]] = {
-    "created_at": {"column": "assets_view.created_at", "type": int, "collate": ""},
-    "mtime": {"column": "assets_view.mtime_ns", "type": int, "collate": ""},
-    "filename": {"column": "assets_view.filename", "type": str, "collate": "COLLATE NOCASE"},
-    "size_bytes": {"column": "assets_view.size_bytes", "type": int, "collate": ""},
+    "created_at": {"column": "assets_view.created_at", "row_field": "created_at", "type": int, "collate": ""},
+    "mtime": {"column": "assets_view.mtime_ns", "row_field": "mtime_ns", "type": int, "collate": ""},
+    "filename": {"column": "assets_view.filename", "row_field": "filename", "type": str, "collate": "COLLATE NOCASE"},
+    "size_bytes": {"column": "assets_view.size_bytes", "row_field": "size_bytes", "type": int, "collate": ""},
 }
 
 TS_DEFAULT_SORT_KEY = "created_at"

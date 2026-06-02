@@ -7,7 +7,7 @@ from typing import Any
 
 from .ts_companion import TSComputeCompanionStemFromFilename
 from .ts_db_payload import TSBuildUpdatedAssetPayload, TSComputeAssetStatus, TSPayloadFromAssetRow
-from .ts_db_query import TSBuildAssetQueryParts, TSResolveSortKey
+from .ts_db_query import TS_SORT_KEY_MAP, TSBuildAssetQueryParts, TSResolveSortKey
 from .ts_db_schema import TS_DB_DROP_SCHEMA_SQL, TS_DB_RESET_INDEX_SQL, TS_DB_SCHEMA_SQL, TS_DB_SCHEMA_VERSION
 from .ts_logging import TSLogVerbose
 from .ts_types import TSAssetPayload
@@ -541,13 +541,7 @@ class TSDatabase:
             return None
         ts_last_row = ts_rows[-1]
         ts_sort_key = TSResolveSortKey((ts_filters or {}).get("sort_key"))
-        ts_column_to_row_field = {
-            "created_at": "created_at",
-            "mtime": "mtime_ns",
-            "filename": "filename",
-            "size_bytes": "size_bytes",
-        }
-        ts_field = ts_column_to_row_field.get(ts_sort_key, "created_at")
+        ts_field = TS_SORT_KEY_MAP[ts_sort_key]["row_field"]
         return {
             "sort_key": ts_sort_key,
             "sort_value": ts_last_row[ts_field],
