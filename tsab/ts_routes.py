@@ -5,7 +5,6 @@ import asyncio
 from aiohttp import web as TSWeb
 from .ts_settings import TS_DEFAULT_PAGE_SIZE, TS_MAX_3D_CAPTURE_DATA_URL_LENGTH
 from .ts_logging import TSLogVerbose
-from .ts_load3d_stage import TSPrepare3DAssetForLoad3D
 from .ts_utils import TSParseAssetCursor, TSParseDateToEpoch, TSParseMaybeInt, TSParseQueryList
 from .ts_version import TSCollectVersionInfo
 
@@ -268,7 +267,7 @@ async def TSHandle3DThumbnail(ts_runtime, ts_request):
 async def TSHandle3DStage(ts_runtime, ts_request):
     ts_asset_id = TSParseRouteAssetId(ts_request)
     TSLogVerbose("route.3d_stage.post", asset_id=ts_asset_id, path=ts_request.path)
-    return TSWeb.json_response(TSPrepare3DAssetForLoad3D(ts_runtime, ts_asset_id))
+    return TSWeb.json_response(ts_runtime.TSPrepare3DAssetForLoad3D(ts_asset_id))
 
 
 async def TSHandleVersion(ts_runtime, ts_request):

@@ -104,21 +104,21 @@ def _TSCopyOrLinkFile(ts_source_path: Path, ts_target_path: Path) -> None:
         shutil.copy2(ts_source_path, ts_target_path)
 
 
-def _TSStage3DAsset(ts_runtime, ts_row) -> str:
+def _TSStage3DAsset(ts_input_directory: Path, ts_row) -> str:
     ts_source_path = Path(str(ts_row["path"])).resolve()
     if not ts_source_path.exists():
         raise FileNotFoundError(str(ts_source_path))
     try:
-        ts_existing_relative = ts_source_path.relative_to(ts_runtime.ts_storage_paths.ts_input_directory).as_posix()
+        ts_existing_relative = ts_source_path.relative_to(ts_input_directory).as_posix()
         if ts_existing_relative.startswith("3d/"):
             return ts_existing_relative
     except ValueError:
         pass
 
     if ts_source_path.suffix.lower() == ".obj":
-        ts_stage_root = ts_runtime.ts_storage_paths.ts_input_directory / "3d" / ".ts_artius_browser" / ts_source_path.stem
+        ts_stage_root = ts_input_directory / "3d" / ".ts_artius_browser" / ts_source_path.stem
     else:
-        ts_stage_root = ts_runtime.ts_storage_paths.ts_input_directory / "3d" / ".ts_artius_browser"
+        ts_stage_root = ts_input_directory / "3d" / ".ts_artius_browser"
     ts_stage_root.mkdir(parents=True, exist_ok=True)
 
     ts_files_to_stage: list[Path] = [ts_source_path]
@@ -135,15 +135,14 @@ def _TSStage3DAsset(ts_runtime, ts_row) -> str:
             ts_relative_from_source = Path(ts_file_path.name)
         _TSCopyOrLinkFile(ts_file_path, ts_stage_root / ts_relative_from_source)
 
-    return (ts_stage_root / ts_source_path.name).relative_to(ts_runtime.ts_storage_paths.ts_input_directory).as_posix()
+    return (ts_stage_root / ts_source_path.name).relative_to(ts_input_directory).as_posix()
 
-def TSPrepare3DAssetForLoad3D(ts_runtime, ts_asset_id: int) -> dict[str, Any]:
-    ts_row = ts_runtime.ts_database.TSGetAssetById(ts_asset_id)
+def TSPrepare3DAssetForLoad3D(ts_database, ts_get_asset_lock, ts_input_directory: Path, ts_asset_id: int) -> dict[str, Any]:
+    ts_row = ts_database.TSGetAssetById(ts_asset_id)
     if ts_row is None or str(ts_row["type"] or "") != "3d":
         raise TSWeb.HTTPNotFound()
-    ts_lock = ts_runtime._TSGetAssetLock(ts_asset_id)
-    with ts_lock:
-        ts_model_file = _TSStage3DAsset(ts_runtime, ts_row)
+    with ts_get_asset_lock(ts_asset_id):
+        ts_model_file = _TSStage3DAsset(ts_input_directory, ts_row)
     return {
         "asset_id": ts_asset_id,
         "model_file": ts_model_file,

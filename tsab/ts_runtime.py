@@ -16,6 +16,7 @@ from .ts_db import TSDatabase
 from .ts_delete import TSDeleteService
 from .ts_handlers import TSHandlerRegistry
 from .ts_indexer import TSIndexer
+from .ts_load3d_stage import TSPrepare3DAssetForLoad3D
 from .ts_logging import TSLogVerbose
 from .ts_preview import TSPreviewCache
 from .ts_routes import TSRegisterRoutes
@@ -330,6 +331,14 @@ class TSAssetBrowserRuntime:
             ts_preview_cache=self.ts_preview_cache,
             ts_get_roots=self.TSGetRoots,
             ts_emit_asset_upsert=self._TSEmitAssetUpsert,
+        )
+
+    def TSPrepare3DAssetForLoad3D(self, ts_asset_id: int) -> dict[str, Any]:
+        return TSPrepare3DAssetForLoad3D(
+            ts_database=self.ts_database,
+            ts_get_asset_lock=self._TSGetAssetLock,
+            ts_input_directory=self.ts_storage_paths.ts_input_directory,
+            ts_asset_id=ts_asset_id,
         )
 
 
