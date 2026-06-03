@@ -39,6 +39,16 @@ from .ts_settings import (
     TS_MAX_3D_CAPTURE_PIXELS,
     TS_DEFAULT_WAVEFORM_HEIGHT,
     TS_DEFAULT_WAVEFORM_WIDTH,
+    TS_PLACEHOLDER_HEIGHT_MAX,
+    TS_PLACEHOLDER_HEIGHT_MIN,
+    TS_PLACEHOLDER_WIDTH_MAX,
+    TS_PLACEHOLDER_WIDTH_MIN,
+    TS_THUMBNAIL_SIZE_MAX,
+    TS_THUMBNAIL_SIZE_MIN,
+    TS_WAVEFORM_HEIGHT_MAX,
+    TS_WAVEFORM_HEIGHT_MIN,
+    TS_WAVEFORM_WIDTH_MAX,
+    TS_WAVEFORM_WIDTH_MIN,
 )
 from .ts_utils import TSNormalizePathString, TSRelativePosixPath
 
@@ -314,18 +324,18 @@ class TSPreviewCache:
 
     def _TSThumbnailSize(self) -> int:
         ts_value = int(self._TSPreviewConfig().get("thumbnail_size", TS_DEFAULT_THUMBNAIL_SIZE))
-        return max(96, min(1024, ts_value))
+        return max(TS_THUMBNAIL_SIZE_MIN, min(TS_THUMBNAIL_SIZE_MAX, ts_value))
 
     def _TSWaveformSize(self) -> tuple[int, int]:
         ts_config = self._TSPreviewConfig()
-        ts_width = max(320, min(2048, int(ts_config.get("waveform_width", TS_DEFAULT_WAVEFORM_WIDTH))))
-        ts_height = max(96, min(1024, int(ts_config.get("waveform_height", TS_DEFAULT_WAVEFORM_HEIGHT))))
+        ts_width = max(TS_WAVEFORM_WIDTH_MIN, min(TS_WAVEFORM_WIDTH_MAX, int(ts_config.get("waveform_width", TS_DEFAULT_WAVEFORM_WIDTH))))
+        ts_height = max(TS_WAVEFORM_HEIGHT_MIN, min(TS_WAVEFORM_HEIGHT_MAX, int(ts_config.get("waveform_height", TS_DEFAULT_WAVEFORM_HEIGHT))))
         return ts_width, ts_height
 
     def _TSPlaceholderSize(self) -> tuple[int, int]:
         ts_config = self._TSPreviewConfig()
-        ts_width = max(160, min(1024, int(ts_config.get("placeholder_width", TS_DEFAULT_PLACEHOLDER_WIDTH))))
-        ts_height = max(120, min(768, int(ts_config.get("placeholder_height", TS_DEFAULT_PLACEHOLDER_HEIGHT))))
+        ts_width = max(TS_PLACEHOLDER_WIDTH_MIN, min(TS_PLACEHOLDER_WIDTH_MAX, int(ts_config.get("placeholder_width", TS_DEFAULT_PLACEHOLDER_WIDTH))))
+        ts_height = max(TS_PLACEHOLDER_HEIGHT_MIN, min(TS_PLACEHOLDER_HEIGHT_MAX, int(ts_config.get("placeholder_height", TS_DEFAULT_PLACEHOLDER_HEIGHT))))
         return ts_width, ts_height
 
     def _TSPreviewFormat(self) -> str:

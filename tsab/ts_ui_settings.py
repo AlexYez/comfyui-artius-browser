@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .ts_settings import TS_PREVIEW_SIZE_MAX, TS_PREVIEW_SIZE_MIN
+
 TS_BROWSER_SECTIONS = {"assets", "workflows"}
 TS_VIEW_MODES = {"flat", "tree"}
 TS_ASSET_SORT_KEYS = {"created_at", "filename", "size_bytes"}
@@ -59,11 +61,11 @@ def TSNormalizeUISettings(ts_ui: dict[str, Any] | None) -> dict[str, Any]:
         "workflow_view_mode": str(ts_ui.get("workflow_view_mode") or "flat"),
         "asset_sort_key": str(ts_ui.get("asset_sort_key") or "created_at"),
         "asset_sort_direction": str(ts_ui.get("asset_sort_direction") or "desc"),
-        "asset_preview_size": TSClampInt(ts_ui.get("asset_preview_size"), 48, 512, 180),
+        "asset_preview_size": TSClampInt(ts_ui.get("asset_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX, 180),
         "asset_search": str(ts_ui.get("asset_search") or ""),
         "workflow_sort_key": str(ts_ui.get("workflow_sort_key") or "created_at"),
         "workflow_sort_direction": str(ts_ui.get("workflow_sort_direction") or "desc"),
-        "workflow_preview_size": TSClampInt(ts_ui.get("workflow_preview_size"), 48, 512, 180),
+        "workflow_preview_size": TSClampInt(ts_ui.get("workflow_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX, 180),
         "workflow_search": str(ts_ui.get("workflow_search") or ""),
         "asset_types": [ts_type for ts_type in TSNormalizeStringSequence(ts_ui.get("asset_types")) if ts_type in TS_ASSET_TYPES],
         "selected_root_id": str(ts_ui.get("selected_root_id") or "all"),
@@ -98,13 +100,13 @@ def TSApplyUISettingsUpdates(ts_ui: dict[str, Any], ts_ui_updates: dict[str, Any
     if "workflow_sort_direction" in ts_updates:
         ts_ui["workflow_sort_direction"] = TSNormalizeChoice(ts_updates.get("workflow_sort_direction"), TS_SORT_DIRECTIONS, "desc")
     if "asset_preview_size" in ts_updates:
-        ts_preview_size = TSParseClampedInt(ts_updates.get("asset_preview_size"), 48, 512)
+        ts_preview_size = TSParseClampedInt(ts_updates.get("asset_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX)
         if ts_preview_size is not None:
             ts_ui["asset_preview_size"] = ts_preview_size
     if "asset_search" in ts_updates:
         ts_ui["asset_search"] = str(ts_updates.get("asset_search") or "")
     if "workflow_preview_size" in ts_updates:
-        ts_preview_size = TSParseClampedInt(ts_updates.get("workflow_preview_size"), 48, 512)
+        ts_preview_size = TSParseClampedInt(ts_updates.get("workflow_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX)
         if ts_preview_size is not None:
             ts_ui["workflow_preview_size"] = ts_preview_size
     if "workflow_search" in ts_updates:
