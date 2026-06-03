@@ -36,24 +36,16 @@ dist/
 *.tmp
 *.bak
 agents.md
+AGENTS.md
 CLAUDE.md
 doc/
-# Local boundary tests stay out of the repo. Public e2e and integration
-# suites live in dedicated subdirectories below and are explicitly
-# whitelisted. Note: re-including paths inside an excluded directory
-# requires `tests/*` (not `tests/`) so the directory itself is not
-# excluded by Git.
-tests/*
-!tests/e2e/
-!tests/e2e/**
-!tests/integration/
-!tests/integration/**
-# Re-exclude generated artifacts inside the whitelisted dirs.
-tests/e2e/node_modules/
-tests/e2e/playwright-report/
-tests/e2e/test-results/
-tests/integration/__pycache__/
-tests/e2e/__pycache__/
+
+# Tests are PRIVATE to the master working copy. They are never tracked in the
+# public repo nor synced into the ComfyUI deploy. The whole tree is ignored.
+tests/
+
+# Project memory (AI session state) is private to the master working copy.
+project_memory/
 
 # Editor / agent state
 .claude/
