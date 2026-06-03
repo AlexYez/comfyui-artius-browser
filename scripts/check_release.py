@@ -170,6 +170,38 @@ def TSCheckGitWhitespace() -> None:
     TSRunCommand([ts_git, "-c", "core.whitespace=cr-at-eol", "diff", "--check"])
 
 
+def TSCheckWorkflowPreviewExtensionParity() -> None:
+    # The workflow-preview extension set is hand-maintained on both the Python
+    # side (TS_WORKFLOW_PREVIEW_EXTENSIONS in ts_workflows.py) and the JS side
+    # (api-paths.js). It is intentionally distinct from the asset-support
+    # canon (it lists sidecar formats the browser can render next to a .json
+    # workflow, not what the indexer ingests), so it cannot be derived from
+    # TS_*_EXTENSIONS. The two hand-maintained copies must stay in sync or
+    # workflow sidecar previews/trashing drift between backend and frontend.
+    ts_py_text = (TS_REPO_ROOT / "tsab" / "ts_workflows.py").read_text(encoding="utf-8-sig")
+    ts_py_match = re.search(r"TS_WORKFLOW_PREVIEW_EXTENSIONS\s*=\s*\{([^}]*)\}", ts_py_text)
+    if ts_py_match is None:
+        print("workflow preview parity: FAILED (TS_WORKFLOW_PREVIEW_EXTENSIONS not found)")
+        raise SystemExit(1)
+    ts_py_set = set(re.findall(r'"([^"]+)"', ts_py_match.group(1)))
+
+    ts_js_text = (TS_REPO_ROOT / "js" / "ts-artius-browser-api-paths.js").read_text(encoding="utf-8-sig")
+    ts_js_set: set[str] = set()
+    for ts_var in ("tsWorkflowPreviewImageExtensions", "tsWorkflowPreviewVideoExtensions"):
+        ts_js_match = re.search(rf"{ts_var}\s*=\s*new Set\(\[([^\]]*)\]\)", ts_js_text)
+        if ts_js_match is None:
+            print(f"workflow preview parity: FAILED ({ts_var} not found)")
+            raise SystemExit(1)
+        ts_js_set.update(re.findall(r'"([^"]+)"', ts_js_match.group(1)))
+
+    if ts_py_set != ts_js_set:
+        print("workflow preview parity: FAILED")
+        print("  python-only:", sorted(ts_py_set - ts_js_set))
+        print("  js-only:", sorted(ts_js_set - ts_py_set))
+        raise SystemExit(1)
+    print("workflow preview parity: OK")
+
+
 def TSRunUnitTests() -> None:
     ts_tests_dir = TS_REPO_ROOT / "tests"
     if not ts_tests_dir.exists():
@@ -188,6 +220,7 @@ def main() -> int:
     TSCheckFrontendCharacterization()
     TSCheckJsonFiles()
     TSCheckLocalization()
+    TSCheckWorkflowPreviewExtensionParity()
     TSCheckTopLevelDeadDefs()
     TSRunUnitTests()
     TSCheckGitWhitespace()
