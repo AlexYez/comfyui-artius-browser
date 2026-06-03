@@ -376,6 +376,72 @@ function tsRunStageMarkupTests(tsViewerClass) {
     tsIncludes(tsModelMarkup, `src="/model.png"`, "3D stage includes preview fallback");
 }
 
+function tsRunAudioStageCleanupTests(tsViewerClass) {
+    const tsMakeNode = () => {
+        const tsListeners = [];
+        return {
+            tsListeners,
+            addEventListener(tsType, tsHandler) {
+                tsListeners.push({ tsType, tsHandler, tsActive: true });
+            },
+            removeEventListener(tsType, tsHandler) {
+                for (const tsEntry of tsListeners) {
+                    if (tsEntry.tsType === tsType && tsEntry.tsHandler === tsHandler) {
+                        tsEntry.tsActive = false;
+                    }
+                }
+            },
+            style: {},
+            textContent: "",
+            duration: 0,
+            currentTime: 0,
+            paused: true,
+            play() {
+                return Promise.resolve();
+            },
+            pause() {},
+            getBoundingClientRect() {
+                return { left: 0, width: 0 };
+            },
+            setPointerCapture() {},
+            releasePointerCapture() {},
+        };
+    };
+    const tsNodes = {
+        ".ts-audio-element": tsMakeNode(),
+        ".ts-audio-waveform-shell": tsMakeNode(),
+        ".ts-audio-progress": tsMakeNode(),
+        ".ts-audio-playhead": tsMakeNode(),
+        ".ts-audio-play": tsMakeNode(),
+        ".ts-audio-stop": tsMakeNode(),
+        ".ts-audio-time": tsMakeNode(),
+    };
+    const tsProbe = tsBuildViewerProbe(tsViewerClass, {
+        tsRefs: { tsStage: { querySelector: (tsSelector) => tsNodes[tsSelector] || null } },
+    });
+    const tsCleanup = tsProbe.tsSetupAudioStage({ duration: 0 });
+    assert.equal(typeof tsCleanup, "function", "audio stage returns a cleanup function");
+    tsAssertions += 1;
+
+    const tsAllListeners = Object.values(tsNodes).flatMap((tsNode) => tsNode.tsListeners);
+    assert.ok(tsAllListeners.length > 0, "audio stage registers transient listeners");
+    tsAssertions += 1;
+    assert.equal(
+        tsAllListeners.filter((tsEntry) => tsEntry.tsActive).length,
+        tsAllListeners.length,
+        "all audio listeners are active before cleanup",
+    );
+    tsAssertions += 1;
+
+    tsCleanup();
+    assert.equal(
+        tsAllListeners.filter((tsEntry) => tsEntry.tsActive).length,
+        0,
+        "audio stage cleanup removes every registered listener",
+    );
+    tsAssertions += 1;
+}
+
 const tsHelperExports = await tsLoadHelperExports();
 const tsViewerExports = tsBuildViewerHarness(tsHelperExports);
 
@@ -385,5 +451,6 @@ tsRunCompareModeTests(tsViewerExports.TSArtiusBrowserViewer);
 tsRunSyncItemsTests(tsViewerExports.TSArtiusBrowserViewer);
 tsRunMetaMarkupTests(tsViewerExports.TSArtiusBrowserViewer);
 tsRunStageMarkupTests(tsViewerExports.TSArtiusBrowserViewer);
+tsRunAudioStageCleanupTests(tsViewerExports.TSArtiusBrowserViewer);
 
 console.log(`frontend viewer characterization: ${tsAssertions} assertions OK`);

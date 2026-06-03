@@ -1914,6 +1914,17 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         tsUpdateUI();
 
         return () => {
+            tsWaveform.removeEventListener("pointerdown", tsHandlePointerDown);
+            tsWaveform.removeEventListener("pointermove", tsHandlePointerMove);
+            tsWaveform.removeEventListener("pointerup", tsHandlePointerUp);
+            tsWaveform.removeEventListener("pointercancel", tsHandlePointerUp);
+            tsPlayButton.removeEventListener("click", tsHandlePlayClick);
+            tsStopButton.removeEventListener("click", tsHandleStopClick);
+            tsAudio.removeEventListener("loadedmetadata", tsUpdateUI);
+            tsAudio.removeEventListener("timeupdate", tsUpdateUI);
+            tsAudio.removeEventListener("play", tsUpdateUI);
+            tsAudio.removeEventListener("pause", tsUpdateUI);
+            tsAudio.removeEventListener("ended", tsUpdateUI);
             tsAudio.pause();
         };
     }
