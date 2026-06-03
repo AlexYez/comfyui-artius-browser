@@ -236,14 +236,7 @@ ComfyUI/output/.ts_artius_browser/
 python scripts/check_release.py
 ```
 
-Validates Python syntax · JS syntax · JSON · localization keys · dead helpers · 179 unit tests · git whitespace.
-
-Optional, against a running ComfyUI:
-
-```bash
-pytest tests/integration -v             # 18 HTTP route tests
-cd tests/e2e && npx playwright test     # 5 native node ID + version smoke tests
-```
+Validates Python syntax · JS syntax · JSON · localization keys · dead helpers · unit tests · git whitespace.
 
 ### 📋 Changelog
 
@@ -570,14 +563,7 @@ ComfyUI/output/.ts_artius_browser/
 python scripts/check_release.py
 ```
 
-Valida sintaxis Python · sintaxis JS · JSON · claves de localización · helpers muertos · 179 tests unitarios · whitespace de git.
-
-Opcionalmente, contra un ComfyUI en marcha:
-
-```bash
-pytest tests/integration -v             # 18 tests de rutas HTTP
-cd tests/e2e && npx playwright test     # 5 smoke tests: IDs de nodos nativos + versión
-```
+Valida sintaxis Python · sintaxis JS · JSON · claves de localización · helpers muertos · tests unitarios · whitespace de git.
 
 ### 📋 Changelog
 
@@ -786,14 +772,8 @@ ComfyUI/output/.ts_artius_browser/
 python scripts/check_release.py
 ```
 
-验证 Python 语法 · JS 语法 · JSON · 本地化键 · 死代码 · 179 个单元测试 · git 空白字符。
+验证 Python 语法 · JS 语法 · JSON · 本地化键 · 死代码 · 个单元测试 · git 空白字符。
 
-可选,针对运行中的 ComfyUI:
-
-```bash
-pytest tests/integration -v             # 18 个 HTTP 路由测试
-cd tests/e2e && npx playwright test     # 5 个原生节点 ID + 版本冒烟测试
-```
 
 ### 📋 更新日志
 
@@ -1003,14 +983,8 @@ ComfyUI/output/.ts_artius_browser/
 python scripts/check_release.py
 ```
 
-Python シンタックス · JS シンタックス · JSON · ローカライズキー · 死コード · 179 ユニットテスト · git 空白を検証します。
+Python シンタックス · JS シンタックス · JSON · ローカライズキー · 死コード · ユニットテスト · git 空白を検証します。
 
-オプションで、稼働中の ComfyUI に対して:
-
-```bash
-pytest tests/integration -v             # 18 個の HTTP ルートテスト
-cd tests/e2e && npx playwright test     # 5 個のネイティブノード ID + バージョン smoke テスト
-```
 
 ### 📋 変更履歴
 
@@ -1220,14 +1194,8 @@ ComfyUI/output/.ts_artius_browser/
 python scripts/check_release.py
 ```
 
-Python 문법 · JS 문법 · JSON · 로컬라이제이션 키 · 죽은 헬퍼 · 179 개 유닛 테스트 · git 공백을 검증합니다.
+Python 문법 · JS 문법 · JSON · 로컬라이제이션 키 · 죽은 헬퍼 · 개 유닛 테스트 · git 공백을 검증합니다.
 
-선택적으로, 실행 중인 ComfyUI 에 대해:
-
-```bash
-pytest tests/integration -v             # 18 개 HTTP 라우트 테스트
-cd tests/e2e && npx playwright test     # 5 개 네이티브 노드 ID + 버전 스모크 테스트
-```
 
 ### 📋 변경 이력
 
@@ -1437,14 +1405,7 @@ ComfyUI/output/.ts_artius_browser/
 python scripts/check_release.py
 ```
 
-Prüft Python-Syntax · JS-Syntax · JSON · Lokalisierungsschlüssel · tote Helfer · 179 Unit-Tests · Git-Whitespace.
-
-Optional, gegen ein laufendes ComfyUI:
-
-```bash
-pytest tests/integration -v             # 18 HTTP-Routen-Tests
-cd tests/e2e && npx playwright test     # 5 Smoke-Tests: native Node-IDs + Version
-```
+Prüft Python-Syntax · JS-Syntax · JSON · Lokalisierungsschlüssel · tote Helfer · Unit-Tests · Git-Whitespace.
 
 ### 📋 Changelog
 
@@ -1654,14 +1615,7 @@ ComfyUI/output/.ts_artius_browser/
 python scripts/check_release.py
 ```
 
-Valida sintassi Python · sintassi JS · JSON · chiavi di localizzazione · helper morti · 179 test unitari · whitespace git.
-
-Opzionalmente, contro un ComfyUI in esecuzione:
-
-```bash
-pytest tests/integration -v             # 18 test sulle rotte HTTP
-cd tests/e2e && npx playwright test     # 5 smoke test su native node ID + versione
-```
+Valida sintassi Python · sintassi JS · JSON · chiavi di localizzazione · helper morti · test unitari · whitespace git.
 
 ### 📋 Changelog
 
@@ -1872,14 +1826,7 @@ ComfyUI/output/.ts_artius_browser/
 python scripts/check_release.py
 ```
 
-Valide la syntaxe Python · la syntaxe JS · le JSON · les clés de localisation · les helpers morts · 179 tests unitaires · les espaces git.
-
-Optionnel, contre un ComfyUI en cours d'exécution :
-
-```bash
-pytest tests/integration -v             # 18 tests des routes HTTP
-cd tests/e2e && npx playwright test     # 5 smoke tests : IDs de nœuds natifs + version
-```
+Valide la syntaxe Python · la syntaxe JS · le JSON · les clés de localisation · les helpers morts · tests unitaires · les espaces git.
 
 ### 📋 Changelog
 
@@ -2090,14 +2037,7 @@ ComfyUI/output/.ts_artius_browser/
 python scripts/check_release.py
 ```
 
-Valida sintaxe Python · sintaxe JS · JSON · chaves de localização · helpers mortos · 179 testes unitários · whitespace do git.
-
-Opcional, contra um ComfyUI em execução:
-
-```bash
-pytest tests/integration -v             # 18 testes de rotas HTTP
-cd tests/e2e && npx playwright test     # 5 smoke tests: IDs de nós nativos + versão
-```
+Valida sintaxe Python · sintaxe JS · JSON · chaves de localização · helpers mortos · testes unitários · whitespace do git.
 
 ### 📋 Changelog
 
