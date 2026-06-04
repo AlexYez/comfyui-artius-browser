@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-04
+
 ### Fixed
 - Toolbar resizer polish (findings #7-#11):
   - `tsApplyToolbarScale` no longer locks the wrap height at
@@ -294,7 +296,8 @@ Baseline release. See `git log` for prior commit-level history.
 - Tags, rating, `asset_user_fields` table (schema v10).
 - `exiftool` dependency from the image pipeline.
 
-[Unreleased]: https://github.com/AlexYez/comfyui-artius-browser/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/AlexYez/comfyui-artius-browser/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/AlexYez/comfyui-artius-browser/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v1.2.0
 [1.1.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v1.1.0
 [1.0.0]: https://github.com/AlexYez/comfyui-artius-browser/releases/tag/v1.0.0
