@@ -80,7 +80,13 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 
 Then **restart ComfyUI** and **hard refresh** the browser with `Ctrl+F5`.
 
-> 💡 Make sure `ffmpeg` and `ffprobe` are on your `PATH` — videos and audio need them for full metadata and waveforms.
+> 💡 **FFmpeg** (`ffmpeg` + `ffprobe`) powers video/audio metadata and the audio waveforms — optional (ComfyUI still starts without it), but recommended:
+>
+> - **Windows:** `winget install ffmpeg` (or `choco install ffmpeg`)
+> - **macOS:** `brew install ffmpeg`
+> - **Linux:** `sudo apt install ffmpeg`
+>
+> Restart ComfyUI after installing, then verify with `ffmpeg -version`.
 
 ### ⌨️ Keyboard shortcuts
 
@@ -289,7 +295,13 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 
 Перезапустите ComfyUI и сделайте hard refresh `Ctrl+F5`.
 
-> 💡 Убедитесь, что `ffmpeg` и `ffprobe` доступны в `PATH` — без них видео и аудио не получат полные метаданные.
+> 💡 **FFmpeg** (`ffmpeg` + `ffprobe`) нужен для метаданных видео/аудио и звуковых waveform — опционален (ComfyUI запускается и без него), но рекомендуется:
+>
+> - **Windows:** `winget install ffmpeg` (или `choco install ffmpeg`)
+> - **macOS:** `brew install ffmpeg`
+> - **Linux:** `sudo apt install ffmpeg`
+>
+> После установки перезапустите ComfyUI и проверьте: `ffmpeg -version`.
 
 ### ⌨️ Горячие клавиши
 
@@ -414,7 +426,13 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 
 Luego **reinicia ComfyUI** y haz un **hard refresh** del navegador con `Ctrl+F5`.
 
-> 💡 Asegúrate de tener `ffmpeg` y `ffprobe` en tu `PATH` — vídeos y audios los necesitan para obtener metadatos completos y formas de onda.
+> 💡 **FFmpeg** (`ffmpeg` + `ffprobe`) genera los metadatos de vídeo/audio y las formas de onda — opcional (ComfyUI arranca igual sin él), pero recomendado:
+>
+> - **Windows:** `winget install ffmpeg` (o `choco install ffmpeg`)
+> - **macOS:** `brew install ffmpeg`
+> - **Linux:** `sudo apt install ffmpeg`
+>
+> Reinicia ComfyUI tras instalarlo y comprueba con `ffmpeg -version`.
 
 ### ⌨️ Atajos de teclado
 
@@ -623,7 +641,13 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 
 然后**重启 ComfyUI**并使用 `Ctrl+F5` 进行**强制刷新**。
 
-> 💡 请确保 `ffmpeg` 和 `ffprobe` 在你的 `PATH` 中 — 视频和音频需要它们才能获取完整的元数据与波形。
+> 💡 **FFmpeg**(`ffmpeg` + `ffprobe`)用于生成视频/音频元数据和音频波形 — 可选(没有它 ComfyUI 也能启动),但推荐安装:
+>
+> - **Windows:** `winget install ffmpeg`(或 `choco install ffmpeg`)
+> - **macOS:** `brew install ffmpeg`
+> - **Linux:** `sudo apt install ffmpeg`
+>
+> 安装后重启 ComfyUI,并用 `ffmpeg -version` 验证。
 
 ### ⌨️ 快捷键
 
@@ -834,7 +858,13 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 
 その後、**ComfyUI を再起動**し、`Ctrl+F5` でブラウザの**ハードリフレッシュ**を行ってください。
 
-> 💡 `ffmpeg` と `ffprobe` が `PATH` に含まれていることを確認してください — 動画と音声の完全なメタデータと波形にはこれらが必要です。
+> 💡 **FFmpeg**(`ffmpeg` + `ffprobe`)は動画/音声のメタデータと音声波形の生成に使われます — 任意(なくても ComfyUI は起動します)ですが推奨:
+>
+> - **Windows:** `winget install ffmpeg`(または `choco install ffmpeg`)
+> - **macOS:** `brew install ffmpeg`
+> - **Linux:** `sudo apt install ffmpeg`
+>
+> インストール後に ComfyUI を再起動し、`ffmpeg -version` で確認してください。
 
 ### ⌨️ キーボードショートカット
 
@@ -1045,7 +1075,13 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 
 그 다음 **ComfyUI 를 재시작**하고 브라우저에서 `Ctrl+F5` 로 **하드 새로고침** 하세요.
 
-> 💡 `ffmpeg` 와 `ffprobe` 가 `PATH` 에 있는지 확인하세요 — 비디오와 오디오의 전체 메타데이터와 파형에 필요합니다.
+> 💡 **FFmpeg**(`ffmpeg` + `ffprobe`)는 비디오/오디오 메타데이터와 오디오 파형 생성에 사용됩니다 — 선택 사항(없어도 ComfyUI 는 실행됩니다)이지만 권장합니다:
+>
+> - **Windows:** `winget install ffmpeg` (또는 `choco install ffmpeg`)
+> - **macOS:** `brew install ffmpeg`
+> - **Linux:** `sudo apt install ffmpeg`
+>
+> 설치 후 ComfyUI 를 재시작하고 `ffmpeg -version` 으로 확인하세요.
 
 ### ⌨️ 키보드 단축키
 
@@ -1256,7 +1292,13 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 
 Danach **ComfyUI neu starten** und im Browser mit `Ctrl+F5` einen **Hard Refresh** ausführen.
 
-> 💡 Stelle sicher, dass `ffmpeg` und `ffprobe` in deinem `PATH` liegen — Videos und Audio benötigen sie für vollständige Metadaten und Waveforms.
+> 💡 **FFmpeg** (`ffmpeg` + `ffprobe`) erzeugt Video-/Audio-Metadaten und die Audio-Waveforms — optional (ComfyUI startet auch ohne), aber empfohlen:
+>
+> - **Windows:** `winget install ffmpeg` (oder `choco install ffmpeg`)
+> - **macOS:** `brew install ffmpeg`
+> - **Linux:** `sudo apt install ffmpeg`
+>
+> Starte ComfyUI nach der Installation neu und prüfe mit `ffmpeg -version`.
 
 ### ⌨️ Tastaturkürzel
 
@@ -1466,7 +1508,13 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 
 Poi **riavvia ComfyUI** e fai un **hard refresh** del browser con `Ctrl+F5`.
 
-> 💡 Assicurati che `ffmpeg` e `ffprobe` siano nel tuo `PATH` — video e audio ne hanno bisogno per metadati completi e forme d'onda.
+> 💡 **FFmpeg** (`ffmpeg` + `ffprobe`) genera i metadati di video/audio e le forme d'onda — opzionale (ComfyUI si avvia anche senza), ma consigliato:
+>
+> - **Windows:** `winget install ffmpeg` (o `choco install ffmpeg`)
+> - **macOS:** `brew install ffmpeg`
+> - **Linux:** `sudo apt install ffmpeg`
+>
+> Riavvia ComfyUI dopo l'installazione e verifica con `ffmpeg -version`.
 
 ### ⌨️ Scorciatoie da tastiera
 
@@ -1677,7 +1725,13 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 
 Puis **redémarrez ComfyUI** et faites un **rafraîchissement forcé** du navigateur avec `Ctrl+F5`.
 
-> 💡 Vérifiez que `ffmpeg` et `ffprobe` sont dans votre `PATH` — les vidéos et l'audio en ont besoin pour leurs métadonnées complètes et leurs formes d'onde.
+> 💡 **FFmpeg** (`ffmpeg` + `ffprobe`) génère les métadonnées vidéo/audio et les formes d'onde — optionnel (ComfyUI démarre quand même sans), mais recommandé :
+>
+> - **Windows :** `winget install ffmpeg` (ou `choco install ffmpeg`)
+> - **macOS :** `brew install ffmpeg`
+> - **Linux :** `sudo apt install ffmpeg`
+>
+> Redémarrez ComfyUI après l'installation, puis vérifiez avec `ffmpeg -version`.
 
 ### ⌨️ Raccourcis clavier
 
@@ -1888,7 +1942,13 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 
 Depois **reinicia o ComfyUI** e faz um **hard refresh** no browser com `Ctrl+F5`.
 
-> 💡 Garante que `ffmpeg` e `ffprobe` estão no teu `PATH` — vídeos e áudios precisam deles para metadados completos e formas de onda.
+> 💡 **FFmpeg** (`ffmpeg` + `ffprobe`) gera os metadados de vídeo/áudio e as formas de onda — opcional (o ComfyUI arranca mesmo sem ele), mas recomendado:
+>
+> - **Windows:** `winget install ffmpeg` (ou `choco install ffmpeg`)
+> - **macOS:** `brew install ffmpeg`
+> - **Linux:** `sudo apt install ffmpeg`
+>
+> Reinicia o ComfyUI após instalar e confirma com `ffmpeg -version`.
 
 ### ⌨️ Atalhos de teclado
 

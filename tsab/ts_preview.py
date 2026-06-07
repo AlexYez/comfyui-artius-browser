@@ -53,11 +53,38 @@ from .ts_settings import (
 from .ts_utils import TSNormalizePathString, TSRelativePosixPath
 
 
+# SoundCloud-style waveform rendering: discrete vertical bars filled with a
+# greenish steel gradient. Geometry is in source pixels (waveform_width/height);
+# bar count scales with the configured waveform width.
+TS_WAVEFORM_BAR_WIDTH = 5
+TS_WAVEFORM_BAR_GAP = 3
+TS_WAVEFORM_BAR_MIN_HEIGHT_FRACTION = 0.06
+TS_WAVEFORM_VERTICAL_PADDING_FRACTION = 0.08
+TS_WAVEFORM_GRADIENT_STOPS = ((168, 222, 200), (78, 156, 128), (34, 84, 72))
+
+
+def _TSLerpColor(ts_start: tuple[int, int, int], ts_end: tuple[int, int, int], ts_fraction: float) -> tuple[int, int, int]:
+    return tuple(round(ts_start[ts_i] + (ts_end[ts_i] - ts_start[ts_i]) * ts_fraction) for ts_i in range(3))
+
+
+def _TSBuildVerticalGradient(ts_width: int, ts_height: int, ts_stops: tuple) -> Image.Image:
+    ts_column = Image.new("RGB", (1, ts_height))
+    ts_pixels = ts_column.load()
+    ts_segments = max(1, len(ts_stops) - 1)
+    for ts_y in range(ts_height):
+        ts_fraction = ts_y / max(1, ts_height - 1)
+        ts_segment = min(ts_segments - 1, int(ts_fraction * ts_segments))
+        ts_local = (ts_fraction * ts_segments) - ts_segment
+        ts_pixels[0, ts_y] = _TSLerpColor(ts_stops[ts_segment], ts_stops[ts_segment + 1], ts_local)
+    return ts_column.resize((ts_width, ts_height))
+
+
 class TSPreviewCache:
     def __init__(self, ts_storage_paths, ts_config_store) -> None:
         self.ts_storage_paths = ts_storage_paths
         self.ts_config_store = ts_config_store
         self.ts_resampling = getattr(getattr(Image, "Resampling", Image), "LANCZOS", Image.LANCZOS)
+        self.ts_box_resampling = getattr(getattr(Image, "Resampling", Image), "BOX", Image.BOX)
         self.ts_placeholder_specs = {
             "image": ("placeholder-image", "IMG"),
             "video": ("placeholder-video", "VID"),
@@ -193,7 +220,7 @@ class TSPreviewCache:
         if not ts_waveform_success:
             return ts_probe, self.TSGetTypePlaceholderPreview("audio")
         try:
-            self._TSNormalizePreviewFile(ts_temp_path, ts_output_path, ts_resize_to_thumbnail=False)
+            self._TSStylizeWaveform(ts_temp_path, ts_output_path)
         except Exception as ts_error:
             TSLogVerbose("preview.waveform.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
             return ts_probe, self.TSGetTypePlaceholderPreview("audio")
@@ -214,11 +241,51 @@ class TSPreviewCache:
         if not ts_success:
             return self.TSGetTypePlaceholderPreview("audio")
         try:
-            self._TSNormalizePreviewFile(ts_temp_path, ts_output_path, ts_resize_to_thumbnail=False)
+            self._TSStylizeWaveform(ts_temp_path, ts_output_path)
         except Exception as ts_error:
             TSLogVerbose("preview.waveform.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
             return self.TSGetTypePlaceholderPreview("audio")
         return self.TSRelativePreviewPath(ts_output_path)
+
+    def _TSStylizeWaveform(self, ts_source_preview_path: Path, ts_output_path: Path) -> None:
+        try:
+            with Image.open(ts_source_preview_path) as ts_source_image:
+                ts_waveform = self._TSRenderWaveformBars(ts_source_image.convert("RGBA"))
+            self._TSSavePreviewImage(ts_waveform, ts_output_path)
+        finally:
+            if ts_source_preview_path.exists():
+                try:
+                    ts_source_preview_path.unlink()
+                except OSError as ts_error:
+                    TSLogVerbose("preview.temp_cleanup.failed", preview_path=str(ts_source_preview_path), error=str(ts_error))
+
+    def _TSRenderWaveformBars(self, ts_image: Image.Image) -> Image.Image:
+        ts_width, ts_height = ts_image.size
+        ts_unit = TS_WAVEFORM_BAR_WIDTH + TS_WAVEFORM_BAR_GAP
+        ts_bar_count = max(8, ts_width // ts_unit)
+        # showwavespic fills the wave symmetrically around the vertical center on a
+        # transparent background, so per-bucket mean alpha tracks the amplitude.
+        ts_profile = ts_image.getchannel("A").resize((ts_bar_count, 1), self.ts_box_resampling).load()
+        ts_amplitudes = [ts_profile[ts_index, 0] for ts_index in range(ts_bar_count)]
+        ts_peak = max(ts_amplitudes) or 1
+        ts_center_y = ts_height / 2
+        ts_usable_half = max(1.0, ts_center_y - ts_height * TS_WAVEFORM_VERTICAL_PADDING_FRACTION)
+        ts_radius = max(1, TS_WAVEFORM_BAR_WIDTH // 2)
+        ts_start_x = (ts_width - ts_bar_count * ts_unit) // 2 + TS_WAVEFORM_BAR_GAP // 2
+        ts_mask = Image.new("L", (ts_width, ts_height), 0)
+        ts_draw = ImageDraw.Draw(ts_mask)
+        for ts_index, ts_value in enumerate(ts_amplitudes):
+            ts_amplitude = TS_WAVEFORM_BAR_MIN_HEIGHT_FRACTION + (1 - TS_WAVEFORM_BAR_MIN_HEIGHT_FRACTION) * (ts_value / ts_peak)
+            ts_bar_half = ts_amplitude * ts_usable_half
+            ts_x0 = ts_start_x + ts_index * ts_unit
+            ts_draw.rounded_rectangle(
+                (ts_x0, ts_center_y - ts_bar_half, ts_x0 + TS_WAVEFORM_BAR_WIDTH - 1, ts_center_y + ts_bar_half),
+                radius=ts_radius,
+                fill=255,
+            )
+        ts_waveform = _TSBuildVerticalGradient(ts_width, ts_height, TS_WAVEFORM_GRADIENT_STOPS).convert("RGBA")
+        ts_waveform.putalpha(ts_mask)
+        return ts_waveform
 
     def TSBuild3DCapturePreviewPath(self, ts_preview_key: str) -> Path:
         return self.TSBuildPreviewPath(f"{ts_preview_key}.3d", "thumbnails")
