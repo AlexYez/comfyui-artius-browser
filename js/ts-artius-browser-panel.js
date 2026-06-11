@@ -2500,10 +2500,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsRenderRootOptions() {
+        const tsBuildRootOption = (tsRoot) => `<option value="${this.tsEscapeAttribute(tsRoot.root_id)}">${this.tsEscapeHTML(tsRoot.label)}</option>`;
         const tsOptions = this.tsIsWorkflowSection()
-            ? (this.tsState.tsRoots || []).map((tsRoot) => `<option value="${tsRoot.root_id}">${tsRoot.label}</option>`)
+            ? (this.tsState.tsRoots || []).map(tsBuildRootOption)
             : [`<option value="all">${this.tsT("label.allRoots", "All Folders")}</option>`]
-                .concat((this.tsState.tsRoots || []).map((tsRoot) => `<option value="${tsRoot.root_id}">${tsRoot.label}</option>`));
+                .concat((this.tsState.tsRoots || []).map(tsBuildRootOption));
         this.tsRefs.tsRootSelect.innerHTML = tsOptions.join("");
         const tsKnownRootIds = new Set([
             ...(this.tsIsWorkflowSection() ? [] : ["all"]),
@@ -2650,7 +2651,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 && (this.tsState.tsFolder || "") === (tsNode.tsFolderPath || "");
             const tsToggleLabel = tsExpanded ? "&#9662;" : "&#9656;";
             const tsToggleMarkup = tsHasChildren
-                ? `<button class="ts-tree-toggle" type="button" data-toggle-key="${tsNode.tsKey}">${tsToggleLabel}</button>`
+                ? `<button class="ts-tree-toggle" type="button" data-toggle-key="${this.tsEscapeAttribute(tsNode.tsKey)}">${tsToggleLabel}</button>`
                 : `<span class="ts-tree-toggle-spacer"></span>`;
             return `
                 <div>
@@ -2659,8 +2660,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         <button
                             class="ts-tree-folder"
                             type="button"
-                            data-tree-folder="${tsNode.tsFolderPath || ""}"
-                            data-tree-root="${tsNode.tsRootId}"
+                            data-tree-folder="${this.tsEscapeAttribute(tsNode.tsFolderPath || "")}"
+                            data-tree-root="${this.tsEscapeAttribute(tsNode.tsRootId)}"
                             data-active="${String(tsActive)}"
                         >
                             <span class="ts-tree-name">${this.tsEscapeHTML(tsNode.tsLabel)}</span>
