@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-06-11
+
+### Fixed
+- Asset detail, preview, file, delete, workflow delete and 3D
+  thumbnail/stage route handlers now run their synchronous work via
+  `asyncio.to_thread` instead of on the aiohttp event loop. On-demand
+  indexing in that path can hash a whole media file, run
+  ffprobe/ffmpeg (120-180 s timeouts), generate previews and call
+  `send2trash`; previously this froze the entire ComfyUI web server
+  (all routes and websocket progress) for the duration.
+- A scan no longer treats an unavailable `output`/`input` root
+  (unplugged external drive, network share down) as "all assets
+  deleted". Roots whose directory is missing are skipped from both the
+  walk and the stale-row prune with a warning, instead of wiping the
+  root's index rows and purging its cached previews. Custom roots
+  already had this protection.
+- `TSDeleteAssetIds` now chunks its `IN (...)` clauses at 500 ids.
+  Mass prunes above SQLite's 32766-variable limit (e.g. moving a very
+  large folder out of a root) previously failed every scan with
+  "too many SQL variables" until a manual cache rebuild.
+- Folder tree markup now escapes folder paths, tree keys and root ids
+  in data attributes, and the root selector escapes root labels/ids in
+  its options. Folder names containing a double quote (legal on
+  Linux/macOS) previously broke the tree row markup.
+- The Rescan button with "All Folders" selected now asks the backend
+  to scan every configured root (output, input, custom) as the tooltip
+  promises, instead of silently scanning only `output`. Automatic
+  rescans (startup bootstrap, post-execution) keep their explicit
+  output-only behavior.
+
+### Performance
+- Added an index on `assets.preview_path`. Preview reference counting
+  (`TSCountPreviewReferences`) runs per changed file during scans, per
+  pruned row and per deleted asset, and previously did a full table
+  scan each time — seconds of extra CPU per rescan on 100k-asset
+  libraries. Existing databases pick the index up automatically on the
+  next startup; no rebuild needed.
+
 ## [1.4.0] - 2026-06-07
 
 ### Changed
