@@ -2179,7 +2179,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (this.tsState.tsScanStatus?.running) {
             return;
         }
-        const tsPayload = tsOverridePayload || (this.tsState.tsRootId !== "all" ? { root_id: this.tsState.tsRootId } : { root_id: "output" });
+        // With "All Folders" selected an empty payload asks the backend to
+        // scan every configured root (output, input, custom) — matching the
+        // button tooltip. Automatic rescans (bootstrap, post-execution)
+        // still pass an explicit { root_id: "output" } override.
+        const tsPayload = tsOverridePayload || (this.tsState.tsRootId !== "all" ? { root_id: this.tsState.tsRootId } : {});
         this.tsState.tsScanStatus = {
             running: true,
             phase: "count",
