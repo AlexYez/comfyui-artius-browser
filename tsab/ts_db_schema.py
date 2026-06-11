@@ -87,6 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_assets_mtime_ns ON assets(mtime_ns);
 CREATE INDEX IF NOT EXISTS idx_assets_size_bytes ON assets(size_bytes);
 CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(status);
 CREATE INDEX IF NOT EXISTS idx_assets_preview_ready ON assets(has_preview);
+CREATE INDEX IF NOT EXISTS idx_assets_preview_path ON assets(preview_path);
 CREATE INDEX IF NOT EXISTS idx_assets_companion_lookup ON assets(root_lookup_id, folder_lookup_id, companion_stem, type_lookup_id);
 CREATE INDEX IF NOT EXISTS idx_assets_companion_filter ON assets(is_companion_image, type_lookup_id);
 CREATE INDEX IF NOT EXISTS idx_asset_folders_root_lookup_id ON asset_folders(root_lookup_id);
