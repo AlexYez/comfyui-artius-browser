@@ -160,7 +160,8 @@ async def TSHandleAssets(ts_runtime, ts_request):
     ts_view = ts_request.query.get("view") or "flat"
     ts_query = ts_request.query.get("q") or ""
     ts_cursor_after = TSParseAssetCursor(ts_request.query)
-    ts_response_payload = ts_runtime.TSQueryAssets(
+    ts_response_payload = await asyncio.to_thread(
+        ts_runtime.TSQueryAssets,
         ts_search_text=ts_query,
         ts_filters=ts_filters,
         ts_cursor_after=ts_cursor_after,
@@ -179,7 +180,7 @@ async def TSHandleAssets(ts_runtime, ts_request):
 async def TSHandleAsset(ts_runtime, ts_request):
     ts_asset_id = TSParseRouteAssetId(ts_request)
     TSLogVerbose("route.asset.request", asset_id=ts_asset_id, path=ts_request.path)
-    ts_asset_payload = ts_runtime.TSGetAssetDetail(ts_asset_id)
+    ts_asset_payload = await asyncio.to_thread(ts_runtime.TSGetAssetDetail, ts_asset_id)
     if ts_asset_payload is None:
         raise TSWeb.HTTPNotFound()
     return TSWeb.json_response(ts_asset_payload)
@@ -188,20 +189,20 @@ async def TSHandleAsset(ts_runtime, ts_request):
 async def TSHandlePreview(ts_runtime, ts_request):
     ts_asset_id = TSParseRouteAssetId(ts_request)
     TSLogVerbose("route.preview.request", asset_id=ts_asset_id, path=ts_request.path)
-    return ts_runtime.TSBuildPreviewResponse(ts_asset_id)
+    return await asyncio.to_thread(ts_runtime.TSBuildPreviewResponse, ts_asset_id)
 
 
 async def TSHandlePreviewWarm(ts_runtime, ts_request):
     ts_asset_id = TSParseRouteAssetId(ts_request)
     TSLogVerbose("route.preview.warm.request", asset_id=ts_asset_id, path=ts_request.path)
-    return TSWeb.json_response(ts_runtime.TSWarmPreview(ts_asset_id))
+    return TSWeb.json_response(await asyncio.to_thread(ts_runtime.TSWarmPreview, ts_asset_id))
 
 
 async def TSHandleFile(ts_runtime, ts_request):
     ts_path = ts_request.query.get("path")
     ts_asset_id = TSParseMaybeInt(ts_request.query.get("id"))
     TSLogVerbose("route.file.request", asset_id=ts_asset_id, path=ts_path, request_path=ts_request.path)
-    return ts_runtime.TSBuildFileResponse(ts_path=ts_path, ts_asset_id=ts_asset_id)
+    return await asyncio.to_thread(ts_runtime.TSBuildFileResponse, ts_path=ts_path, ts_asset_id=ts_asset_id)
 
 
 async def TSHandleRescan(ts_runtime, ts_request):
@@ -222,7 +223,7 @@ async def TSHandleDelete(ts_runtime, ts_request):
     ts_payload = await TSReadJsonObject(ts_request, ts_required=True)
     ts_asset_ids = TSParseAssetIdList(ts_payload.get("ids", []))
     TSLogVerbose("route.delete.request", asset_ids=ts_asset_ids, path=ts_request.path)
-    ts_result = ts_runtime.TSDeleteAssets(ts_asset_ids)
+    ts_result = await asyncio.to_thread(ts_runtime.TSDeleteAssets, ts_asset_ids)
     return TSWeb.json_response(ts_result)
 
 
@@ -242,7 +243,7 @@ async def TSHandleWorkflowDelete(ts_runtime, ts_request):
     ts_payload = await TSReadJsonObject(ts_request)
     ts_relative_path = str(ts_payload.get("path") or "")
     TSLogVerbose("route.workflow.delete.request", path=ts_request.path, workflow_path=ts_relative_path)
-    return TSWeb.json_response(ts_runtime.TSDeleteRequestWorkflowFile(ts_request, ts_relative_path))
+    return TSWeb.json_response(await asyncio.to_thread(ts_runtime.TSDeleteRequestWorkflowFile, ts_request, ts_relative_path))
 
 
 async def TSHandle3DViewer(ts_runtime, ts_request):
@@ -261,13 +262,13 @@ async def TSHandle3DThumbnail(ts_runtime, ts_request):
             actual_size=len(ts_image_data_url),
         )
     TSLogVerbose("route.3d_thumbnail.post", asset_id=ts_asset_id, path=ts_request.path)
-    return TSWeb.json_response({"asset": ts_runtime.TSSave3DThumbnail(ts_asset_id, str(ts_image_data_url or ""))})
+    return TSWeb.json_response({"asset": await asyncio.to_thread(ts_runtime.TSSave3DThumbnail, ts_asset_id, str(ts_image_data_url or ""))})
 
 
 async def TSHandle3DStage(ts_runtime, ts_request):
     ts_asset_id = TSParseRouteAssetId(ts_request)
     TSLogVerbose("route.3d_stage.post", asset_id=ts_asset_id, path=ts_request.path)
-    return TSWeb.json_response(ts_runtime.TSPrepare3DAssetForLoad3D(ts_asset_id))
+    return TSWeb.json_response(await asyncio.to_thread(ts_runtime.TSPrepare3DAssetForLoad3D, ts_asset_id))
 
 
 async def TSHandleVersion(ts_runtime, ts_request):
