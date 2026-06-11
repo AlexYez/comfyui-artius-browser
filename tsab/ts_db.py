@@ -444,17 +444,19 @@ class TSDatabase:
     def TSDeleteAssetIds(self, ts_asset_ids: list[int]) -> None:
         if not ts_asset_ids:
             return
-        ts_placeholders = ",".join("?" for _ in ts_asset_ids)
         ts_connection = self.TSGetConnection()
-        ts_touched_folders: set[tuple[int, int]] = {
-            (int(ts_row["root_lookup_id"]), int(ts_row["folder_lookup_id"]))
-            for ts_row in ts_connection.execute(
-                f"SELECT root_lookup_id, folder_lookup_id FROM assets WHERE id IN ({ts_placeholders})",
-                ts_asset_ids,
-            ).fetchall()
-        }
-        ts_connection.execute(f"DELETE FROM assets_fts WHERE rowid IN ({ts_placeholders})", ts_asset_ids)
-        ts_connection.execute(f"DELETE FROM assets WHERE id IN ({ts_placeholders})", ts_asset_ids)
+        ts_touched_folders: set[tuple[int, int]] = set()
+        for ts_id_batch in self._TSChunkedValues(list(ts_asset_ids), 500):
+            ts_placeholders = ",".join("?" for _ in ts_id_batch)
+            ts_touched_folders.update(
+                (int(ts_row["root_lookup_id"]), int(ts_row["folder_lookup_id"]))
+                for ts_row in ts_connection.execute(
+                    f"SELECT root_lookup_id, folder_lookup_id FROM assets WHERE id IN ({ts_placeholders})",
+                    ts_id_batch,
+                ).fetchall()
+            )
+            ts_connection.execute(f"DELETE FROM assets_fts WHERE rowid IN ({ts_placeholders})", ts_id_batch)
+            ts_connection.execute(f"DELETE FROM assets WHERE id IN ({ts_placeholders})", ts_id_batch)
         self._TSRecomputeCompanionFlags(ts_touched_folders)
         TSLogVerbose("db.asset_ids.deleted", count=len(ts_asset_ids), asset_ids=ts_asset_ids)
 
