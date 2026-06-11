@@ -120,6 +120,17 @@ class TSIndexer:
                     ts_roots = [ts_root for ts_root in ts_roots if ts_root.ts_scope == ts_scope]
                 if ts_root_id:
                     ts_roots = [ts_root for ts_root in ts_roots if ts_root.ts_root_id == ts_root_id]
+                ts_unavailable_roots = [ts_root for ts_root in ts_roots if not ts_root.ts_path.is_dir()]
+                if ts_unavailable_roots:
+                    # A missing root directory (unplugged drive, network share
+                    # down) must not be treated as "all assets deleted" -
+                    # skipping it here keeps the root out of both the walk and
+                    # the stale-row prune below.
+                    TSLogger.warning(
+                        "TS asset scan skipping unavailable roots: %s",
+                        ", ".join(f"{ts_root.ts_root_id}={ts_root.ts_path}" for ts_root in ts_unavailable_roots),
+                    )
+                    ts_roots = [ts_root for ts_root in ts_roots if ts_root not in ts_unavailable_roots]
                 TSLogInfoIfVerbose(
                     "TS asset scan start: %s",
                     ", ".join(f"{ts_root.ts_root_id}={ts_root.ts_path}" for ts_root in ts_roots) or "<none>",
