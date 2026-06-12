@@ -61,6 +61,7 @@ export const tsPanelSettings = Object.freeze({
         warmFrames: 2,
         backgroundPageSize: 8,
         idlePollMs: 120,
+        cacheCapacity: 64,
     },
     previewSizeRange: {
         min: 96,

@@ -154,7 +154,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.ts3DThumbnailWarmupPromise = null;
         this.ts3DThumbnailWarmupKey = "";
         this.ts3DThumbnailWarmupToken = 0;
-        this.tsSidebarRefreshTimer = 0;
+        this.tsSidebarRefreshTimers = new Set();
         this.tsWorkflowLibrary = [];
         this.tsWorkflowLibraryLoaded = false;
         this.tsApiEventsBound = false;
@@ -195,7 +195,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.ts3DThumbnailWarmupToken += 1;
         this.ts3DThumbnailQueue = [];
         this.ts3DThumbnailPending.clear();
-        window.clearTimeout(this.tsSidebarRefreshTimer);
+        for (const tsTimerId of this.tsSidebarRefreshTimers) {
+            window.clearTimeout(tsTimerId);
+        }
+        this.tsSidebarRefreshTimers.clear();
         if (this.tsGridRenderFrame) {
             window.cancelAnimationFrame?.(this.tsGridRenderFrame);
             this.tsGridRenderFrame = 0;
@@ -305,8 +308,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsRunRefresh();
             return;
         }
-        window.clearTimeout(this.tsSidebarRefreshTimer);
-        this.tsSidebarRefreshTimer = window.setTimeout(tsRunRefresh, tsDelayMs);
+        // Each delayed refresh gets its own timer: the staggered
+        // 0/32/96/180ms cascade after a sidebar show must all fire, so a
+        // later call must not cancel an earlier pending one.
+        const tsTimerId = window.setTimeout(() => {
+            this.tsSidebarRefreshTimers.delete(tsTimerId);
+            tsRunRefresh();
+        }, tsDelayMs);
+        this.tsSidebarRefreshTimers.add(tsTimerId);
     }
 
     tsStartWidthTracking() {
@@ -1928,6 +1937,15 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             });
             if (tsPreviewURL) {
                 this.ts3DThumbnailCache.set(tsJob.tsViewerURL, tsPreviewURL);
+                // Captured thumbnails are data URLs (hundreds of KB each);
+                // evict the oldest entries so a large 3D library cannot grow
+                // the tab's memory without bound. Evicted entries reload from
+                // the persisted backend preview, not via a fresh capture.
+                const tsCacheCapacity = Math.max(8, Number(ts3DThumbnailSettings.cacheCapacity || 64));
+                while (this.ts3DThumbnailCache.size > tsCacheCapacity) {
+                    const tsOldestKey = this.ts3DThumbnailCache.keys().next().value;
+                    this.ts3DThumbnailCache.delete(tsOldestKey);
+                }
                 if (!this.ts3DThumbnailDisposed) {
                     this.tsPatchVisibleThumbnail(tsJob.tsAssetId, tsPreviewURL, tsJob.tsFilename);
                 }
@@ -2205,6 +2223,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             await tsPostJSON(`${tsRouteBase}/rescan`, tsPayload);
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser rescan failed", tsError);
+            // The optimistic local status above never gets corrected by
+            // tsab:index-* events when the POST itself failed (no scan
+            // started), so drop it here or Rescan/Rebuild stay disabled.
+            this.tsState.tsScanStatus = null;
+            this.tsRenderProgress();
         } finally {
             this.tsRenderSelectionButtons();
         }
@@ -2259,12 +2282,20 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsInvalidateGridMetrics();
         this.tsRebuildItemIndex();
         this.tsRenderAll();
+        let tsRebuildStarted = false;
         try {
             this.tsRefs.tsRebuildCache.disabled = true;
             await tsPostJSON(`${tsRouteBase}/rebuild_cache`, {});
+            tsRebuildStarted = true;
             await this.tsFetchAssets(true);
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser rebuild cache failed", tsError);
+            if (!tsRebuildStarted) {
+                // POST failed — no scan is running server-side, so no
+                // tsab:index-* event will clear the optimistic status.
+                this.tsState.tsScanStatus = null;
+                this.tsRenderProgress();
+            }
         } finally {
             this.tsRenderSelectionButtons();
         }
