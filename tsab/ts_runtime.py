@@ -243,9 +243,6 @@ class TSAssetBrowserRuntime:
     def TSWarmPreview(self, ts_asset_id: int) -> dict[str, Any]:
         return self.ts_asset_processing.TSWarmPreview(ts_asset_id)
 
-    def _TSEnsureIndexed(self, ts_row):
-        return self.ts_asset_processing.TSEnsureIndexed(ts_row)
-
     def _TSEnsurePreview(self, ts_row):
         return self.ts_asset_processing.TSEnsurePreview(ts_row)
 

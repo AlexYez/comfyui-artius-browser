@@ -41,6 +41,3 @@ class TSHandlerRegistry:
         if ts_kind:
             return self.ts_kind_map.get(ts_kind)
         return None
-
-    def TSResolveByKind(self, ts_kind: str):
-        return self.ts_kind_map.get(ts_kind)

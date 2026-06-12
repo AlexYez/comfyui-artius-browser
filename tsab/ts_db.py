@@ -134,21 +134,6 @@ class TSDatabase:
     def TSPayloadFromRow(self, ts_row: sqlite3.Row) -> TSAssetPayload:
         return TSPayloadFromAssetRow(ts_row)
 
-    def TSGetSnapshot(self, ts_root_ids: list[str] | None = None) -> dict[str, sqlite3.Row]:
-        ts_connection = self.TSGetConnection()
-        ts_query = "SELECT * FROM assets_view"
-        ts_params: list[Any] = []
-        if ts_root_ids is not None:
-            if not ts_root_ids:
-                TSLogVerbose("db.snapshot", root_ids=[], rows=0)
-                return {}
-            ts_placeholders = ",".join("?" for _ in ts_root_ids)
-            ts_query += f" WHERE root_id IN ({ts_placeholders})"
-            ts_params.extend(ts_root_ids)
-        ts_rows = ts_connection.execute(ts_query, ts_params).fetchall()
-        TSLogVerbose("db.snapshot", root_ids=ts_root_ids, rows=len(ts_rows))
-        return {str(ts_row["path"]): ts_row for ts_row in ts_rows}
-
     def TSGetSnapshotBatch(self, ts_paths: list[str]) -> dict[str, sqlite3.Row]:
         if not ts_paths:
             return {}
@@ -481,7 +466,9 @@ class TSDatabase:
         TSLogVerbose("db.asset_paths.deleted", count=len(ts_paths), paths=ts_paths)
 
     def TSCountVisibleByType(self, ts_root_ids: list[str] | None = None) -> dict[str, int]:
-        ts_where_clauses: list[str] = []
+        # "Visible" matches the asset listing: companion images suppressed
+        # from the grid must not inflate the scan summary counts either.
+        ts_where_clauses: list[str] = ["assets_view.is_companion_image = 0"]
         ts_parameters: list[Any] = []
         if ts_root_ids is not None:
             if not ts_root_ids:
