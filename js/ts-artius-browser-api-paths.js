@@ -2,19 +2,24 @@ const tsWorkflowUserdataRoot = "workflows";
 const tsWorkflowPreviewImageExtensions = new Set([".png", ".jpg", ".jpeg", ".webp", ".avif", ".gif"]);
 const tsWorkflowPreviewVideoExtensions = new Set([".mp4", ".webm", ".mov", ".m4v"]);
 
-// djb2 hash of the workflow's relative path, projected into the negative
-// integer range so a workflow id stays stable across library re-fetches
-// even when entries are added/removed. Negative range avoids collisions
-// with positive DB-backed asset ids; the +1 offset prevents a path whose
-// hash is 0 from producing id 0 (a "no item" sentinel).
+// Combined djb2+sdbm hash of the workflow's relative path, projected into
+// the negative integer range so a workflow id stays stable across library
+// re-fetches even when entries are added/removed. Negative range avoids
+// collisions with positive DB-backed asset ids; the +1 offset prevents a
+// path that hashes to 0 from producing id 0 (a "no item" sentinel). Two
+// independent 32-bit hashes packed into a 52-bit safe integer make an
+// accidental id collision between two workflow paths practically
+// impossible (both hashes would have to collide at once).
 function tsHashWorkflowRelativePathToId(tsRelativePath) {
     const tsText = String(tsRelativePath || "");
-    let tsHash = 5381;
+    let tsHashA = 5381;
+    let tsHashB = 0;
     for (let tsIndex = 0; tsIndex < tsText.length; tsIndex += 1) {
-        tsHash = ((tsHash << 5) + tsHash) + tsText.charCodeAt(tsIndex);
-        tsHash = tsHash | 0;
+        const tsCode = tsText.charCodeAt(tsIndex);
+        tsHashA = (((tsHashA << 5) + tsHashA) + tsCode) | 0;
+        tsHashB = (tsCode + (tsHashB << 6) + (tsHashB << 16) - tsHashB) | 0;
     }
-    return -(Math.abs(tsHash) + 1);
+    return -((Math.abs(tsHashA) * 0x200000) + (tsHashB & 0x1FFFFF) + 1);
 }
 
 export function tsNormalizeRelativePath(tsPath) {

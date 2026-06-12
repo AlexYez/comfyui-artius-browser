@@ -293,7 +293,10 @@ class TSAssetBrowserRuntime:
         if ts_preview_path_value and not self.ts_preview_cache.TSIsPlaceholderPreview(ts_preview_path_value) and (ts_preview_file_path is None or not ts_preview_file_path.exists()):
             ts_row = self._TSEnsurePreview(ts_row) or ts_row
         ts_preview_path = self._TSResolvePreviewFilePath(ts_row)
-        if ts_preview_path is None or not ts_preview_path.exists():
+        # is_file, not exists: if placeholder generation ever fails the
+        # fallback resolves to the cache root directory, which must yield a
+        # 404 rather than a FileResponse on a directory.
+        if ts_preview_path is None or not ts_preview_path.is_file():
             raise TSWeb.HTTPNotFound()
         return self._TSApplyPreviewCacheHeaders(TSWeb.FileResponse(ts_preview_path))
 

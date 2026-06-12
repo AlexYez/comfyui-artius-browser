@@ -39,7 +39,12 @@ async def TSReadJsonObject(ts_request, *, ts_required: bool = False) -> dict:
         if ts_required:
             raise TSWeb.HTTPBadRequest(reason="Expected JSON object")
         return {}
-    ts_payload = await ts_request.json()
+    try:
+        ts_payload = await ts_request.json()
+    except ValueError as ts_error:
+        # json.JSONDecodeError / UnicodeDecodeError: a malformed body is a
+        # client error, not an internal one.
+        raise TSWeb.HTTPBadRequest(reason="Invalid JSON body") from ts_error
     if not isinstance(ts_payload, dict):
         raise TSWeb.HTTPBadRequest(reason="Expected JSON object")
     return ts_payload
