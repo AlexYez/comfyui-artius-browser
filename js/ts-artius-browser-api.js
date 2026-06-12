@@ -297,7 +297,11 @@ async function tsWaitForWidget(tsNode, tsNames, tsAttempts = 40) {
     return null;
 }
 function tsSetWidgetValue(tsNode, tsWidget, tsValue) {
-    return tsSetWidgetValueImpl(tsNode, tsWidget, tsValue, { app, consoleDebug: tsConsoleDebug });
+    return tsSetWidgetValueImpl(tsNode, tsWidget, tsValue, {
+        app,
+        consoleDebug: tsConsoleDebug,
+        markDirty: () => tsMarkComfyGraphDirty(tsComfyAdapterDeps()),
+    });
 }
 
 function tsDelay(tsTimeoutMs) {

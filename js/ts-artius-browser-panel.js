@@ -151,9 +151,6 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.ts3DThumbnailCache = new Map();
         this.ts3DThumbnailWorkers = 0;
         this.ts3DThumbnailPersisting = new Set();
-        this.ts3DThumbnailWarmupPromise = null;
-        this.ts3DThumbnailWarmupKey = "";
-        this.ts3DThumbnailWarmupToken = 0;
         this.tsSidebarRefreshTimers = new Set();
         this.tsWorkflowLibrary = [];
         this.tsWorkflowLibraryLoaded = false;
@@ -192,7 +189,6 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     disconnectedCallback() {
         this.ts3DThumbnailDisposed = true;
-        this.ts3DThumbnailWarmupToken += 1;
         this.ts3DThumbnailQueue = [];
         this.ts3DThumbnailPending.clear();
         for (const tsTimerId of this.tsSidebarRefreshTimers) {
@@ -1804,82 +1800,6 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsScheduleVisible3DThumbnailCapture(tsItems) {
         this.tsEnqueue3DThumbnailItems(tsItems, Number(ts3DThumbnailSettings.visibleLimit || 4));
-    }
-
-    async tsWaitFor3DThumbnailIdle(tsWarmupToken) {
-        const tsDelayMs = Math.max(40, Number(ts3DThumbnailSettings.idlePollMs || 120));
-        while (!this.ts3DThumbnailDisposed && tsWarmupToken === this.ts3DThumbnailWarmupToken) {
-            if (
-                this.ts3DThumbnailQueue.length === 0
-                && this.ts3DThumbnailPending.size === 0
-                && this.ts3DThumbnailInFlight.size === 0
-                && this.ts3DThumbnailPersisting.size === 0
-            ) {
-                return true;
-            }
-            await new Promise((tsResolve) => window.setTimeout(tsResolve, tsDelayMs));
-        }
-        return false;
-    }
-
-    async tsWarm3DThumbnailCache(tsForce = false) {
-        if (this.ts3DThumbnailDisposed || this.tsState.tsScanStatus?.running) {
-            return false;
-        }
-        const tsRootWarmupKey = `${this.tsState.tsRootId || "all"}::${Number(this.tsState.tsScanStatus?.completed_at || 0)}`;
-        if (!tsForce && this.ts3DThumbnailWarmupPromise) {
-            return this.ts3DThumbnailWarmupPromise;
-        }
-        if (!tsForce && this.ts3DThumbnailWarmupKey === tsRootWarmupKey) {
-            return false;
-        }
-        this.ts3DThumbnailWarmupKey = tsRootWarmupKey;
-        const tsWarmupToken = ++this.ts3DThumbnailWarmupToken;
-        const tsPageSize = Math.max(4, Number(ts3DThumbnailSettings.backgroundPageSize || 8));
-        const tsWarmupPromise = (async () => {
-            try {
-                let tsOffset = 0;
-                while (!this.ts3DThumbnailDisposed && tsWarmupToken === this.ts3DThumbnailWarmupToken) {
-                    const tsParams = this.tsBuildSearchParams(tsOffset, {
-                        limit: tsPageSize,
-                        view: "flat",
-                        search: "",
-                        types: ["3d"],
-                        folder: "",
-                        rootId: this.tsState.tsRootId,
-                        sortKey: "created_at",
-                        sortDirection: "desc",
-                    });
-                    const tsPayload = await tsFetchJSON(`${tsRouteBase}/search?${tsParams.toString()}`);
-                    const tsItems = Array.isArray(tsPayload?.items) ? tsPayload.items : [];
-                    if (tsItems.length === 0) {
-                        break;
-                    }
-                    this.tsEnqueue3DThumbnailItems(tsItems, Number.POSITIVE_INFINITY);
-                    const tsDidDrain = await this.tsWaitFor3DThumbnailIdle(tsWarmupToken);
-                    if (!tsDidDrain) {
-                        break;
-                    }
-                    if (!tsPayload?.has_more) {
-                        break;
-                    }
-                    tsOffset += tsItems.length;
-                }
-                return true;
-            } catch (tsError) {
-                this.ts3DThumbnailWarmupKey = "";
-                tsConsoleWarn("Timesaver Artius Browser 3D eager warmup failed", tsError);
-                return false;
-            }
-        })();
-        this.ts3DThumbnailWarmupPromise = tsWarmupPromise;
-        try {
-            return await tsWarmupPromise;
-        } finally {
-            if (this.ts3DThumbnailWarmupPromise === tsWarmupPromise) {
-                this.ts3DThumbnailWarmupPromise = null;
-            }
-        }
     }
 
     tsPump3DThumbnailQueue() {

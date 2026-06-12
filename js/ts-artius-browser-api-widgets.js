@@ -42,7 +42,9 @@ export function tsSetWidgetValue(tsNode, tsWidget, tsValue, tsDeps) {
             tsDeps.consoleDebug("Timesaver Artius Browser widget callback failed", tsError);
         }
     }
-    tsDeps.app?.graph?.setDirtyCanvas?.(true, true);
-    tsDeps.app?.canvas?.setDirty?.(true, true);
+    // Graph/canvas dirty marking goes through the Comfy adapter helper
+    // injected by the caller — direct app.graph access belongs only in
+    // ts-artius-browser-api-workflow.js.
+    tsDeps.markDirty?.();
     return true;
 }
