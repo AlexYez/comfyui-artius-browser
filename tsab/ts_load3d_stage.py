@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import Any
 from aiohttp import web as TSWeb
 
 from .ts_logging import TSLogVerbose
+from .ts_utils import TSNormalizePathString
 
 TS_TEXTURE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tga"}
 TS_MTL_TEXTURE_KEYWORDS = {"map_Kd", "map_Ka", "map_d", "map_bump", "bump"}
@@ -115,10 +117,16 @@ def _TSStage3DAsset(ts_input_directory: Path, ts_row) -> str:
     except ValueError:
         pass
 
-    if ts_source_path.suffix.lower() == ".obj":
-        ts_stage_root = ts_input_directory / "3d" / ".ts_artius_browser" / ts_source_path.stem
-    else:
-        ts_stage_root = ts_input_directory / "3d" / ".ts_artius_browser"
+    # Per-asset stage folder keyed by the source path: two same-named models
+    # from different library folders must not overwrite each other's staged
+    # files (a previously created Load3D node would silently load the other
+    # model). The hash is stable, so re-staging reuses the same folder.
+    ts_path_discriminator = hashlib.blake2b(
+        TSNormalizePathString(ts_source_path).encode("utf-8"), digest_size=4
+    ).hexdigest()
+    ts_stage_root = (
+        ts_input_directory / "3d" / ".ts_artius_browser" / f"{ts_source_path.stem}-{ts_path_discriminator}"
+    )
     ts_stage_root.mkdir(parents=True, exist_ok=True)
 
     ts_files_to_stage: list[Path] = [ts_source_path]
