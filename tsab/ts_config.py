@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import threading
 from pathlib import Path
 
 from .ts_settings import TS_DEFAULT_CONFIG
@@ -13,37 +14,45 @@ class TSConfigStore:
     def __init__(self, ts_config_path: Path) -> None:
         self.ts_config_path = ts_config_path
         self.ts_cached_config: dict | None = None
+        # RLock: TSLoadConfig calls TSSaveConfig for missing/corrupt files.
+        # Load/save are called concurrently from the event-loop thread
+        # (settings POST), the scan thread, and preview generators; the lock
+        # prevents read-modify-write pairs from losing updates.
+        self.ts_config_lock = threading.RLock()
 
     def TSBuildDefaultConfig(self) -> dict:
         return copy.deepcopy(TS_DEFAULT_CONFIG)
 
     def TSLoadConfig(self) -> dict:
-        if self.ts_cached_config is not None:
-            return copy.deepcopy(self.ts_cached_config)
-        if not self.ts_config_path.exists():
-            self.ts_cached_config = self.TSBuildDefaultConfig()
-            self.TSSaveConfig(self.ts_cached_config)
-            return copy.deepcopy(self.ts_cached_config)
-        try:
-            ts_loaded = json.loads(self.ts_config_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as ts_error:
-            TSLogVerbose("config.load.failed", path=str(self.ts_config_path), error=str(ts_error))
-            ts_loaded = self.TSBuildDefaultConfig()
-            self._TSBackupCorruptConfig()
-            self.TSSaveConfig(ts_loaded)
-        ts_merged = self.TSMergeDefaults(ts_loaded)
-        self.ts_cached_config = ts_merged
-        return copy.deepcopy(ts_merged)
+        with self.ts_config_lock:
+            if self.ts_cached_config is not None:
+                return copy.deepcopy(self.ts_cached_config)
+            if not self.ts_config_path.exists():
+                self.ts_cached_config = self.TSBuildDefaultConfig()
+                self.TSSaveConfig(self.ts_cached_config)
+                return copy.deepcopy(self.ts_cached_config)
+            try:
+                ts_loaded = json.loads(self.ts_config_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as ts_error:
+                TSLogVerbose("config.load.failed", path=str(self.ts_config_path), error=str(ts_error))
+                ts_loaded = self.TSBuildDefaultConfig()
+                self._TSBackupCorruptConfig()
+                self.TSSaveConfig(ts_loaded)
+            ts_merged = self.TSMergeDefaults(ts_loaded)
+            self.ts_cached_config = ts_merged
+            return copy.deepcopy(ts_merged)
 
     def TSSaveConfig(self, ts_config: dict) -> dict:
-        ts_merged = self.TSMergeDefaults(ts_config)
-        self._TSWriteConfigAtomically(ts_merged)
-        self.ts_cached_config = ts_merged
-        return copy.deepcopy(ts_merged)
+        with self.ts_config_lock:
+            ts_merged = self.TSMergeDefaults(ts_config)
+            self._TSWriteConfigAtomically(ts_merged)
+            self.ts_cached_config = ts_merged
+            return copy.deepcopy(ts_merged)
 
     def TSReloadConfig(self) -> dict:
-        self.ts_cached_config = None
-        return self.TSLoadConfig()
+        with self.ts_config_lock:
+            self.ts_cached_config = None
+            return self.TSLoadConfig()
 
     def TSMergeDefaults(self, ts_config: dict) -> dict:
         ts_default = self.TSBuildDefaultConfig()

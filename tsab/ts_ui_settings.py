@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .ts_settings import TS_PREVIEW_SIZE_MAX, TS_PREVIEW_SIZE_MIN
+from .ts_settings import TS_DEFAULT_PREVIEW_SIZE, TS_PREVIEW_SIZE_MAX, TS_PREVIEW_SIZE_MIN
 
 TS_BROWSER_SECTIONS = {"assets", "workflows"}
 TS_VIEW_MODES = {"flat", "tree"}
@@ -57,15 +57,15 @@ def TSNormalizeUISettings(ts_ui: dict[str, Any] | None) -> dict[str, Any]:
         "language": str(ts_ui.get("language") or "en"),
         "autoscan": bool(ts_ui.get("autoscan", True)),
         "browser_section": TSNormalizeChoice(ts_ui.get("browser_section"), TS_BROWSER_SECTIONS, "assets"),
-        "asset_view_mode": str(ts_ui.get("asset_view_mode") or "flat"),
-        "workflow_view_mode": str(ts_ui.get("workflow_view_mode") or "flat"),
-        "asset_sort_key": str(ts_ui.get("asset_sort_key") or "created_at"),
-        "asset_sort_direction": str(ts_ui.get("asset_sort_direction") or "desc"),
-        "asset_preview_size": TSClampInt(ts_ui.get("asset_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX, 180),
+        "asset_view_mode": TSNormalizeChoice(ts_ui.get("asset_view_mode"), TS_VIEW_MODES, "flat"),
+        "workflow_view_mode": TSNormalizeChoice(ts_ui.get("workflow_view_mode"), TS_VIEW_MODES, "flat"),
+        "asset_sort_key": TSNormalizeChoice(ts_ui.get("asset_sort_key"), TS_ASSET_SORT_KEYS, "created_at"),
+        "asset_sort_direction": TSNormalizeChoice(ts_ui.get("asset_sort_direction"), TS_SORT_DIRECTIONS, "desc"),
+        "asset_preview_size": TSClampInt(ts_ui.get("asset_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX, TS_DEFAULT_PREVIEW_SIZE),
         "asset_search": str(ts_ui.get("asset_search") or ""),
-        "workflow_sort_key": str(ts_ui.get("workflow_sort_key") or "created_at"),
-        "workflow_sort_direction": str(ts_ui.get("workflow_sort_direction") or "desc"),
-        "workflow_preview_size": TSClampInt(ts_ui.get("workflow_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX, 180),
+        "workflow_sort_key": TSNormalizeChoice(ts_ui.get("workflow_sort_key"), TS_WORKFLOW_SORT_KEYS, "created_at"),
+        "workflow_sort_direction": TSNormalizeChoice(ts_ui.get("workflow_sort_direction"), TS_SORT_DIRECTIONS, "desc"),
+        "workflow_preview_size": TSClampInt(ts_ui.get("workflow_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX, TS_DEFAULT_PREVIEW_SIZE),
         "workflow_search": str(ts_ui.get("workflow_search") or ""),
         "asset_types": [ts_type for ts_type in TSNormalizeStringSequence(ts_ui.get("asset_types")) if ts_type in TS_ASSET_TYPES],
         "selected_root_id": str(ts_ui.get("selected_root_id") or "all"),

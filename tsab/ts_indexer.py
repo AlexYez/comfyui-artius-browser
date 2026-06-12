@@ -111,6 +111,7 @@ class TSIndexer:
                 ts_error=None,
             )
             self.ts_emit_callback(TS_EVENT_INDEX_START, {"status": self.TSGetStatus()})
+            self.ts_tools.TSInvalidateMissingTools()
             self.ts_emit_callback(TS_EVENT_HEALTH, {"issues": [ts_issue.TSAsDict() for ts_issue in self.ts_tools.TSGetHealth()]})
 
             try:

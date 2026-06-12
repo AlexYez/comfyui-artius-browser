@@ -53,6 +53,16 @@ class TSToolLocator:
                 ts_candidates.append((ts_root / ts_relative_path).resolve())
         return ts_candidates
 
+    def TSInvalidateMissingTools(self) -> None:
+        # Drop cached negative lookups so a tool installed (or configured)
+        # after startup is picked up by the next scan without restarting
+        # ComfyUI. Successful resolutions stay cached.
+        ts_missing_tools = [ts_name for ts_name, ts_path in self.ts_cached_paths.items() if ts_path is None]
+        for ts_tool_name in ts_missing_tools:
+            del self.ts_cached_paths[ts_tool_name]
+        if ts_missing_tools:
+            TSLogVerbose("tools.cache.invalidated", tools=ts_missing_tools)
+
     def TSResolveTool(self, ts_tool_name: str) -> str | None:
         if ts_tool_name in self.ts_cached_paths:
             return self.ts_cached_paths[ts_tool_name]
