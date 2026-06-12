@@ -27,6 +27,7 @@ class TSDeleteService:
         TSLogVerbose("runtime.assets.delete.request", asset_ids=ts_asset_ids)
         ts_deleted_ids: list[int] = []
         ts_skipped_ids: list[int] = []
+        ts_deleted_refs: list[tuple[int, str, str]] = []
         ts_roots = {ts_root["root_id"]: ts_root for ts_root in self.ts_get_roots()}
         for ts_asset_id in ts_asset_ids:
             ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
@@ -57,11 +58,23 @@ class TSDeleteService:
                 TSLogVerbose("runtime.asset.delete.skipped", asset_id=ts_asset_id, reason=str(ts_error))
                 continue
 
-            ts_preview_path = str(ts_row["preview_path"] or "")
-            if ts_preview_path and self.ts_database.TSCountPreviewReferences(ts_preview_path, ts_asset_id) == 0:
-                self.ts_preview_cache.TSPurgePreview(ts_preview_path)
-            self.ts_database.TSDeleteAssetIds([ts_asset_id])
+            ts_deleted_refs.append((ts_asset_id, str(ts_row["path"]), str(ts_row["preview_path"] or "")))
             ts_deleted_ids.append(ts_asset_id)
-            TSLogVerbose("runtime.asset.deleted", asset_id=ts_asset_id, path=str(ts_row["path"]))
-            self.ts_emit_event("tsab:asset-remove", {"id": ts_asset_id, "path": ts_row["path"]})
+
+        if ts_deleted_ids:
+            # One batched DB delete: a single companion-flag recompute per
+            # touched folder instead of one per asset.
+            self.ts_database.TSDeleteAssetIds(ts_deleted_ids)
+            # Purge previews after the rows are gone so a preview shared only
+            # within this batch is correctly detected as unreferenced.
+            ts_checked_previews: set[str] = set()
+            for ts_asset_id, _ts_path, ts_preview_path in ts_deleted_refs:
+                if not ts_preview_path or ts_preview_path in ts_checked_previews:
+                    continue
+                ts_checked_previews.add(ts_preview_path)
+                if self.ts_database.TSCountPreviewReferences(ts_preview_path, ts_asset_id) == 0:
+                    self.ts_preview_cache.TSPurgePreview(ts_preview_path)
+            for ts_asset_id, ts_path, _ts_preview_path in ts_deleted_refs:
+                TSLogVerbose("runtime.asset.deleted", asset_id=ts_asset_id, path=ts_path)
+                self.ts_emit_event("tsab:asset-remove", {"id": ts_asset_id, "path": ts_path})
         return {"deleted": ts_deleted_ids, "skipped": ts_skipped_ids}

@@ -331,7 +331,7 @@ class TSDatabase:
         )
         return ts_row
 
-    def TSUpsertAssets(self, ts_payloads: list[TSAssetPayload]) -> list[sqlite3.Row]:
+    def TSUpsertAssets(self, ts_payloads: list[TSAssetPayload], ts_return_rows: bool = True) -> list[sqlite3.Row]:
         if not ts_payloads:
             return []
         ts_connection = self.TSGetConnection()
@@ -349,6 +349,11 @@ class TSDatabase:
             raise
         ts_connection.execute("COMMIT")
         self._TSRecomputeCompanionFlags(ts_touched_folders)
+        if not ts_return_rows:
+            # Hot-path variant for callers that ignore the rows (scan hash
+            # phase): skips one assets_view SELECT per upserted asset.
+            TSLogVerbose("db.assets.upserted.batch", count=len(ts_asset_ids), affected_folders=len(ts_touched_folders))
+            return []
         ts_rows: list[sqlite3.Row] = []
         for ts_asset_id in ts_asset_ids:
             ts_row = self.TSGetAssetById(ts_asset_id)

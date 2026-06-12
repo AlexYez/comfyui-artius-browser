@@ -247,7 +247,7 @@ class TSIndexer:
                             ):
                                 self._TSEmitScanProgress()
                         if ts_upsert_payloads:
-                            self.ts_database.TSUpsertAssets(ts_upsert_payloads)
+                            self.ts_database.TSUpsertAssets(ts_upsert_payloads, ts_return_rows=False)
                             self.ts_status.ts_changed += len(ts_upsert_payloads)
 
                 self.ts_status.ts_running = False
