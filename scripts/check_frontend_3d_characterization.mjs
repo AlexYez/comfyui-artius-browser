@@ -180,6 +180,26 @@ async function tsRun3DWorkerTests() {
     tsEqual(tsCaptureCalls, [["/view?filename=a.glb", { width: 480, height: 480, warmFrames: 2 }]], "3D worker passes thumbnail capture settings");
     tsEqual(tsSaveCalls, [[7, "data:image/png;base64,thumb"]], "3D worker saves captured thumbnail");
 
+    // A capture that returns nothing must be remembered so it is not retried
+    // (and a fresh WebGL viewer recreated) on the next focus/scan sweep.
+    let tsFailingCaptureCount = 0;
+    const tsFailingWorker = new (tsBuildWorkerHarness({
+        capture3DThumbnail: async () => {
+            tsFailingCaptureCount += 1;
+            return "";
+        },
+    }).TSGlobal3DThumbnailWorker)();
+    const tsPlaceholderAsset = {
+        id: 9,
+        type: "3d",
+        viewer_3d_url: "/view?filename=broken.glb",
+        preview_is_3d_capture: false,
+        preview_is_placeholder: true,
+    };
+    tsEqual(await tsFailingWorker.tsProcessAsset(tsPlaceholderAsset), false, "3D worker reports failed capture");
+    tsEqual(await tsFailingWorker.tsProcessAsset(tsPlaceholderAsset), false, "3D worker keeps skipping a failed capture");
+    tsEqual(tsFailingCaptureCount, 1, "3D worker does not recreate a viewer for an already-failed model");
+
     const tsRequestedURLs = [];
     const tsCompletedAsset = {
         type: "3d",

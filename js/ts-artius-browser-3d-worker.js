@@ -22,6 +22,14 @@ class TSGlobal3DThumbnailWorker {
         this.tsScanRunning = false;
         this.tsLastWarmupKey = "";
         this.tsStartupTimer = 0;
+        // 3D viewer captures (3d.js) each spin up a WebGL/Three.js context.
+        // A model that can't be captured (corrupt, unsupported, viewer
+        // returns nothing) must not be re-attempted on every focus /
+        // visibility / scan-complete sweep — that would recreate WebGL
+        // contexts without bound and can exhaust GPU memory in the Electron
+        // renderer. Remember failures and skip them; the set is cleared on a
+        // fresh scan so a rescan retries them once.
+        this.tsFailedViewerURLs = new Set();
         this.tsBoundScanEvent = (tsEvent) => this.tsHandleScanEvent(tsEvent);
         this.tsBoundVisibilityChange = () => {
             if (!document.hidden) {
@@ -81,6 +89,9 @@ class TSGlobal3DThumbnailWorker {
             const tsWarmupKey = `scan:${tsCompletedAt}`;
             if (tsWarmupKey !== this.tsLastWarmupKey) {
                 this.tsLastWarmupKey = tsWarmupKey;
+                // A new scan may have replaced previously-uncapturable files,
+                // so give earlier failures one retry on the post-scan sweep.
+                this.tsFailedViewerURLs.clear();
                 void this.tsScheduleRun("scan-complete");
             }
         }
@@ -118,12 +129,25 @@ class TSGlobal3DThumbnailWorker {
         if (tsAsset.preview_is_3d_capture && !tsAsset.preview_is_placeholder) {
             return false;
         }
-        const tsPreviewURL = await tsCapture3DThumbnail(tsAsset.viewer_3d_url, {
-            width: tsPanelSettings.threeDThumbnails?.captureSize,
-            height: tsPanelSettings.threeDThumbnails?.captureSize,
-            warmFrames: tsPanelSettings.threeDThumbnails?.warmFrames,
-        });
+        // Skip before creating any WebGL viewer: a model that already failed
+        // once this scan cycle is not retried until the next scan clears the
+        // set (see tsHandleScanEvent).
+        if (this.tsFailedViewerURLs.has(tsAsset.viewer_3d_url)) {
+            return false;
+        }
+        let tsPreviewURL = "";
+        try {
+            tsPreviewURL = await tsCapture3DThumbnail(tsAsset.viewer_3d_url, {
+                width: tsPanelSettings.threeDThumbnails?.captureSize,
+                height: tsPanelSettings.threeDThumbnails?.captureSize,
+                warmFrames: tsPanelSettings.threeDThumbnails?.warmFrames,
+            });
+        } catch (tsError) {
+            this.tsFailedViewerURLs.add(tsAsset.viewer_3d_url);
+            throw tsError;
+        }
         if (!tsPreviewURL) {
+            this.tsFailedViewerURLs.add(tsAsset.viewer_3d_url);
             return false;
         }
         await tsSave3DThumbnail(tsAsset.id, tsPreviewURL);
