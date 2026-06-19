@@ -280,6 +280,17 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (this.tsIsWorkflowSection()) {
             this.tsWorkflowLibraryLoaded = false;
             void this.tsFetchAssets(true);
+        } else {
+            // Re-show of the Assets tab. ComfyUI tears the sidebar tab out of
+            // the DOM while another tab is active, so the panel can miss the
+            // tsab:index-* events emitted by an autoscan that ran while it was
+            // hidden (e.g. the post-generation rescan fired from the extension
+            // entry on execution_success). Without this, assets indexed since
+            // the last view stay invisible until a manual Rescan. Drop the
+            // cached first page and refetch so freshly indexed assets show up
+            // on return.
+            this.tsInvalidateResponseCache();
+            void this.tsFetchAssets(true);
         }
     }
 
@@ -584,7 +595,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return;
         }
         this.tsToolbarNaturalHeight = tsRawNaturalHeight;
-        tsWrap.style.height = `${Math.round(tsRawNaturalHeight * tsScale)}px`;
+        // Ceil, not round: the scaled content is exactly tsRawNaturalHeight *
+        // tsScale tall, and overflow:hidden on the wrap crops anything past
+        // its pixel height. Rounding down by up to half a pixel can shave the
+        // last button row; ceil guarantees the wrap never sits below the
+        // content it must show.
+        tsWrap.style.height = `${Math.ceil(tsRawNaturalHeight * tsScale)}px`;
     }
 
     tsBindToolbarResizer() {
@@ -1992,6 +2008,19 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRescan.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRebuildCache.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsDeleteSelected.style.display = tsWorkflowHiddenDisplay;
+        // Assets <-> Workflows toggles a large block of controls (root, type
+        // chips, autoscan, rescan, rebuild, delete), which changes the
+        // toolbar's natural unscaled height. The scaled wrap clips to a
+        // measured pixel height, so without a fresh measure the stale value
+        // from the previous section can crop the freshly shown controls
+        // (buttons "disappear"). Re-measure on an actual section change and
+        // reset the ResizeObserver dedup baseline so the re-measure is never
+        // skipped as a no-op.
+        if (this.tsLastRenderedToolbarSection !== tsWorkflowSection) {
+            this.tsLastRenderedToolbarSection = tsWorkflowSection;
+            this.tsLastObservedToolbarHeight = 0;
+            this.tsApplyToolbarScale();
+        }
     }
 
     tsRenderSortOptions() {

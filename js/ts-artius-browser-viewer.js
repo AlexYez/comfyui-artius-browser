@@ -30,6 +30,32 @@ import {
 import { tsBuildStageMarkup } from "./ts-artius-browser-viewer-stage.js";
 import { tsViewerSettings } from "./ts-artius-browser-settings.js";
 
+// Detaching a <video>/<audio> element from the DOM does not, by itself,
+// release the decoded frames, buffered network data, and media-pipeline
+// memory the browser holds for it: that survives until the element is GC'd,
+// and an element that still has a live `src` can keep buffering in the
+// meantime. Across a long session of opening clips in the lightbox this
+// accumulates and is a prime suspect for the renderer "Out of Memory" crash.
+// Pausing, clearing the source, and calling load() forces the browser to free
+// those resources immediately on stage teardown (CLAUDE.md/AGENTS.md section 8
+// teardown contract).
+function tsReleaseMediaSource(tsMedia) {
+    if (!tsMedia) {
+        return;
+    }
+    try {
+        tsMedia.pause();
+    } catch {
+        // no-op
+    }
+    try {
+        tsMedia.removeAttribute("src");
+        tsMedia.load();
+    } catch {
+        // no-op
+    }
+}
+
 export class TSArtiusBrowserViewer extends HTMLElement {
     constructor() {
         super();
@@ -1234,7 +1260,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsVideo.removeEventListener("pause", tsHandlePause);
             tsVideo.removeEventListener("play", tsHandlePlay);
             tsVideo.removeEventListener("ended", tsHandlePause);
-            tsVideo.pause();
+            tsReleaseMediaSource(tsVideo);
         };
     }
 
@@ -1511,7 +1537,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsPrimaryVideo.removeEventListener("ended", tsHandlePrimaryEnded);
             tsPrimaryVideo.removeEventListener("ratechange", tsHandlePrimaryRateChange);
             tsVideos.forEach((tsVideo) => {
-                tsVideo.pause();
+                tsReleaseMediaSource(tsVideo);
             });
         };
     }
@@ -1925,7 +1951,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsAudio.removeEventListener("play", tsUpdateUI);
             tsAudio.removeEventListener("pause", tsUpdateUI);
             tsAudio.removeEventListener("ended", tsUpdateUI);
-            tsAudio.pause();
+            tsReleaseMediaSource(tsAudio);
         };
     }
 
