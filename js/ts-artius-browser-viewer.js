@@ -37,7 +37,7 @@ import { tsViewerSettings } from "./ts-artius-browser-settings.js";
 // meantime. Across a long session of opening clips in the lightbox this
 // accumulates and is a prime suspect for the renderer "Out of Memory" crash.
 // Pausing, clearing the source, and calling load() forces the browser to free
-// those resources immediately on stage teardown (CLAUDE.md/AGENTS.md section 8
+// those resources immediately on stage teardown (CLAUDE.md section 8
 // teardown contract).
 function tsReleaseMediaSource(tsMedia) {
     if (!tsMedia) {

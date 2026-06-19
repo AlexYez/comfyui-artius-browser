@@ -652,7 +652,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsResizer.addEventListener("pointercancel", tsOnPointerUp);
         };
         // Stash the handler so disconnectedCallback can remove it; required
-        // by AGENTS.md §8 ("every transient ... listener must have
+        // by CLAUDE.md §8 ("every transient ... listener must have
         // teardown") for new listeners added in this code path.
         this.tsToolbarResizerPointerDownHandler = tsOnPointerDown;
         tsResizer.addEventListener("pointerdown", tsOnPointerDown);

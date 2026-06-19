@@ -82,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the slider felt ~2× more sensitive when growing the toolbar.
   - The `pointerdown` listener on `.ts-toolbar-resizer` is now stored
     and removed in `disconnectedCallback`, matching the
-    AGENTS.md §8 teardown rule for new listeners.
+    CLAUDE.md §8 teardown rule for new listeners.
 
 ### Changed
 - `tsHandleAssetRemoveEvent` now delegates to `tsRemoveItemsByIds`

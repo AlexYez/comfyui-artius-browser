@@ -35,8 +35,6 @@ dist/
 *.log
 *.tmp
 *.bak
-agents.md
-AGENTS.md
 CLAUDE.md
 doc/
 

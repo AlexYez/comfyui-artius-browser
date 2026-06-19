@@ -3,8 +3,8 @@
 ComfyUI deploy directory (``custom_nodes/comfyu-artius-browser``).
 
 The master working copy holds *everything* — runtime code plus the private
-development assets (``tests/``, ``project_memory/``, ``doc/``, ``CLAUDE.md`` /
-``AGENTS.md``). The deploy must contain *only* the shippable runtime files,
+development assets (``tests/``, ``project_memory/``, ``doc/``, ``CLAUDE.md``).
+The deploy must contain *only* the shippable runtime files,
 i.e. exactly the set that is tracked in the public repository. Run this after
 changing runtime code so the live ComfyUI install matches the master:
 
