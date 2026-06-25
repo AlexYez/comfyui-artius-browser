@@ -145,6 +145,18 @@ def TSExtractPromptPartsFromPromptField(ts_prompt_value) -> tuple[str, str]:
 
         TSWalkPromptPayload(ts_prompt_payload)
 
+    # Drop any positive text that leaked into the negative bucket. The negative
+    # reference walk recurses through every input, so shared upstream nodes
+    # (ConditioningConcat/Combine, region tricks) can pull positive prompt text
+    # into ts_negative_candidates and surface it after a line break.
+    ts_positive_keys = {TSNormalizePromptKey(ts_text_value) for ts_text_value in ts_positive_candidates}
+    if ts_positive_keys:
+        ts_negative_candidates = [
+            ts_text_value
+            for ts_text_value in ts_negative_candidates
+            if TSNormalizePromptKey(ts_text_value) not in ts_positive_keys
+        ]
+
     ts_negative_keys = {TSNormalizePromptKey(ts_text_value) for ts_text_value in ts_negative_candidates}
     ts_positive_fallback_candidates = [
         ts_text_value
