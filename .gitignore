@@ -47,3 +47,9 @@ project_memory/
 
 # Editor / agent state
 .claude/
+
+# Dev-only tooling — kept in the master working copy, never published to the
+# public repo nor synced into the ComfyUI deploy.
+scripts/
+.comfyignore
+.pre-commit-config.yaml
