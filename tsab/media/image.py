@@ -3,7 +3,7 @@ from __future__ import annotations
 from PIL import Image
 
 from .common import TSBuildDiscoveredPayload, TSBuildIndexedPayload
-from .prompt_metadata import TSExtractPromptPartsFromPromptField
+from .prompt_metadata import TSExtractPromptPartsFromPromptField, TSExtractSeedFromPromptField
 from ..ts_metadata_extract import TSExtractWorkflowText
 from ..ts_settings import TS_IMAGE_EXTENSIONS
 from ..ts_types import TSAssetPayload, TSAssetStat
@@ -84,13 +84,15 @@ class TSImageHandler:
         ts_prompt_field = ts_metadata.get("Prompt") or ts_metadata.get("prompt") or ""
         ts_workflow_field = ts_metadata.get("Workflow") or ts_metadata.get("workflow") or ""
         ts_prompt_text, ts_negative_prompt_text = TSExtractPromptPartsFromPromptField(ts_prompt_field)
+        ts_seed_text = TSExtractSeedFromPromptField(ts_prompt_field)
         ts_workflow_text = TSExtractWorkflowText({"Workflow": ts_workflow_field}) if ts_workflow_field else ""
         ts_metadata_payload = {}
-        if ts_prompt_text or ts_negative_prompt_text or ts_workflow_text:
+        if ts_prompt_text or ts_negative_prompt_text or ts_workflow_text or ts_seed_text:
             ts_metadata_payload = {
-                "prompt_parts_version": 4,
+                "prompt_parts_version": 5,
                 "positive_prompt_text": ts_prompt_text,
                 "negative_prompt_text": ts_negative_prompt_text,
+                "seed": ts_seed_text,
             }
         return {
             "metadata": TSJsonDumps(ts_metadata_payload) if ts_metadata_payload else "{}",

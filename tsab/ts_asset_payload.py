@@ -79,6 +79,12 @@ def TSBuildAssetCard(ts_row, ts_roots: dict[str, dict[str, Any]], ts_preview_cac
     ts_preview_url = f"/asset_browser/preview/{ts_row['id']}?v={ts_preview_cache_token}"
     ts_file_url = f"/asset_browser/file?id={ts_row['id']}&v={ts_file_cache_token}"
     ts_technical_info = TSResolveTechnicalInfo(ts_row) if str(ts_row["type"] or "") in {"video", "audio"} else {}
+    # 3D capture keys are built as "{key}.3d" (see TSBuildPreviewPath), so the
+    # cache filename is "{key}.3d.<ext>". Anchor on the stem suffix instead of
+    # a substring so a normal preview whose path merely contains ".3d." cannot
+    # be mislabeled as a 3D capture.
+    ts_preview_filename = ts_preview_path.rsplit("/", 1)[-1].lower()
+    ts_preview_is_3d_capture = ts_preview_exists and ts_preview_filename.rsplit(".", 1)[0].endswith(".3d")
     return {
         "id": ts_row["id"],
         "path": ts_row["path"],
@@ -91,7 +97,7 @@ def TSBuildAssetCard(ts_row, ts_roots: dict[str, dict[str, Any]], ts_preview_cac
         "file_url": ts_file_url,
         "viewer_3d_url": TSBuildNative3DViewerURL(ts_row, ts_root) if str(ts_row["type"] or "") == "3d" else "",
         "preview_is_placeholder": (not ts_preview_exists) or ts_preview_cache.TSIsPlaceholderPreview(ts_preview_path),
-        "preview_is_3d_capture": ts_preview_exists and ".3d." in ts_preview_path.lower(),
+        "preview_is_3d_capture": ts_preview_is_3d_capture,
         "scope": ts_row["scope"],
         "root_id": ts_row["root_id"],
         "width": ts_row["width"],

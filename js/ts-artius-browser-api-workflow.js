@@ -108,6 +108,17 @@ export function tsGetComfyVisibleNodes(tsDeps) {
     return [];
 }
 
+export function tsGetComfySelectedNodes(tsDeps) {
+    const tsSelected = tsDeps?.app?.canvas?.selected_nodes;
+    if (!tsSelected) {
+        return [];
+    }
+    if (Array.isArray(tsSelected)) {
+        return tsSelected;
+    }
+    return Object.values(tsSelected);
+}
+
 export function tsCreateComfyGraphNode(tsNodeType, tsDeps) {
     const tsLiteGraph = tsDeps?.window?.LiteGraph;
     if (typeof tsLiteGraph?.createNode !== "function") {

@@ -133,6 +133,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsTtlMs: tsPanelSettings.responseCache.ttlMs,
         });
         this.tsRevalidationsInFlight = new Set();
+        // Bumped by tsInvalidateResponseCache. A fetch/revalidation that
+        // started before an invalidation must not write its now-stale
+        // payload back into the cache, so every cache write is gated on the
+        // epoch being unchanged since the request began.
+        this.tsResponseCacheEpoch = 0;
         this.tsDebouncedAssetEventRefresh = tsDebounce(() => {
             this.tsScheduleGridRender(true, false);
             this.tsRenderSelectionButtons();
@@ -171,6 +176,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (this.tsConnectedOnce) {
             this.tsBindApiEvents();
             this.tsStartWidthTracking();
+            // The gallery/toolbar observers were disconnected in
+            // disconnectedCallback (ComfyUI tears the tab out of the DOM when
+            // hidden). tsBuildShell only runs once, so re-observe the same
+            // shell elements here or toolbar height stops tracking reflow.
+            if (this.tsRefs?.tsGalleryScroll) {
+                this.tsResizeObserver?.observe?.(this.tsRefs.tsGalleryScroll);
+            }
+            if (this.tsRefs?.tsToolbarMain) {
+                this.tsToolbarResizeObserver?.observe?.(this.tsRefs.tsToolbarMain);
+            }
             this.tsScheduleSidebarRefresh(0);
             return;
         }
@@ -2305,6 +2320,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             const tsCanUseCache = tsReset && !this.tsIsWorkflowSection();
             const tsCacheKey = tsCanUseCache ? this.tsBuildRequestPath(null) : null;
             const tsCacheEntry = tsCacheKey ? this.tsResponseCache.tsGet(tsCacheKey) : null;
+            const tsFetchEpoch = this.tsResponseCacheEpoch;
             try {
                 let tsPayload;
                 if (tsCacheEntry) {
@@ -2325,7 +2341,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 } else {
                     const tsRequestPath = this.tsBuildRequestPath(tsCursorForFetch);
                     tsPayload = await tsFetchJSON(tsRequestPath);
-                    if (tsCacheKey && tsRequestPath === tsCacheKey) {
+                    if (tsCacheKey && tsRequestPath === tsCacheKey && tsFetchEpoch === this.tsResponseCacheEpoch) {
                         this.tsResponseCache.tsSet(tsCacheKey, tsPayload);
                     }
                 }
@@ -2405,9 +2421,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return;
         }
         this.tsRevalidationsInFlight.add(tsCacheKey);
+        const tsRevalidateEpoch = this.tsResponseCacheEpoch;
         window.setTimeout(async () => {
             try {
                 const tsPayload = await tsFetchJSON(tsCacheKey);
+                if (tsRevalidateEpoch !== this.tsResponseCacheEpoch) {
+                    return;
+                }
                 this.tsResponseCache.tsSet(tsCacheKey, tsPayload);
                 if (!this.tsIsWorkflowSection() && this.tsBuildRequestPath(null) === tsCacheKey) {
                     this.tsApplyRevalidatedPayload(tsPayload);
@@ -2444,6 +2464,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsInvalidateResponseCache() {
+        this.tsResponseCacheEpoch += 1;
         this.tsResponseCache.tsClear();
     }
 

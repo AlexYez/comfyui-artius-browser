@@ -101,6 +101,7 @@
     "meta.positivePrompt": "Positive Prompt",
     "meta.negativePrompt": "Negative Prompt",
     "meta.workflow": "Workflow",
+    "meta.seed": "Seed",
     "meta.noPrompt": "No prompt metadata found.",
     "meta.technical": "Technical",
     "meta.fileFormat": "File Format",

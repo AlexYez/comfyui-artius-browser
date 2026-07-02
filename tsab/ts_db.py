@@ -450,21 +450,6 @@ class TSDatabase:
         self._TSRecomputeCompanionFlags(ts_touched_folders)
         TSLogVerbose("db.asset_ids.deleted", count=len(ts_asset_ids), asset_ids=ts_asset_ids)
 
-    def TSDeleteAssetPaths(self, ts_paths: list[str]) -> None:
-        if not ts_paths:
-            return
-        ts_connection = self.TSGetConnection()
-        ts_asset_ids: list[int] = []
-        for ts_path_batch in self._TSChunkedValues(list(dict.fromkeys(ts_paths)), 500):
-            ts_placeholders = ",".join("?" for _ in ts_path_batch)
-            ts_rows = ts_connection.execute(
-                f"SELECT id FROM assets WHERE path IN ({ts_placeholders})",
-                ts_path_batch,
-            ).fetchall()
-            ts_asset_ids.extend(int(ts_row["id"]) for ts_row in ts_rows)
-        self.TSDeleteAssetIds(ts_asset_ids)
-        TSLogVerbose("db.asset_paths.deleted", count=len(ts_paths), paths=ts_paths)
-
     def TSCountVisibleByType(self, ts_root_ids: list[str] | None = None) -> dict[str, int]:
         # "Visible" matches the asset listing: companion images suppressed
         # from the grid must not inflate the scan summary counts either.

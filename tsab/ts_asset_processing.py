@@ -137,7 +137,7 @@ class TSAssetProcessingService:
                 return None
             ts_metadata = TSJsonLoads(ts_fresh_row["metadata"], {})
             ts_needs_image_prompt_refresh = str(ts_fresh_row["type"] or "") == "image" and (
-                not isinstance(ts_metadata, dict) or int(ts_metadata.get("prompt_parts_version") or 0) < 4
+                not isinstance(ts_metadata, dict) or int(ts_metadata.get("prompt_parts_version") or 0) < 5
             )
             if bool(ts_fresh_row["has_metadata"]) and not ts_needs_image_prompt_refresh:
                 return ts_fresh_row

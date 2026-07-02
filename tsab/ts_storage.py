@@ -63,12 +63,6 @@ class TSStoragePaths:
         self.ts_placeholder_directory.mkdir(parents=True, exist_ok=True)
         TSLogVerbose("storage.directories.ensured", root=str(self.ts_asset_browser_directory))
 
-    def TSNormalizePath(self, ts_path_value: str | Path) -> str:
-        return TSNormalizePathString(ts_path_value)
-
-    def TSRelativeCachePath(self, ts_path_value: Path) -> str:
-        return ts_path_value.relative_to(self.ts_asset_browser_directory).as_posix()
-
     def TSResolveCachePath(self, ts_relative_cache_path: str) -> Path:
         ts_candidate = Path(ts_relative_cache_path)
         if ts_candidate.is_absolute():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import threading
@@ -12,6 +13,11 @@ import folder_paths
 from .ts_logging import TSLogVerbose
 from .ts_settings import TS_DEFAULT_FFMPEG_WORKERS, TS_DEFAULT_FFPROBE_WORKERS
 from .ts_types import TSHealthIssue
+
+# On Windows, portable ComfyUI runs from a console window (via .bat), so every
+# ffmpeg/ffprobe spawn without this flag flashes a console window that steals
+# focus. Zero on non-Windows platforms where the flag does not exist.
+TS_SUBPROCESS_CREATIONFLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
 
 
 class TSToolLocator:
@@ -107,6 +113,7 @@ class TSToolLocator:
                 check=False,
                 encoding="utf-8",
                 errors="replace",
+                creationflags=TS_SUBPROCESS_CREATIONFLAGS,
             )
         except (subprocess.SubprocessError, OSError) as ts_error:
             TSLogVerbose("tools.run.failed", arguments=ts_arguments, error=str(ts_error))
@@ -146,6 +153,7 @@ class TSToolLocator:
                         text=True,
                         encoding="utf-8",
                         errors="replace",
+                        creationflags=TS_SUBPROCESS_CREATIONFLAGS,
                     )
                     ts_processes.append((ts_process, ts_arguments, ts_timeout))
                 except OSError as ts_error:

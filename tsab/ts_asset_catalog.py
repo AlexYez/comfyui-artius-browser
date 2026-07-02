@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from .ts_asset_metadata import TSResolveAssetNegativePromptText, TSResolveAssetPromptText, TSResolveAssetWorkflowText
+from .ts_asset_metadata import TSResolveAssetNegativePromptText, TSResolveAssetPromptText, TSResolveAssetSeedText, TSResolveAssetWorkflowText
 from .ts_asset_payload import TSBuildAssetCard, TSResolveTechnicalInfo
 from .ts_asset_technical import TSEnrichAudioTechnicalInfo, TSEnrichVideoTechnicalInfo
 from .ts_logging import TSLogVerbose
@@ -90,5 +90,6 @@ class TSAssetCatalogService:
         ts_payload["prompt_text"] = TSResolveAssetPromptText(ts_row)
         ts_payload["negative_prompt_text"] = TSResolveAssetNegativePromptText(ts_row)
         ts_payload["workflow_text"] = TSResolveAssetWorkflowText(ts_row)
+        ts_payload["seed"] = TSResolveAssetSeedText(ts_row)
         ts_payload["technical_info"] = ts_technical_info
         return ts_payload

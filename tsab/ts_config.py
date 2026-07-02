@@ -49,11 +49,6 @@ class TSConfigStore:
             self.ts_cached_config = ts_merged
             return copy.deepcopy(ts_merged)
 
-    def TSReloadConfig(self) -> dict:
-        with self.ts_config_lock:
-            self.ts_cached_config = None
-            return self.TSLoadConfig()
-
     def TSMergeDefaults(self, ts_config: dict) -> dict:
         ts_default = self.TSBuildDefaultConfig()
         ts_overrides = ts_config if isinstance(ts_config, dict) else {}

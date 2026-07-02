@@ -824,7 +824,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         }
         this.tsStageCleanup = null;
         this.tsVideoFrameStepper = null;
-        this.tsDetailRequestToken = 0;
+        // tsDetailRequestToken stays monotonic on purpose: a stale detail
+        // fetch is rejected by the ++token guard, not by a reset here.
+        // Resetting it let a concurrent tsRender() (e.g. prefetch) drop the
+        // freshly loaded metadata for the asset still on screen.
     }
 
     tsIsVideoCompareMode() {
@@ -980,6 +983,8 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             ? tsAsset.workflow_text
             : tsField === "negative_prompt"
                 ? tsAsset.negative_prompt_text
+            : tsField === "seed"
+                ? tsAsset.seed
             : tsAsset.prompt_text;
         if (tsValue) {
             await tsCopyText(tsValue);
@@ -1166,7 +1171,6 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsStageCleanup = null;
         this.tsVideoFrameStepper = null;
         this.tsCompareItems = [];
-        this.tsDetailRequestToken = 0;
     }
 
     tsSetupVideoStage(tsAsset) {

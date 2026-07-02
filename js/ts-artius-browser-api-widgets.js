@@ -1,14 +1,3 @@
-export function tsGetSelectedNodes(tsApp) {
-    const tsSelected = tsApp?.canvas?.selected_nodes;
-    if (!tsSelected) {
-        return [];
-    }
-    if (Array.isArray(tsSelected)) {
-        return tsSelected;
-    }
-    return Object.values(tsSelected);
-}
-
 export function tsFindWidget(tsNode, tsNames) {
     if (!tsNode?.widgets?.length) {
         return null;

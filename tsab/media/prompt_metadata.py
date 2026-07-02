@@ -175,3 +175,50 @@ def TSExtractPromptPartsFromPromptField(ts_prompt_value) -> tuple[str, str]:
     if ts_positive_prompt and TSNormalizePromptKey(ts_positive_prompt) == TSNormalizePromptKey(ts_negative_prompt):
         ts_negative_prompt = ""
     return ts_positive_prompt, ts_negative_prompt
+
+
+def _TSNormalizeSeedValue(ts_value) -> str:
+    if isinstance(ts_value, bool):
+        return ""
+    if isinstance(ts_value, int):
+        return str(ts_value)
+    if isinstance(ts_value, str):
+        ts_clean = ts_value.strip()
+        if ts_clean and ts_clean.lstrip("-").isdigit():
+            return ts_clean
+    return ""
+
+
+def TSExtractSeedFromPromptField(ts_prompt_value) -> str:
+    """Collect the generation seed(s) from the API-format PNG ``Prompt`` JSON.
+
+    Reads every node's ``inputs.seed`` / ``inputs.noise_seed`` integer value
+    (a linked seed is a ``[node_id, slot]`` list, so the literal value is
+    picked up from the upstream provider node instead). Deduplicates while
+    preserving order and joins multiple distinct seeds with ", ".
+    """
+    if not isinstance(ts_prompt_value, str):
+        return ""
+    ts_prompt_text = ts_prompt_value.strip()
+    if not ts_prompt_text:
+        return ""
+    try:
+        ts_prompt_payload = json.loads(ts_prompt_text)
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(ts_prompt_payload, dict):
+        return ""
+    ts_seeds: list[str] = []
+    ts_seen: set[str] = set()
+    for ts_node in ts_prompt_payload.values():
+        if not isinstance(ts_node, dict):
+            continue
+        ts_inputs = ts_node.get("inputs", {})
+        if not isinstance(ts_inputs, dict):
+            continue
+        for ts_seed_key in ("seed", "noise_seed"):
+            ts_seed_text = _TSNormalizeSeedValue(ts_inputs.get(ts_seed_key))
+            if ts_seed_text and ts_seed_text not in ts_seen:
+                ts_seen.add(ts_seed_text)
+                ts_seeds.append(ts_seed_text)
+    return ", ".join(ts_seeds)

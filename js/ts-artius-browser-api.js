@@ -23,6 +23,7 @@ import {
     tsCreateComfyGraphNode,
     tsGetComfyCanvasDropGraphPosition,
     tsGetComfyCanvasElement,
+    tsGetComfySelectedNodes,
     tsGetComfyVisibleNodes,
     tsGetRelativeAssetPath,
     tsIsGraphPointInsideNode,
@@ -33,7 +34,6 @@ import {
 import {
     tsEnsureWidgetOptionValue as tsEnsureWidgetOptionValueImpl,
     tsFindWidget as tsFindWidgetImpl,
-    tsGetSelectedNodes as tsGetSelectedNodesImpl,
     tsSetWidgetValue as tsSetWidgetValueImpl,
 } from "./ts-artius-browser-api-widgets.js";
 import {
@@ -275,7 +275,7 @@ export function tsBuildFolderTree(tsFolders, tsRoots) {
 }
 
 function tsGetSelectedNodes() {
-    return tsGetSelectedNodesImpl(app);
+    return tsGetComfySelectedNodes(tsComfyAdapterDeps());
 }
 
 function tsFindWidget(tsNode, tsNames) {

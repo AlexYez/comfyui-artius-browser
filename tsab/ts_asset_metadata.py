@@ -33,3 +33,10 @@ def TSResolveAssetWorkflowText(ts_row) -> str:
     if ts_metadata:
         return TSExtractWorkflowText(ts_metadata)
     return ""
+
+
+def TSResolveAssetSeedText(ts_row) -> str:
+    ts_metadata = TSJsonLoads(ts_row["metadata"], {})
+    if not isinstance(ts_metadata, dict):
+        return ""
+    return str(ts_metadata.get("seed") or "")

@@ -53,6 +53,18 @@ export function tsBuildImageMetaMarkup(tsAsset, tsDeps) {
             escapeAttribute: tsDeps.escapeAttribute,
         })
         : "";
+    const tsSeedText = tsAsset.seed || "";
+    const tsSeedMarkup = tsSeedText
+        ? `
+            <div class="ts-meta-block">
+                <div class="ts-meta-row">
+                    <h4>${tsDeps.t("meta.seed", "Seed")}</h4>
+                    <button class="ts-meta-copy" type="button" data-copy-field="seed">${tsDeps.t("button.copy", "Copy")}</button>
+                </div>
+                <div class="ts-seed">${tsDeps.escapeHTML(tsSeedText)}</div>
+            </div>
+        `
+        : "";
     const tsWorkflowButtonMarkup = tsAsset.workflow_text
         ? `
             <div class="ts-meta-block">
@@ -66,6 +78,7 @@ export function tsBuildImageMetaMarkup(tsAsset, tsDeps) {
     return `
         ${tsPositivePromptMarkup}
         ${tsNegativePromptMarkup}
+        ${tsSeedMarkup}
         ${tsWorkflowButtonMarkup}
     `;
 }

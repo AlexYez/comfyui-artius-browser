@@ -171,7 +171,7 @@ exactly like files picked from the node UI. The `Workflows` tab reads
 - **Workflow** is read **only** from the PNG `Workflow` field
 - Positive and negative prompts are split before display
 - If positive and negative are identical, only the positive is shown
-- *Seed is no longer stored*
+- **Seed** is read from the PNG `Prompt` field and shown in the lightbox (copyable)
 
 ### 🛡️ Compatibility & safety
 
@@ -235,14 +235,6 @@ ComfyUI/output/.ts_artius_browser/
     ├── waveforms/
     └── placeholders/
 ```
-
-### 🧪 Release checks
-
-```bash
-python scripts/check_release.py
-```
-
-Validates Python syntax · JS syntax · JSON · localization keys · dead helpers · unit tests · git whitespace.
 
 ### 📋 Changelog
 
@@ -515,7 +507,7 @@ Los archivos 3D se preparan automáticamente en el almacenamiento de input de Co
 - **Workflow** se lee **solo** del campo `Workflow` del PNG
 - Los prompts positivos y negativos se separan antes de mostrarse
 - Si positivo y negativo son idénticos, solo se muestra el positivo
-- *El seed ya no se almacena*
+- El **seed** se lee del campo `Prompt` del PNG y se muestra en el lightbox (copiable)
 
 ### 🛡️ Compatibilidad y seguridad
 
@@ -574,14 +566,6 @@ ComfyUI/output/.ts_artius_browser/
     ├── waveforms/
     └── placeholders/
 ```
-
-### 🧪 Comprobaciones de release
-
-```bash
-python scripts/check_release.py
-```
-
-Valida sintaxis Python · sintaxis JS · JSON · claves de localización · helpers muertos · tests unitarios · whitespace de git.
 
 ### 📋 Changelog
 
@@ -730,7 +714,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 - **Workflow** **只**从 PNG 的 `Workflow` 字段读取
 - 正向与负向 prompt 在显示前会被分离
 - 如果正向与负向相同,只显示正向
-- *Seed 不再被存储*
+- **Seed** 从 PNG `Prompt` 字段读取并显示在灯箱中（可复制）
 
 ### 🛡️ 兼容性与安全
 
@@ -789,15 +773,6 @@ ComfyUI/output/.ts_artius_browser/
     ├── waveforms/
     └── placeholders/
 ```
-
-### 🧪 Release 检查
-
-```bash
-python scripts/check_release.py
-```
-
-验证 Python 语法 · JS 语法 · JSON · 本地化键 · 死代码 · 个单元测试 · git 空白字符。
-
 
 ### 📋 更新日志
 
@@ -947,7 +922,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 - **Workflow** は PNG の `Workflow` フィールド**のみ**から読み込み
 - ポジティブとネガティブの prompt は表示前に分離
 - ポジティブとネガティブが同じ場合、ポジティブのみ表示
-- *Seed は保存されなくなりました*
+- **Seed** は PNG の `Prompt` フィールドから読み取られ、ライトボックスに表示されます（コピー可能）
 
 ### 🛡️ 互換性と安全性
 
@@ -1006,15 +981,6 @@ ComfyUI/output/.ts_artius_browser/
     ├── waveforms/
     └── placeholders/
 ```
-
-### 🧪 リリースチェック
-
-```bash
-python scripts/check_release.py
-```
-
-Python シンタックス · JS シンタックス · JSON · ローカライズキー · 死コード · ユニットテスト · git 空白を検証します。
-
 
 ### 📋 変更履歴
 
@@ -1164,7 +1130,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 - **Workflow** 는 PNG `Workflow` 필드**에서만** 읽음
 - 긍정 / 부정 프롬프트는 표시 전에 분리됨
 - 긍정과 부정이 동일하면 긍정만 표시
-- *Seed 는 더 이상 저장되지 않음*
+- **Seed** 는 PNG `Prompt` 필드에서 읽어 라이트박스에 표시됩니다 (복사 가능)
 
 ### 🛡️ 호환성 및 안전성
 
@@ -1223,15 +1189,6 @@ ComfyUI/output/.ts_artius_browser/
     ├── waveforms/
     └── placeholders/
 ```
-
-### 🧪 릴리스 체크
-
-```bash
-python scripts/check_release.py
-```
-
-Python 문법 · JS 문법 · JSON · 로컬라이제이션 키 · 죽은 헬퍼 · 개 유닛 테스트 · git 공백을 검증합니다.
-
 
 ### 📋 변경 이력
 
@@ -1381,7 +1338,7 @@ Dieses Pack erfindet keine Loader neu — es leitet Drag-and-Drop an die nativen
 - **Workflow** wird **ausschließlich** aus dem PNG-Feld `Workflow` gelesen
 - Positive und negative Prompts werden vor der Anzeige getrennt
 - Sind positive und negative Prompts identisch, wird nur der positive gezeigt
-- *Seed wird nicht mehr gespeichert*
+- **Seed** wird aus dem PNG-`Prompt`-Feld gelesen und in der Lightbox angezeigt (kopierbar)
 
 ### 🛡️ Kompatibilität und Sicherheit
 
@@ -1440,14 +1397,6 @@ ComfyUI/output/.ts_artius_browser/
     ├── waveforms/
     └── placeholders/
 ```
-
-### 🧪 Release-Checks
-
-```bash
-python scripts/check_release.py
-```
-
-Prüft Python-Syntax · JS-Syntax · JSON · Lokalisierungsschlüssel · tote Helfer · Unit-Tests · Git-Whitespace.
 
 ### 📋 Changelog
 
@@ -1597,7 +1546,7 @@ I file 3D vengono automaticamente messi in staging nello storage di input di Com
 - **Workflow** viene letto **solo** dal campo `Workflow` del PNG
 - Prompt positivi e negativi sono separati prima della visualizzazione
 - Se positivo e negativo sono identici, viene mostrato solo il positivo
-- *Il seed non è più memorizzato*
+- Il **seed** viene letto dal campo `Prompt` del PNG e mostrato nel lightbox (copiabile)
 
 ### 🛡️ Compatibilità e sicurezza
 
@@ -1656,14 +1605,6 @@ ComfyUI/output/.ts_artius_browser/
     ├── waveforms/
     └── placeholders/
 ```
-
-### 🧪 Controlli di release
-
-```bash
-python scripts/check_release.py
-```
-
-Valida sintassi Python · sintassi JS · JSON · chiavi di localizzazione · helper morti · test unitari · whitespace git.
 
 ### 📋 Changelog
 
@@ -1814,7 +1755,7 @@ Les fichiers 3D sont automatiquement préparés dans le stockage d'input de Comf
 - **Workflow** est lu **uniquement** depuis le champ `Workflow` du PNG
 - Les prompts positifs et négatifs sont séparés avant affichage
 - Si positif et négatif sont identiques, seul le positif est affiché
-- *Le seed n'est plus stocké*
+- Le **seed** est lu depuis le champ `Prompt` du PNG et affiché dans la lightbox (copiable)
 
 ### 🛡️ Compatibilité et sécurité
 
@@ -1873,14 +1814,6 @@ ComfyUI/output/.ts_artius_browser/
     ├── waveforms/
     └── placeholders/
 ```
-
-### 🧪 Vérifications de release
-
-```bash
-python scripts/check_release.py
-```
-
-Valide la syntaxe Python · la syntaxe JS · le JSON · les clés de localisation · les helpers morts · tests unitaires · les espaces git.
 
 ### 📋 Changelog
 
@@ -2031,7 +1964,7 @@ Os ficheiros 3D são automaticamente preparados no armazenamento de input do Com
 - **Workflow** é lido **apenas** do campo `Workflow` do PNG
 - Prompts positivos e negativos são separados antes de serem mostrados
 - Se positivo e negativo forem idênticos, só o positivo é mostrado
-- *O seed deixou de ser guardado*
+- O **seed** é lido do campo `Prompt` do PNG e mostrado no lightbox (copiável)
 
 ### 🛡️ Compatibilidade e segurança
 
@@ -2090,14 +2023,6 @@ ComfyUI/output/.ts_artius_browser/
     ├── waveforms/
     └── placeholders/
 ```
-
-### 🧪 Verificações de release
-
-```bash
-python scripts/check_release.py
-```
-
-Valida sintaxe Python · sintaxe JS · JSON · chaves de localização · helpers mortos · testes unitários · whitespace do git.
 
 ### 📋 Changelog
 

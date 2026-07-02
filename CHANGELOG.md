@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-02
+
+### Added
+- The image lightbox now shows the generation **seed** parsed from the PNG
+  `Prompt` field (sampler `seed` / `noise_seed`), with a one-click copy
+  button. Existing images pick it up on first open — no cache rebuild needed.
+
+### Fixed
+- Freshly generated images now appear reliably after ComfyUI finishes a
+  prompt. A response-cache invalidation that raced an in-flight request could
+  re-store a stale asset list and suppress the follow-up refresh; cache writes
+  are now gated on a cache epoch so a pre-invalidation response is discarded.
+- The lightbox metadata panel (prompt / negative prompt / seed / technical
+  info) no longer stays blank when a page prefetch renders concurrently with
+  the detail fetch. The detail-request token is kept monotonic instead of
+  being reset during stage teardown.
+- The gallery and toolbar resize observers are re-attached when the sidebar
+  tab is shown again, so toolbar height keeps tracking layout after switching
+  tabs away and back.
+- 3D-capture detection for card previews is anchored to the preview filename
+  suffix instead of a path substring, so a normal preview can no longer be
+  mislabeled as a 3D capture.
+
+### Changed
+- On Windows, `ffmpeg` / `ffprobe` are spawned with `CREATE_NO_WINDOW`, so
+  indexing a library no longer flashes console windows over ComfyUI.
+- Removed unused internal helpers and routed the last graph/canvas access
+  through the sanctioned Comfy adapter module.
+
+## [1.5.1] - 2026-06-25
+
+### Fixed
+- The PNG positive prompt no longer leaks into the negative-prompt panel
+  when an image carries both a positive and a negative prompt.
+
+### Changed
+- Development-only tooling (`scripts/`, `.comfyignore`,
+  `.pre-commit-config.yaml`) and the `test.yml` CI workflow are no longer
+  tracked in the public repository. They stay in the private working copy;
+  the published package and runtime behavior are unchanged.
+
+## [1.5.0] - 2026-06-19
+
+### Fixed
+- 3D assets are staged into per-source subfolders, so identically named
+  models from different folders no longer collide when dragged into a
+  native `Load3D` node.
+- The global 3D thumbnail worker no longer recreates a WebGL viewer for
+  models it already failed to capture. A corrupt or unsupported model
+  previously got a fresh WebGL context on every window-focus sweep, which
+  could exhaust GPU contexts and crash the renderer.
+- Panel resilience: staggered sidebar refreshes, recovery after a failed
+  rescan, and a bounded 3D capture cache.
+- Settings hardening: config-store locking, external-tool re-probe on
+  scan, and GET-side UI-settings normalization.
+- Lightbox media is released when the viewer closes, the grid refreshes
+  when returning to the browser tab, and toolbar height is hardened.
+- Miscellaneous request/payload hardening.
+
+### Performance
+- Scan upserts skip a redundant per-row refetch, and bulk deletes are
+  batched into fewer database operations.
+
+### Changed
+- Companion images are excluded from scan summary counts. Dead backend
+  methods and the unused 3D warmup path were removed.
+
 ## [1.4.1] - 2026-06-11
 
 ### Fixed
