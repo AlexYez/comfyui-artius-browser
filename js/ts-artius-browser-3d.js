@@ -70,11 +70,22 @@ export async function tsCapture3DThumbnail(tsViewerURL, tsOptions = {}) {
         tsViewerController.controlsManager?.reset?.();
         tsViewerController.modelManager?.clearModel?.();
         tsViewerController.animationManager?.dispose?.();
-        const tsModel = await tsViewerController.loaderManager?.loadModelInternal?.(tsViewerURL, tsExtension);
+        let tsModel = await tsViewerController.loaderManager?.loadModelInternal?.(tsViewerURL, tsExtension);
+        if (!tsModel) {
+            // Newer ComfyUI frontends resolve loadModelInternal without
+            // returning the model object; the loaded model lands on the
+            // model manager instead. Treating that as a failure used to
+            // reload the full model on every sweep without ever persisting
+            // a thumbnail. Wait for the loader to go idle and read it back.
+            await tsViewerController.loaderManager?.whenLoadIdle?.();
+            tsModel = tsViewerController.modelManager?.currentModel || null;
+        }
         if (!tsModel) {
             return null;
         }
-        await tsViewerController.modelManager?.setupModel?.(tsModel);
+        if (tsViewerController.modelManager?.currentModel !== tsModel) {
+            await tsViewerController.modelManager?.setupModel?.(tsModel);
+        }
         if (tsViewerController.modelManager?.currentModel) {
             tsViewerController.animationManager?.setupModelAnimations?.(
                 tsViewerController.modelManager.currentModel,
@@ -94,6 +105,19 @@ export async function tsCapture3DThumbnail(tsViewerURL, tsOptions = {}) {
     } finally {
         try {
             tsViewerController?.remove?.();
+        } catch {
+            // no-op: fall through to the context-loss fallback below
+        }
+        try {
+            // Safety net: if remove() is missing or threw mid-dispose, the
+            // WebGL context would outlive this capture and accumulate across
+            // sweeps until the renderer crashes. Force-lose any context left
+            // on the host's canvases; loseContext on an already-lost context
+            // is a no-op.
+            for (const tsCanvas of tsHost.querySelectorAll("canvas")) {
+                const tsContext = tsCanvas.getContext("webgl2") || tsCanvas.getContext("webgl");
+                tsContext?.getExtension?.("WEBGL_lose_context")?.loseContext?.();
+            }
         } catch {
             // no-op
         }

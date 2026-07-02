@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-07-02
+
+### Fixed
+- Fixed a renderer memory/GPU churn that could crash the browser tab on
+  libraries with 3D models. Newer ComfyUI frontends stopped returning the
+  model from `loadModelInternal`, so every 3D thumbnail capture fully loaded
+  the model (WebGL context + parse) and then discarded it as a failure; the
+  failure list was also cleared after every scan, so the post-generation
+  autoscan re-loaded every uncapturable model after each prompt. Captures now
+  read the loaded model back from the model manager (thumbnails work again on
+  current frontends), failed captures are capped at two attempts per page
+  load, sweeps no longer start in a hidden tab, and a context-loss fallback
+  releases the WebGL context even if the viewer's own dispose fails.
+
 ## [1.6.0] - 2026-07-02
 
 ### Added

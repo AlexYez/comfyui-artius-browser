@@ -12,6 +12,11 @@ import {
     tsPanelSettings,
 } from "./ts-artius-browser-settings.js";
 
+// Total capture attempts per model per page load. Attempt 1 is the normal
+// capture; one retry covers transient failures (slow disk, first-load races).
+// Anything still failing after that is skipped until the page reloads.
+const TS_MAX_3D_CAPTURE_ATTEMPTS = 2;
+
 class TSGlobal3DThumbnailWorker {
     constructor() {
         this.tsStarted = false;
@@ -22,14 +27,16 @@ class TSGlobal3DThumbnailWorker {
         this.tsScanRunning = false;
         this.tsLastWarmupKey = "";
         this.tsStartupTimer = 0;
-        // 3D viewer captures (3d.js) each spin up a WebGL/Three.js context.
-        // A model that can't be captured (corrupt, unsupported, viewer
-        // returns nothing) must not be re-attempted on every focus /
-        // visibility / scan-complete sweep — that would recreate WebGL
-        // contexts without bound and can exhaust GPU memory in the Electron
-        // renderer. Remember failures and skip them; the set is cleared on a
-        // fresh scan so a rescan retries them once.
-        this.tsFailedViewerURLs = new Set();
+        // 3D viewer captures (3d.js) each spin up a WebGL/Three.js context
+        // and load the full model file. A model that can't be captured
+        // (corrupt, unsupported, viewer returns nothing) must not be
+        // re-attempted on every sweep — that recreates WebGL contexts and
+        // re-parses multi-MB models without bound and can crash the
+        // renderer. Failures get a small fixed number of attempts per page
+        // load; clearing them on every scan-complete is NOT safe, because
+        // the post-generation autoscan completes after every prompt and
+        // would retry permanently-uncapturable models all session long.
+        this.tsFailedViewerAttempts = new Map();
         this.tsBoundScanEvent = (tsEvent) => this.tsHandleScanEvent(tsEvent);
         this.tsBoundVisibilityChange = () => {
             if (!document.hidden) {
@@ -89,9 +96,11 @@ class TSGlobal3DThumbnailWorker {
             const tsWarmupKey = `scan:${tsCompletedAt}`;
             if (tsWarmupKey !== this.tsLastWarmupKey) {
                 this.tsLastWarmupKey = tsWarmupKey;
-                // A new scan may have replaced previously-uncapturable files,
-                // so give earlier failures one retry on the post-scan sweep.
-                this.tsFailedViewerURLs.clear();
+                // Deliberately keep tsFailedViewerAttempts: scans complete
+                // after every generation, so wholesale retries here would
+                // re-load uncapturable models on every prompt (see the
+                // constructor comment). The attempt cap already grants a
+                // bounded number of retries per page load.
                 void this.tsScheduleRun("scan-complete");
             }
         }
@@ -99,6 +108,13 @@ class TSGlobal3DThumbnailWorker {
 
     async tsScheduleRun(tsReason = "manual") {
         if (this.tsDisposed || this.tsScanRunning) {
+            return false;
+        }
+        // Never start a sweep in a hidden tab: requestAnimationFrame is
+        // suspended there, so a capture would park a fully loaded model in
+        // memory until the tab is shown again. The visibilitychange handler
+        // schedules a fresh run when the tab becomes visible.
+        if (document.hidden) {
             return false;
         }
         if (this.tsRunning) {
@@ -129,10 +145,10 @@ class TSGlobal3DThumbnailWorker {
         if (tsAsset.preview_is_3d_capture && !tsAsset.preview_is_placeholder) {
             return false;
         }
-        // Skip before creating any WebGL viewer: a model that already failed
-        // once this scan cycle is not retried until the next scan clears the
-        // set (see tsHandleScanEvent).
-        if (this.tsFailedViewerURLs.has(tsAsset.viewer_3d_url)) {
+        // Skip before creating any WebGL viewer: a model that already used
+        // up its capture attempts is not retried until the next page load.
+        const tsFailedAttempts = this.tsFailedViewerAttempts.get(tsAsset.viewer_3d_url) || 0;
+        if (tsFailedAttempts >= TS_MAX_3D_CAPTURE_ATTEMPTS) {
             return false;
         }
         let tsPreviewURL = "";
@@ -143,13 +159,14 @@ class TSGlobal3DThumbnailWorker {
                 warmFrames: tsPanelSettings.threeDThumbnails?.warmFrames,
             });
         } catch (tsError) {
-            this.tsFailedViewerURLs.add(tsAsset.viewer_3d_url);
+            this.tsFailedViewerAttempts.set(tsAsset.viewer_3d_url, tsFailedAttempts + 1);
             throw tsError;
         }
         if (!tsPreviewURL) {
-            this.tsFailedViewerURLs.add(tsAsset.viewer_3d_url);
+            this.tsFailedViewerAttempts.set(tsAsset.viewer_3d_url, tsFailedAttempts + 1);
             return false;
         }
+        this.tsFailedViewerAttempts.delete(tsAsset.viewer_3d_url);
         await tsSave3DThumbnail(tsAsset.id, tsPreviewURL);
         return true;
     }
@@ -177,6 +194,13 @@ class TSGlobal3DThumbnailWorker {
                     if (this.tsDisposed || tsRunToken !== this.tsRunToken) {
                         return false;
                     }
+                    // Stop the sweep when the tab goes hidden mid-run: rAF is
+                    // suspended, so the next capture would just park a loaded
+                    // model in memory. The visibilitychange handler restarts
+                    // the sweep (skipping captured/failed models) on return.
+                    if (document.hidden) {
+                        return false;
+                    }
                     try {
                         await this.tsProcessAsset(tsAsset);
                     } catch (tsError) {
@@ -194,7 +218,7 @@ class TSGlobal3DThumbnailWorker {
             return false;
         } finally {
             this.tsRunning = false;
-            if (this.tsPendingRun && !this.tsDisposed && !this.tsScanRunning) {
+            if (this.tsPendingRun && !this.tsDisposed && !this.tsScanRunning && !document.hidden) {
                 this.tsPendingRun = false;
                 void this.tsRun("pending");
             }
