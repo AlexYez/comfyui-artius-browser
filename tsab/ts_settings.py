@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import os
 
 _TS_AUTO_MEDIA_WORKERS = max(1, min(4, (os.cpu_count() or 4) // 2))
@@ -77,9 +76,6 @@ TS_BACKEND_SETTINGS = {
     },
 }
 
-TS_PROJECT_NAME = TS_BACKEND_SETTINGS["project"]["name"]
-TS_PROJECT_TOOLTIP = TS_BACKEND_SETTINGS["project"]["tooltip"]
-TS_PLUGIN_ID = TS_BACKEND_SETTINGS["project"]["plugin_id"]
 TS_EVENT_PREFIX = TS_BACKEND_SETTINGS["project"]["event_prefix"]
 TS_ENABLE_VERBOSE_LOGGING = TS_BACKEND_SETTINGS["logging"]["enable_verbose"]
 TS_ENABLE_PROGRESS_CONSOLE = TS_BACKEND_SETTINGS["logging"]["enable_progress_console"]
@@ -190,5 +186,3 @@ TS_DEFAULT_CONFIG = {
         "placeholder_height": TS_DEFAULT_PLACEHOLDER_HEIGHT,
     },
 }
-
-TS_DEFAULT_CONFIG_TEMPLATE = copy.deepcopy(TS_DEFAULT_CONFIG)

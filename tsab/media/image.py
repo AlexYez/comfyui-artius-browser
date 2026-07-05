@@ -57,26 +57,32 @@ class TSImageHandler:
 
     def _TSReadImageMetadata(self, ts_image_path) -> dict[str, str]:
         ts_metadata: dict[str, str] = {}
-        with Image.open(ts_image_path) as ts_image:
-            ts_metadata_sources = []
-            if isinstance(getattr(ts_image, "info", None), dict):
-                ts_metadata_sources.append(ts_image.info)
-            if isinstance(getattr(ts_image, "text", None), dict):
-                ts_metadata_sources.append(ts_image.text)
-            for ts_source in ts_metadata_sources:
-                for ts_key, ts_value in ts_source.items():
-                    if ts_value is None:
-                        continue
-                    if isinstance(ts_value, bytes):
-                        try:
-                            ts_text = ts_value.decode("utf-8", errors="replace")
-                        except Exception:
+        try:
+            with Image.open(ts_image_path) as ts_image:
+                ts_metadata_sources = []
+                if isinstance(getattr(ts_image, "info", None), dict):
+                    ts_metadata_sources.append(ts_image.info)
+                if isinstance(getattr(ts_image, "text", None), dict):
+                    ts_metadata_sources.append(ts_image.text)
+                for ts_source in ts_metadata_sources:
+                    for ts_key, ts_value in ts_source.items():
+                        if ts_value is None:
                             continue
-                    else:
-                        ts_text = str(ts_value)
-                    if not ts_text:
-                        continue
-                    ts_metadata[str(ts_key)] = ts_text
+                        if isinstance(ts_value, bytes):
+                            try:
+                                ts_text = ts_value.decode("utf-8", errors="replace")
+                            except Exception:
+                                continue
+                        else:
+                            ts_text = str(ts_value)
+                        if not ts_text:
+                            continue
+                        ts_metadata[str(ts_key)] = ts_text
+        except Exception:
+            # Corrupt or vanished files yield "no metadata" instead of
+            # raising through the on-demand ensure chain (mirrors the
+            # unreadable-image handling in TSBuildIndexedPayload above).
+            return {}
         return ts_metadata
 
     def TSExtractMetadata(self, ts_row) -> dict[str, str]:

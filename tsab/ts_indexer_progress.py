@@ -4,8 +4,6 @@ from .ts_types import TSScanStatus
 
 
 def TSComputeProgressPercent(ts_status: TSScanStatus) -> float:
-    if ts_status.ts_phase == "count":
-        return 0.0
     if ts_status.ts_phase == "walk":
         if ts_status.ts_total_files <= 0:
             return 0.0
@@ -20,8 +18,6 @@ def TSComputeProgressPercent(ts_status: TSScanStatus) -> float:
 
 
 def TSBuildProgressMessage(ts_status: TSScanStatus) -> str:
-    if ts_status.ts_phase == "count":
-        return "Counting supported files"
     if ts_status.ts_phase == "walk":
         if ts_status.ts_total_files > 0:
             return f"Scanning files {ts_status.ts_scanned}/{ts_status.ts_total_files}"

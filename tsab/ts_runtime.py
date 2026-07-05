@@ -21,6 +21,7 @@ from .ts_logging import TSLogVerbose
 from .ts_preview import TSPreviewCache
 from .ts_routes import TSRegisterRoutes
 from .ts_scan_service import TSScanService
+from .ts_settings import TS_EVENT_ASSET_UPSERT
 from .ts_storage import TSStoragePaths
 from .ts_tools import TSToolLocator
 from .ts_types import TSAssetStat
@@ -185,7 +186,7 @@ class TSAssetBrowserRuntime:
             return
         ts_asset_payload = self.ts_asset_catalog.TSBuildAssetCard(ts_row)
         self.TSEmitEvent(
-            "tsab:asset-upsert",
+            TS_EVENT_ASSET_UPSERT,
             {
                 "id": ts_row["id"],
                 "path": ts_row["path"],
@@ -291,7 +292,13 @@ class TSAssetBrowserRuntime:
             except ValueError as ts_error:
                 TSLogVerbose("runtime.preview.outside_root", asset_id=ts_asset_id, preview_path=ts_preview_path_value, error=str(ts_error))
         if ts_preview_path_value and not self.ts_preview_cache.TSIsPlaceholderPreview(ts_preview_path_value) and (ts_preview_file_path is None or not ts_preview_file_path.exists()):
-            ts_row = self._TSEnsurePreview(ts_row) or ts_row
+            try:
+                ts_row = self._TSEnsurePreview(ts_row) or ts_row
+            except Exception:
+                # Preview regeneration must not 500 the preview route: a
+                # vanished file or a root removed from config falls back to
+                # the type placeholder resolved below.
+                TSLogger.warning("TS preview regeneration failed for asset %s", ts_asset_id, exc_info=True)
         ts_preview_path = self._TSResolvePreviewFilePath(ts_row)
         # is_file, not exists: if placeholder generation ever fails the
         # fallback resolves to the cache root directory, which must yield a

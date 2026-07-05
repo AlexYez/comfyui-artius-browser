@@ -6,6 +6,7 @@ import {
     tsEnsureCanvasDropBridge,
     tsEnsureSidebarIconStyle,
     tsFetchBrowserSettings,
+    tsFetchJSON,
     tsPostJSON,
 } from "./ts-artius-browser-api.js";
 import {
@@ -143,9 +144,34 @@ app.registerExtension({
         }
 
         if (tsAutoscanEnabled) {
-            window.setTimeout(() => {
+            window.setTimeout(async () => {
                 if (!tsAutoscanEnabled) {
                     return;
+                }
+                try {
+                    // The backend schedules its own startup autoscan; an
+                    // unconditional POST /rescan here used to queue a second
+                    // full walk right behind it. Ask for the scan status
+                    // first (this request also lets the backend auto-start
+                    // the initial scan if it has not run yet) and only
+                    // rescan when nothing is running, nothing is about to
+                    // start, and no scan finished moments ago. A page reload
+                    // of a long-lived server (last scan far in the past)
+                    // still refreshes the output root as before. The
+                    // freshness window compares a server epoch against the
+                    // client clock — same machine in practice, and the worst
+                    // case of skew is one redundant (or one skipped) rescan.
+                    const tsPayload = await tsFetchJSON(`${tsApiSettings.routeBase}/assets?limit=1`);
+                    const tsStatus = tsPayload?.scan_status || {};
+                    const tsCompletedAt = Number(tsStatus.completed_at || 0);
+                    const tsFreshWindowMs = Number(tsBrowserRuntimeSettings.initialRescanFreshWindowMs) || 0;
+                    const tsRecentlyCompleted = tsCompletedAt > 0 && (Date.now() - (tsCompletedAt * 1000)) < tsFreshWindowMs;
+                    const tsStartingUp = Boolean(tsStatus.started_at) && !tsCompletedAt;
+                    if (tsStatus.running || tsStartingUp || tsRecentlyCompleted) {
+                        return;
+                    }
+                } catch (tsError) {
+                    tsConsoleWarn("Timesaver Artius Browser initial scan status check failed", tsError);
                 }
                 tsPostJSON(`${tsApiSettings.routeBase}/rescan`, { root_id: tsBrowserRuntimeSettings.executionRescanRootId }).catch((tsError) => {
                     tsConsoleWarn("Timesaver Artius Browser initial rescan failed", tsError);

@@ -55,19 +55,6 @@ def TSMaybeParseJsonText(ts_value: Any) -> Any | None:
         return None
 
 
-def TSExtractFFProbePayload(ts_value: Any) -> dict[str, Any]:
-    if isinstance(ts_value, str):
-        ts_parsed_json = TSMaybeParseJsonText(ts_value)
-        if ts_parsed_json is None:
-            return {}
-        return TSExtractFFProbePayload(ts_parsed_json)
-    if not isinstance(ts_value, dict):
-        return {}
-    if isinstance(ts_value.get("ffprobe"), dict):
-        return ts_value["ffprobe"]
-    if isinstance(ts_value.get("format"), dict) or isinstance(ts_value.get("streams"), list):
-        return ts_value
-    return {}
 def TSParseMaybeFloat(ts_value: Any) -> float | None:
     if ts_value is None or ts_value == "":
         return None

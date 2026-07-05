@@ -9,7 +9,6 @@ import {
 import {
     tsOpenAssetInNewTab as tsOpenAssetInNewTabImpl,
     tsOpenDownload as tsOpenDownloadImpl,
-    tsResolveOpenableURL as tsResolveOpenableURLImpl,
 } from "./ts-artius-browser-api-open.js";
 import { tsBuildFolderTree as tsBuildFolderTreeImpl } from "./ts-artius-browser-api-tree.js";
 import {
@@ -229,10 +228,6 @@ export async function tsCopyText(tsText) {
         tsConsoleWarn("Timesaver Artius Browser clipboard write failed", tsError);
         return false;
     }
-}
-
-function tsResolveOpenableURL(tsURL) {
-    return tsResolveOpenableURLImpl(tsURL, tsApiURL);
 }
 
 export function tsOpenDownload(tsAsset) {

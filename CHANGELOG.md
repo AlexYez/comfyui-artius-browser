@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-07-05
+
+### Fixed
+- A cancelled asset drag (Esc, or dropping outside the graph) no longer
+  hijacks the next thing dropped onto the canvas. The drag-payload fallback is
+  now cleared on drag end, so an OS file or workflow dropped later is handled
+  natively by ComfyUI instead of re-inserting the previously dragged asset.
+- Opening asset details no longer fails with a server error when the source
+  file vanished mid-request, the image is corrupt, or the asset's root was
+  removed from the config. The detail view degrades to the stored card data
+  and the preview route falls back to the type placeholder.
+- Duplicate files (identical content) indexed in the same scan batch no longer
+  race each other while generating their shared preview, which could persist a
+  corrupt thumbnail. Preview generation is now serialized per preview key.
+- Startup no longer walks the whole library twice: the frontend's initial
+  rescan checks the scan status first and skips when the backend's own startup
+  autoscan is already running or has just finished. Rescan-on-page-reload for
+  a long-running server is preserved.
+
+### Changed
+- Removed dead internal helpers and constants; backend asset events are
+  emitted via the shared event-name constants.
+
 ## [1.6.1] - 2026-07-02
 
 ### Fixed

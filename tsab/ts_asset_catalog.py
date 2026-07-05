@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable
 
 from .ts_asset_metadata import TSResolveAssetNegativePromptText, TSResolveAssetPromptText, TSResolveAssetSeedText, TSResolveAssetWorkflowText
@@ -7,6 +8,8 @@ from .ts_asset_payload import TSBuildAssetCard, TSResolveTechnicalInfo
 from .ts_asset_technical import TSEnrichAudioTechnicalInfo, TSEnrichVideoTechnicalInfo
 from .ts_logging import TSLogVerbose
 from .ts_utils import TSJsonLoads
+
+TSLogger = logging.getLogger("TSArtiusBrowser")
 
 
 class TSAssetCatalogService:
@@ -77,7 +80,14 @@ class TSAssetCatalogService:
         ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
         if ts_row is None:
             return None
-        ts_row = self.ts_ensure_metadata(ts_row) or ts_row
+        try:
+            ts_row = self.ts_ensure_metadata(ts_row) or ts_row
+        except Exception:
+            # On-demand enrichment must never turn the detail route into a
+            # 500: a file that vanished mid-request, a corrupt image, or a
+            # root removed from config degrades to the card built from the
+            # stored row instead.
+            TSLogger.warning("TS asset detail enrichment failed for asset %s", ts_asset_id, exc_info=True)
         ts_technical_info = TSResolveTechnicalInfo(ts_row)
         if str(ts_row["type"] or "") == "video":
             ts_row, ts_technical_info = TSEnrichVideoTechnicalInfo(ts_row, self.ts_database, self.ts_tools, ts_technical_info)

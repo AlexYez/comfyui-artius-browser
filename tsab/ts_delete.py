@@ -6,6 +6,7 @@ from typing import Any, Callable
 from send2trash import send2trash as TSSendToTrash
 
 from .ts_logging import TSLogVerbose
+from .ts_settings import TS_EVENT_ASSET_REMOVE
 
 
 class TSDeleteService:
@@ -76,5 +77,5 @@ class TSDeleteService:
                     self.ts_preview_cache.TSPurgePreview(ts_preview_path)
             for ts_asset_id, ts_path, _ts_preview_path in ts_deleted_refs:
                 TSLogVerbose("runtime.asset.deleted", asset_id=ts_asset_id, path=ts_path)
-                self.ts_emit_event("tsab:asset-remove", {"id": ts_asset_id, "path": ts_path})
+                self.ts_emit_event(TS_EVENT_ASSET_REMOVE, {"id": ts_asset_id, "path": ts_path})
         return {"deleted": ts_deleted_ids, "skipped": ts_skipped_ids}

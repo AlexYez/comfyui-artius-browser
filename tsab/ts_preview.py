@@ -5,6 +5,7 @@ import hashlib
 import io
 import logging
 import shutil
+import threading
 from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
 
@@ -91,6 +92,23 @@ class TSPreviewCache:
             "audio": ("placeholder-audio", "AUD"),
             "3d": ("placeholder-3d", "3D"),
         }
+        self.ts_preview_key_locks: dict[tuple[str, str], threading.Lock] = {}
+        self.ts_preview_key_locks_guard = threading.Lock()
+
+    def _TSGetPreviewKeyLock(self, ts_folder_name: str, ts_preview_key: str) -> threading.Lock:
+        # Scan hash-workers can hit two identical files concurrently (same
+        # content hash => same preview key => same output and temp paths).
+        # Serializing generation per output key prevents interleaved writes
+        # from persisting a corrupt preview; the second worker then sees the
+        # finished file and returns it. Lock objects are tiny and bounded by
+        # the number of distinct previews generated in this process.
+        ts_lock_key = (ts_folder_name, ts_preview_key)
+        with self.ts_preview_key_locks_guard:
+            ts_lock = self.ts_preview_key_locks.get(ts_lock_key)
+            if ts_lock is None:
+                ts_lock = threading.Lock()
+                self.ts_preview_key_locks[ts_lock_key] = ts_lock
+            return ts_lock
 
     def TSBuildPreviewPath(self, ts_preview_key: str, ts_folder_name: str, ts_extension: str | None = None) -> Path:
         ts_base_directory = {
@@ -142,35 +160,37 @@ class TSPreviewCache:
         return self.TSGeneratePlaceholderPreview(ts_placeholder_key, ts_label)
 
     def TSGenerateImageThumbnail(self, ts_source_path: Path, ts_preview_key: str) -> str:
-        ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "thumbnails")
-        if ts_output_path.exists():
+        with self._TSGetPreviewKeyLock("thumbnails", ts_preview_key):
+            ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "thumbnails")
+            if ts_output_path.exists():
+                return self.TSRelativePreviewPath(ts_output_path)
+            try:
+                with Image.open(ts_source_path) as ts_image:
+                    self._TSPrepareSourceImageForThumbnail(ts_image, self._TSThumbnailSize())
+                    ts_image = ImageOps.exif_transpose(ts_image)
+                    self._TSApplyThumbnailResize(ts_image)
+                    self._TSSavePreviewImage(ts_image, ts_output_path)
+            except Exception as ts_error:
+                TSLogVerbose("preview.thumbnail.failed", source_path=str(ts_source_path), error=str(ts_error))
+                return self.TSGetTypePlaceholderPreview("image")
             return self.TSRelativePreviewPath(ts_output_path)
-        try:
-            with Image.open(ts_source_path) as ts_image:
-                self._TSPrepareSourceImageForThumbnail(ts_image, self._TSThumbnailSize())
-                ts_image = ImageOps.exif_transpose(ts_image)
-                self._TSApplyThumbnailResize(ts_image)
-                self._TSSavePreviewImage(ts_image, ts_output_path)
-        except Exception as ts_error:
-            TSLogVerbose("preview.thumbnail.failed", source_path=str(ts_source_path), error=str(ts_error))
-            return self.TSGetTypePlaceholderPreview("image")
-        return self.TSRelativePreviewPath(ts_output_path)
 
     def TSGenerateVideoPoster(self, ts_source_path: Path, ts_preview_key: str, ts_tools) -> str:
-        ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "video_frames")
-        if ts_output_path.exists():
+        with self._TSGetPreviewKeyLock("video_frames", ts_preview_key):
+            ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "video_frames")
+            if ts_output_path.exists():
+                return self.TSRelativePreviewPath(ts_output_path)
+            ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "video_frames", ".source.png")
+            ts_frame_time = float(self._TSPreviewConfig().get("video_frame_time", 0.5))
+            ts_success = ts_tools.TSExtractVideoFrame(ts_source_path, ts_temp_path, ts_frame_time)
+            if not ts_success:
+                return self.TSGetTypePlaceholderPreview("video")
+            try:
+                self._TSNormalizePreviewFile(ts_temp_path, ts_output_path)
+            except Exception as ts_error:
+                TSLogVerbose("preview.video.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
+                return self.TSGetTypePlaceholderPreview("video")
             return self.TSRelativePreviewPath(ts_output_path)
-        ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "video_frames", ".source.png")
-        ts_frame_time = float(self._TSPreviewConfig().get("video_frame_time", 0.5))
-        ts_success = ts_tools.TSExtractVideoFrame(ts_source_path, ts_temp_path, ts_frame_time)
-        if not ts_success:
-            return self.TSGetTypePlaceholderPreview("video")
-        try:
-            self._TSNormalizePreviewFile(ts_temp_path, ts_output_path)
-        except Exception as ts_error:
-            TSLogVerbose("preview.video.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
-            return self.TSGetTypePlaceholderPreview("video")
-        return self.TSRelativePreviewPath(ts_output_path)
 
     def TSGenerateVideoPosterParallel(
         self,
@@ -178,24 +198,25 @@ class TSPreviewCache:
         ts_preview_key: str,
         ts_tools,
     ) -> tuple[dict, str]:
-        ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "video_frames")
-        if ts_output_path.exists():
-            ts_probe = ts_tools.TSRunFFProbe(ts_source_path)
+        with self._TSGetPreviewKeyLock("video_frames", ts_preview_key):
+            ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "video_frames")
+            if ts_output_path.exists():
+                ts_probe = ts_tools.TSRunFFProbe(ts_source_path)
+                return ts_probe, self.TSRelativePreviewPath(ts_output_path)
+            ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "video_frames", ".source.png")
+            ts_frame_time = float(self._TSPreviewConfig().get("video_frame_time", 0.5))
+            ts_max_output_dim = max(self._TSThumbnailSize() * 2, 256)
+            ts_probe, ts_frame_success = ts_tools.TSRunFFProbeAndExtractFrameParallel(
+                ts_source_path, ts_temp_path, ts_frame_time, ts_max_output_dim=ts_max_output_dim
+            )
+            if not ts_frame_success:
+                return ts_probe, self.TSGetTypePlaceholderPreview("video")
+            try:
+                self._TSNormalizePreviewFile(ts_temp_path, ts_output_path)
+            except Exception as ts_error:
+                TSLogVerbose("preview.video.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
+                return ts_probe, self.TSGetTypePlaceholderPreview("video")
             return ts_probe, self.TSRelativePreviewPath(ts_output_path)
-        ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "video_frames", ".source.png")
-        ts_frame_time = float(self._TSPreviewConfig().get("video_frame_time", 0.5))
-        ts_max_output_dim = max(self._TSThumbnailSize() * 2, 256)
-        ts_probe, ts_frame_success = ts_tools.TSRunFFProbeAndExtractFrameParallel(
-            ts_source_path, ts_temp_path, ts_frame_time, ts_max_output_dim=ts_max_output_dim
-        )
-        if not ts_frame_success:
-            return ts_probe, self.TSGetTypePlaceholderPreview("video")
-        try:
-            self._TSNormalizePreviewFile(ts_temp_path, ts_output_path)
-        except Exception as ts_error:
-            TSLogVerbose("preview.video.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
-            return ts_probe, self.TSGetTypePlaceholderPreview("video")
-        return ts_probe, self.TSRelativePreviewPath(ts_output_path)
 
     def TSGenerateWaveformPreviewParallel(
         self,
@@ -203,49 +224,51 @@ class TSPreviewCache:
         ts_preview_key: str,
         ts_tools,
     ) -> tuple[dict, str]:
-        ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "waveforms")
-        ts_waveform_width, ts_waveform_height = self._TSWaveformSize()
-        if ts_output_path.exists() and self._TSPreviewHasMinimumSize(ts_output_path, ts_waveform_width, ts_waveform_height):
-            ts_probe = ts_tools.TSRunFFProbe(ts_source_path)
-            return ts_probe, self.TSRelativePreviewPath(ts_output_path)
-        if ts_output_path.exists():
+        with self._TSGetPreviewKeyLock("waveforms", ts_preview_key):
+            ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "waveforms")
+            ts_waveform_width, ts_waveform_height = self._TSWaveformSize()
+            if ts_output_path.exists() and self._TSPreviewHasMinimumSize(ts_output_path, ts_waveform_width, ts_waveform_height):
+                ts_probe = ts_tools.TSRunFFProbe(ts_source_path)
+                return ts_probe, self.TSRelativePreviewPath(ts_output_path)
+            if ts_output_path.exists():
+                try:
+                    ts_output_path.unlink()
+                except OSError:
+                    pass
+            ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "waveforms", ".source.png")
+            ts_probe, ts_waveform_success = ts_tools.TSRunFFProbeAndExtractWaveformParallel(
+                ts_source_path, ts_temp_path, ts_waveform_width, ts_waveform_height
+            )
+            if not ts_waveform_success:
+                return ts_probe, self.TSGetTypePlaceholderPreview("audio")
             try:
-                ts_output_path.unlink()
-            except OSError:
-                pass
-        ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "waveforms", ".source.png")
-        ts_probe, ts_waveform_success = ts_tools.TSRunFFProbeAndExtractWaveformParallel(
-            ts_source_path, ts_temp_path, ts_waveform_width, ts_waveform_height
-        )
-        if not ts_waveform_success:
-            return ts_probe, self.TSGetTypePlaceholderPreview("audio")
-        try:
-            self._TSStylizeWaveform(ts_temp_path, ts_output_path)
-        except Exception as ts_error:
-            TSLogVerbose("preview.waveform.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
-            return ts_probe, self.TSGetTypePlaceholderPreview("audio")
-        return ts_probe, self.TSRelativePreviewPath(ts_output_path)
+                self._TSStylizeWaveform(ts_temp_path, ts_output_path)
+            except Exception as ts_error:
+                TSLogVerbose("preview.waveform.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
+                return ts_probe, self.TSGetTypePlaceholderPreview("audio")
+            return ts_probe, self.TSRelativePreviewPath(ts_output_path)
 
     def TSGenerateWaveformPreview(self, ts_source_path: Path, ts_preview_key: str, ts_tools) -> str:
-        ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "waveforms")
-        ts_waveform_width, ts_waveform_height = self._TSWaveformSize()
-        if ts_output_path.exists() and self._TSPreviewHasMinimumSize(ts_output_path, ts_waveform_width, ts_waveform_height):
-            return self.TSRelativePreviewPath(ts_output_path)
-        if ts_output_path.exists():
+        with self._TSGetPreviewKeyLock("waveforms", ts_preview_key):
+            ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "waveforms")
+            ts_waveform_width, ts_waveform_height = self._TSWaveformSize()
+            if ts_output_path.exists() and self._TSPreviewHasMinimumSize(ts_output_path, ts_waveform_width, ts_waveform_height):
+                return self.TSRelativePreviewPath(ts_output_path)
+            if ts_output_path.exists():
+                try:
+                    ts_output_path.unlink()
+                except OSError:
+                    pass
+            ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "waveforms", ".source.png")
+            ts_success = ts_tools.TSExtractWaveform(ts_source_path, ts_temp_path, ts_waveform_width, ts_waveform_height)
+            if not ts_success:
+                return self.TSGetTypePlaceholderPreview("audio")
             try:
-                ts_output_path.unlink()
-            except OSError:
-                pass
-        ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "waveforms", ".source.png")
-        ts_success = ts_tools.TSExtractWaveform(ts_source_path, ts_temp_path, ts_waveform_width, ts_waveform_height)
-        if not ts_success:
-            return self.TSGetTypePlaceholderPreview("audio")
-        try:
-            self._TSStylizeWaveform(ts_temp_path, ts_output_path)
-        except Exception as ts_error:
-            TSLogVerbose("preview.waveform.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
-            return self.TSGetTypePlaceholderPreview("audio")
-        return self.TSRelativePreviewPath(ts_output_path)
+                self._TSStylizeWaveform(ts_temp_path, ts_output_path)
+            except Exception as ts_error:
+                TSLogVerbose("preview.waveform.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
+                return self.TSGetTypePlaceholderPreview("audio")
+            return self.TSRelativePreviewPath(ts_output_path)
 
     def _TSStylizeWaveform(self, ts_source_preview_path: Path, ts_output_path: Path) -> None:
         try:

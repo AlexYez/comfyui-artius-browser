@@ -1669,6 +1669,15 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             "dragstart",
             (tsEvent) => this.tsHandleDragStart(tsEvent),
         );
+        this.tsRefs.tsGalleryContent.addEventListener("dragend", () => {
+            // The canvas drop bridge clears this fallback only when the drop
+            // actually lands on the Comfy canvas. A cancelled drag (Esc, drop
+            // outside the canvas) must not leave a stale payload behind: the
+            // bridge falls back to it for foreign drops (e.g. an OS file
+            // dragged onto the canvas) and would re-insert the previously
+            // dragged asset instead of letting ComfyUI handle the drop.
+            window.__tsArtiusDraggedAsset = "";
+        });
         this.tsRefs.tsTreePanel.addEventListener("click", (tsEvent) => this.tsHandleTreeClick(tsEvent));
         this.tsRefs.tsShell.addEventListener("keydown", (tsEvent) => this.tsHandleKeydown(tsEvent));
         this.tsBindTreeResizer();
