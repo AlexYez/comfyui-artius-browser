@@ -399,6 +399,45 @@ class TSPreviewCache:
             TSLogVerbose("preview.placeholder.failed", label=ts_label, preview_path=str(ts_output_path), error=str(ts_error))
             return ""
 
+    def TSPurgeOrphanedPreviews(self, ts_referenced_preview_paths: set[str]) -> int:
+        # Reconcile generated preview files against the paths the database still
+        # references, deleting the orphans. Inline purging already handles the
+        # common cases (asset deleted / re-hashed); this is the safety net for
+        # files left behind by a crash or an interrupted scan, so the cache
+        # cannot grow without bound. Placeholders are shared/regenerated and are
+        # deliberately excluded; transient ".source.png" extraction files belong
+        # to an in-flight generator and are left to its own cleanup.
+        ts_referenced = {
+            str(ts_path).replace("\\", "/")
+            for ts_path in ts_referenced_preview_paths
+            if ts_path
+        }
+        ts_removed = 0
+        for ts_directory in (
+            self.ts_storage_paths.ts_thumbnail_directory,
+            self.ts_storage_paths.ts_video_frame_directory,
+            self.ts_storage_paths.ts_waveform_directory,
+        ):
+            try:
+                ts_entries = list(ts_directory.iterdir())
+            except OSError:
+                continue
+            for ts_file_path in ts_entries:
+                try:
+                    if not ts_file_path.is_file() or ts_file_path.name.endswith(".source.png"):
+                        continue
+                    ts_relative_path = self.TSRelativePreviewPath(ts_file_path)
+                    if ts_relative_path in ts_referenced:
+                        continue
+                    ts_file_path.unlink()
+                    ts_removed += 1
+                    TSLogVerbose("preview.orphan.purged", path=str(ts_file_path))
+                except OSError as ts_error:
+                    TSLogVerbose("preview.orphan.purge_failed", path=str(ts_file_path), error=str(ts_error))
+        if ts_removed:
+            TSLogVerbose("preview.orphans.purged", removed=ts_removed)
+        return ts_removed
+
     def TSClearGeneratedCache(self) -> None:
         ts_cache_directory = self.ts_storage_paths.ts_cache_directory
         try:

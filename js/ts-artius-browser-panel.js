@@ -56,7 +56,9 @@ import {
     tsBuildWorkflowRootNodes,
 } from "./ts-artius-browser-panel-workflows.js";
 import { tsEnsureViewerElement, tsGetViewerSingleton } from "./ts-artius-browser-viewer.js";
+import { TS3DThumbnailQueue } from "./ts-artius-browser-panel-3d-queue.js";
 import { tsPanelSettings, tsProjectSettings } from "./ts-artius-browser-settings.js";
+import { tsPanelStyles } from "./ts-artius-browser-panel-styles.js";
 
 const tsTypeOrder = tsPanelSettings.typeOrder;
 const tsDefaultLimit = tsPanelSettings.defaultLimit;
@@ -148,14 +150,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsLastAssetRootId = tsPanelSettings.defaultRootId || "all";
         this.tsLastAssetFolder = "";
         this.tsWorkflowSelectedFolder = "";
-        this.ts3DThumbnailDisposed = false;
-        this.ts3DThumbnailQueue = [];
-        this.ts3DThumbnailPending = new Set();
-        this.ts3DThumbnailInFlight = new Set();
-        this.ts3DThumbnailFailed = new Set();
-        this.ts3DThumbnailCache = new Map();
-        this.ts3DThumbnailWorkers = 0;
-        this.ts3DThumbnailPersisting = new Set();
+        this.ts3DQueue = new TS3DThumbnailQueue(ts3DThumbnailSettings, {
+            patchThumbnail: (tsAssetId, tsPreviewURL, tsAlt) => this.tsPatchVisibleThumbnail(tsAssetId, tsPreviewURL, tsAlt),
+            capture: (tsViewerURL, tsOptions) => tsCapture3DThumbnail(tsViewerURL, tsOptions),
+            persistToBackend: (tsAssetId, tsPreviewURL) => tsSave3DThumbnail(tsAssetId, tsPreviewURL),
+            applyPersistedAsset: (tsAssetPatch) => this.tsApplyPersisted3DThumbnail(tsAssetPatch),
+            warn: (...tsArgs) => tsConsoleWarn(...tsArgs),
+        });
         this.tsSidebarRefreshTimers = new Set();
         this.tsWorkflowLibrary = [];
         this.tsWorkflowLibraryLoaded = false;
@@ -172,7 +173,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     connectedCallback() {
-        this.ts3DThumbnailDisposed = false;
+        this.ts3DQueue.tsResume();
         if (this.tsConnectedOnce) {
             this.tsBindApiEvents();
             this.tsStartWidthTracking();
@@ -203,9 +204,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     disconnectedCallback() {
-        this.ts3DThumbnailDisposed = true;
-        this.ts3DThumbnailQueue = [];
-        this.ts3DThumbnailPending.clear();
+        this.ts3DQueue.tsDispose();
         for (const tsTimerId of this.tsSidebarRefreshTimers) {
             window.clearTimeout(tsTimerId);
         }
@@ -718,736 +717,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsBuildShell() {
         this.shadowRoot.innerHTML = `
-            <style>
-                :host {
-                    display: flex;
-                    flex: 1 1 auto;
-                    min-height: 0;
-                    height: 100%;
-                    color: var(--input-text, var(--fg-color, inherit));
-                    font-family: var(--font-family, "Segoe UI", sans-serif);
-                    --ts-accent: var(--p-button-primary-background, var(--theme-color, var(--input-text, var(--fg-color, currentColor))));
-                    --ts-accent-contrast: var(--p-button-primary-color, var(--comfy-menu-bg, var(--bg-color, inherit)));
-                    --ts-bg-0: var(--comfy-menu-bg, var(--bg-color, transparent));
-                    --ts-bg-1: var(--comfy-input-bg, var(--comfy-menu-secondary-bg, var(--ts-bg-0)));
-                    --ts-bg-2: var(--content-bg, var(--comfy-input-bg, var(--ts-bg-1)));
-                    --ts-text: var(--input-text, var(--fg-color, inherit));
-                    --ts-bg-3: color-mix(in srgb, var(--ts-text) 5%, var(--ts-bg-0));
-                    --ts-border: var(--border-color, color-mix(in srgb, var(--ts-text) 14%, transparent));
-                    --ts-muted: var(--descrip-text, color-mix(in srgb, var(--ts-text) 72%, transparent));
-                    --ts-shadow-color: color-mix(in srgb, var(--ts-bg-0) 72%, black);
-                    --ts-shadow: 0 4px 18px color-mix(in srgb, var(--ts-shadow-color) 22%, transparent);
-                    --ts-surface-ghost: color-mix(in srgb, var(--ts-text) 4%, transparent);
-                    --ts-surface-soft: color-mix(in srgb, var(--ts-bg-0) 68%, var(--ts-bg-2));
-                    --ts-surface-overlay: color-mix(in srgb, var(--ts-bg-0) 72%, transparent);
-                    --ts-surface-overlay-strong: color-mix(in srgb, var(--ts-bg-0) 82%, transparent);
-                    --ts-surface-overlay-soft: color-mix(in srgb, var(--ts-bg-0) 58%, transparent);
-                    --ts-folder-icon: var(--ts-muted);
-                    --ts-progress-track: color-mix(in srgb, var(--ts-text) 10%, transparent);
-                    --ts-progress-glow: color-mix(in srgb, var(--ts-accent) 72%, var(--ts-text));
-                    --ts-card-overlay-top: color-mix(in srgb, var(--ts-bg-0) 16%, transparent);
-                    --ts-card-overlay-bottom: color-mix(in srgb, var(--ts-bg-0) 88%, transparent);
-                    --ts-danger: color-mix(in srgb, #d24b4b 72%, var(--ts-text));
-                    --ts-danger-surface: color-mix(in srgb, #d24b4b 18%, var(--ts-bg-2));
-                    --ts-danger-surface-hover: color-mix(in srgb, #d24b4b 26%, var(--ts-bg-2));
-                }
-
-                .ts-shell {
-                    flex: 1 1 auto;
-                    min-height: 0;
-                    height: 100%;
-                    display: grid;
-                    grid-template-rows: auto 1fr;
-                    background: var(--ts-bg-0);
-                }
-
-                .ts-toolbar {
-                    display: grid;
-                    gap: 6px;
-                    padding: 10px;
-                    border-bottom: 1px solid var(--ts-border);
-                    background: var(--ts-bg-1);
-                }
-
-                .ts-title {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    font-size: 13px;
-                    font-weight: 600;
-                    letter-spacing: 0.02em;
-                }
-
-                .ts-title-link {
-                    color: inherit;
-                    text-decoration: none;
-                }
-
-                .ts-title-link:hover {
-                    text-decoration: underline;
-                }
-
-                .ts-donate {
-                    display: inline-flex;
-                    align-items: center;
-                    padding: 1px 7px;
-                    border-radius: 6px;
-                    border: 1px solid transparent;
-                    background: #8b7fc4;
-                    color: #ffffff;
-                    font-size: 10px;
-                    font-weight: 500;
-                    letter-spacing: 0.02em;
-                    text-decoration: none;
-                    transition: background 0.14s ease, transform 0.06s ease;
-                }
-
-                .ts-donate:hover {
-                    background: #7a6db3;
-                    text-decoration: none;
-                }
-
-                .ts-donate:active {
-                    transform: translateY(1px);
-                }
-
-                .ts-version {
-                    display: inline-flex;
-                    align-items: center;
-                    font-size: 10px;
-                    font-weight: 500;
-                    letter-spacing: 0.02em;
-                    color: inherit;
-                    opacity: 0.55;
-                    user-select: text;
-                }
-
-                .ts-version[hidden] {
-                    display: none;
-                }
-
-                .ts-update-badge {
-                    display: inline-flex;
-                    align-items: center;
-                    padding: 1px 7px;
-                    border-radius: 6px;
-                    border: 1px solid transparent;
-                    background: #5fa14f;
-                    color: #ffffff;
-                    font-size: 10px;
-                    font-weight: 500;
-                    letter-spacing: 0.02em;
-                    text-decoration: none;
-                    transition: background 0.14s ease, transform 0.06s ease;
-                }
-
-                .ts-update-badge:hover {
-                    background: #4f8a40;
-                    text-decoration: none;
-                }
-
-                .ts-update-badge:active {
-                    transform: translateY(1px);
-                }
-
-                .ts-update-badge[hidden] {
-                    display: none;
-                }
-
-                .ts-toolbar-main,
-                .ts-toolbar-secondary {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    flex-wrap: wrap;
-                }
-
-                .ts-toolbar-cluster {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                    flex-wrap: wrap;
-                    min-height: 32px;
-                    padding: 3px;
-                    border: 1px solid var(--ts-border);
-                    border-radius: 10px;
-                    background: color-mix(in srgb, var(--ts-bg-2) 78%, transparent);
-                }
-
-                .ts-toolbar-main-wrap {
-                    overflow: hidden;
-                }
-
-                .ts-toolbar-main-wrap > .ts-toolbar-main {
-                    transform: scale(var(--ts-toolbar-scale, 1));
-                    transform-origin: top left;
-                    width: calc(100% / var(--ts-toolbar-scale, 1));
-                }
-
-                .ts-toolbar-resizer {
-                    position: relative;
-                    height: 6px;
-                    margin-top: -2px;
-                    cursor: row-resize;
-                    background: transparent;
-                    transition: background 0.14s ease;
-                    touch-action: none;
-                    user-select: none;
-                }
-
-                .ts-toolbar-resizer::after {
-                    content: "";
-                    position: absolute;
-                    left: 50%;
-                    top: 50%;
-                    transform: translate(-50%, -50%);
-                    width: 32px;
-                    height: 2px;
-                    border-radius: 999px;
-                    background: var(--ts-border);
-                    opacity: 0;
-                    transition: opacity 0.14s ease, background 0.14s ease;
-                }
-
-                .ts-toolbar-resizer:hover::after,
-                .ts-toolbar-resizer[data-dragging="true"]::after {
-                    opacity: 1;
-                    background: var(--ts-accent);
-                }
-
-                .ts-type-chips {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                    flex-wrap: wrap;
-                }
-
-                .ts-section-button {
-                    min-width: 84px;
-                }
-
-                .ts-root-select,
-                .ts-sort-select,
-                .ts-sort-direction {
-                    appearance: none;
-                    -webkit-appearance: none;
-                    font: inherit;
-                    cursor: pointer;
-                    padding: 0 28px 0 10px;
-                    border-radius: 8px;
-                    color: var(--ts-text);
-                    background: transparent;
-                    background-image:
-                        linear-gradient(45deg, transparent 50%, var(--ts-muted) 50%),
-                        linear-gradient(135deg, var(--ts-muted) 50%, transparent 50%);
-                    background-position:
-                        calc(100% - 14px) calc(50% - 2px),
-                        calc(100% - 9px) calc(50% - 2px);
-                    background-size: 5px 5px, 5px 5px;
-                    background-repeat: no-repeat;
-                }
-
-                .ts-sort-select,
-                .ts-sort-direction {
-                    padding: 0 20px 0 10px;
-                    background-position:
-                        calc(100% - 11px) calc(50% - 2px),
-                        calc(100% - 6px) calc(50% - 2px);
-                }
-
-                .ts-sort-group {
-                    gap: 3px;
-                }
-
-                .ts-root-select option,
-                .ts-sort-select option {
-                    color: var(--ts-text);
-                    background: var(--ts-bg-1);
-                }
-
-                .ts-root-select::-ms-expand,
-                .ts-sort-select::-ms-expand {
-                    display: none;
-                }
-
-                .ts-toolbar-cluster button,
-                .ts-toolbar-cluster select,
-                .ts-type-chips .ts-chip,
-                .ts-sort-group button,
-                .ts-sort-group select,
-                .ts-mode-group .ts-mode-button {
-                    min-height: 26px;
-                    border-color: transparent;
-                    background: transparent;
-                    box-shadow: none;
-                }
-
-                .ts-toolbar-cluster button:hover,
-                .ts-toolbar-cluster select:hover,
-                .ts-type-chips .ts-chip:hover,
-                .ts-sort-group button:hover,
-                .ts-sort-group select:hover,
-                .ts-mode-group .ts-mode-button:hover {
-                    border-color: color-mix(in srgb, var(--ts-accent) 52%, transparent);
-                    background: color-mix(in srgb, var(--ts-bg-3) 70%, transparent);
-                }
-                .ts-toggle-button {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 8px;
-                    min-height: 32px;
-                    padding: 0 12px;
-                    border: 1px solid var(--ts-border);
-                    border-radius: 999px;
-                    background: var(--ts-bg-2);
-                    color: var(--ts-muted);
-                    user-select: none;
-                    font-size: 12px;
-                }
-
-                .ts-toggle-button::before {
-                    content: "";
-                    width: 10px;
-                    height: 10px;
-                    flex: 0 0 10px;
-                    border-radius: 999px;
-                    background: color-mix(in srgb, var(--ts-text) 24%, transparent);
-                    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ts-text) 10%, transparent);
-                    transition: background 0.14s ease;
-                }
-
-                .ts-toggle-button[data-active="true"] {
-                    border-color: color-mix(in srgb, var(--ts-accent) 58%, transparent);
-                    color: var(--ts-accent-contrast);
-                    background: color-mix(in srgb, var(--ts-accent) 22%, var(--ts-bg-2));
-                }
-
-                .ts-toggle-button[data-active="true"]::before {
-                    background: var(--ts-accent);
-                }
-
-                .ts-rebuild-cache {
-                    border-color: color-mix(in srgb, var(--ts-danger) 52%, var(--ts-border));
-                    background: var(--ts-danger-surface);
-                    color: var(--ts-text);
-                }
-
-                .ts-rebuild-cache:hover {
-                    border-color: color-mix(in srgb, var(--ts-danger) 72%, transparent);
-                    background: var(--ts-danger-surface-hover);
-                }
-
-                .ts-search {
-                    min-width: 180px;
-                    flex: 1 1 220px;
-                }
-
-                .ts-search,
-                select,
-                input[type="search"] {
-                    color: inherit;
-                    background: var(--ts-bg-2);
-                    border: 1px solid var(--ts-border);
-                    border-radius: 8px;
-                    padding: 7px 10px;
-                    min-height: 32px;
-                    outline: none;
-                }
-
-                input[type="range"] {
-                    accent-color: var(--ts-accent);
-                }
-
-                button,
-                .ts-chip {
-                    border: 1px solid var(--ts-border);
-                    border-radius: 8px;
-                    min-height: 32px;
-                    padding: 6px 10px;
-                    color: inherit;
-                    background: var(--ts-bg-2);
-                    cursor: pointer;
-                    transition: border-color 0.14s ease, background 0.14s ease, opacity 0.14s ease;
-                }
-
-                button:hover,
-                .ts-chip:hover {
-                    border-color: var(--ts-accent);
-                }
-
-                button[disabled] {
-                    opacity: 0.5;
-                    cursor: default;
-                }
-
-                .ts-chip[data-active="true"],
-                .ts-section-button[data-active="true"],
-                .ts-mode-button[data-active="true"] {
-                    background: color-mix(in srgb, var(--ts-accent) 20%, var(--ts-bg-2));
-                    border-color: var(--ts-accent);
-                    color: var(--ts-accent-contrast);
-                }
-
-                .ts-status,
-                .ts-health,
-                .ts-tree-count {
-                    color: var(--ts-muted);
-                    font-size: 12px;
-                }
-
-                .ts-progress {
-                    display: none;
-                    gap: 6px;
-                }
-
-                .ts-progress[data-visible="true"] {
-                    display: grid;
-                }
-
-                .ts-progress-track {
-                    position: relative;
-                    height: 6px;
-                    border-radius: 999px;
-                    background: var(--ts-progress-track);
-                    overflow: hidden;
-                }
-
-                .ts-progress-fill {
-                    position: absolute;
-                    inset: 0 auto 0 0;
-                    width: 0%;
-                    border-radius: inherit;
-                    background: linear-gradient(90deg, var(--ts-progress-glow), var(--ts-accent));
-                    transition: width 0.16s ease;
-                }
-
-                .ts-progress[data-indeterminate="true"] .ts-progress-fill {
-                    width: 34%;
-                    animation: ts-progress-indeterminate 1.15s ease-in-out infinite;
-                }
-
-                .ts-progress-caption {
-                    color: var(--ts-muted);
-                    font-size: 11px;
-                }
-
-                @keyframes ts-progress-indeterminate {
-                    0% { transform: translateX(-120%); }
-                    100% { transform: translateX(340%); }
-                }
-
-                .ts-body {
-                    min-height: 0;
-                    display: grid;
-                    grid-template-columns: var(--ts-tree-width, 220px) 4px 1fr;
-                }
-
-                .ts-body[data-mode="flat"] {
-                    grid-template-columns: 1fr;
-                }
-
-                .ts-tree-panel {
-                    border-right: 1px solid var(--ts-border);
-                    overflow: auto;
-                    padding: 10px 8px;
-                    background: var(--ts-bg-1);
-                }
-
-                .ts-body[data-mode="flat"] .ts-tree-panel {
-                    display: none;
-                }
-
-                .ts-tree-resizer {
-                    position: relative;
-                    cursor: col-resize;
-                    background: transparent;
-                    user-select: none;
-                    touch-action: none;
-                    transition: background 0.14s ease;
-                }
-
-                .ts-tree-resizer::after {
-                    content: "";
-                    position: absolute;
-                    top: 0;
-                    bottom: 0;
-                    left: -3px;
-                    right: -3px;
-                }
-
-                .ts-tree-resizer:hover,
-                .ts-tree-resizer[data-dragging="true"] {
-                    background: color-mix(in srgb, var(--ts-accent) 60%, transparent);
-                }
-
-                .ts-body[data-mode="flat"] .ts-tree-resizer {
-                    display: none;
-                }
-
-                .ts-tree-row {
-                    display: flex;
-                    align-items: center;
-                    gap: 4px;
-                    padding-left: calc(var(--ts-depth, 0) * 12px);
-                    margin-bottom: 2px;
-                }
-
-                .ts-tree-toggle {
-                    width: 16px;
-                    min-height: 16px;
-                    padding: 0;
-                    border: 0;
-                    border-radius: 0;
-                    background: transparent;
-                    font-size: 11px;
-                    color: var(--ts-muted);
-                    opacity: 0.9;
-                }
-
-                .ts-tree-toggle:hover {
-                    border: 0;
-                    background: transparent;
-                    color: inherit;
-                }
-
-                .ts-tree-toggle-spacer {
-                    width: 16px;
-                    flex: 0 0 16px;
-                }
-
-                .ts-tree-name {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    min-width: 0;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                }
-
-                .ts-tree-name::before {
-                    content: "";
-                    width: 13px;
-                    height: 13px;
-                    flex: 0 0 13px;
-                    opacity: 0.92;
-                    background-color: var(--ts-folder-icon);
-                    mask: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M3.75 7.5a2.25 2.25 0 0 1 2.25-2.25h4.09a2.25 2.25 0 0 1 1.59.66l1.06 1.06a2.25 2.25 0 0 0 1.59.66H18a2.25 2.25 0 0 1 2.25 2.25v6.75A2.25 2.25 0 0 1 18 19.5H6a2.25 2.25 0 0 1-2.25-2.25V7.5Z'/%3E%3C/svg%3E");
-                    -webkit-mask: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M3.75 7.5a2.25 2.25 0 0 1 2.25-2.25h4.09a2.25 2.25 0 0 1 1.59.66l1.06 1.06a2.25 2.25 0 0 0 1.59.66H18a2.25 2.25 0 0 1 2.25 2.25v6.75A2.25 2.25 0 0 1 18 19.5H6a2.25 2.25 0 0 1-2.25-2.25V7.5Z'/%3E%3C/svg%3E");
-                }
-
-                .ts-tree-folder {
-                    flex: 1 1 auto;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 8px;
-                    min-height: 26px;
-                    border-radius: 7px;
-                    border: 1px solid transparent;
-                    background: transparent;
-                    padding: 3px 6px;
-                    text-align: left;
-                }
-
-                .ts-tree-folder[data-active="true"] {
-                    background: var(--ts-bg-3);
-                    border-color: var(--ts-accent);
-                }
-
-                .ts-gallery-wrap {
-                    min-height: 0;
-                    position: relative;
-                    background: var(--ts-bg-0);
-                }
-
-                .ts-gallery-scroll {
-                    position: absolute;
-                    inset: 0;
-                    overflow: auto;
-                }
-
-                .ts-gallery-spacer {
-                    position: relative;
-                    width: 100%;
-                }
-
-                .ts-gallery-content {
-                    position: absolute;
-                    inset: 0 auto auto 0;
-                    width: 100%;
-                }
-
-                .ts-card {
-                    position: absolute;
-                    border-radius: var(--ts-card-radius, 10px);
-                    border: 1px solid var(--ts-border);
-                    background: var(--ts-bg-1);
-                    box-shadow: none;
-                    overflow: hidden;
-                    transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
-                    user-select: none;
-                }
-
-                .ts-card:hover {
-                    transform: translateY(-1px);
-                    border-color: color-mix(in srgb, var(--ts-accent) 70%, var(--ts-border));
-                    box-shadow: 0 8px 24px color-mix(in srgb, var(--ts-shadow-color) 34%, transparent);
-                }
-
-                .ts-card[data-selected="true"] {
-                    border-color: var(--ts-accent);
-                }
-
-                .ts-card-media {
-                    position: relative;
-                    background: var(--ts-bg-2);
-                    overflow: hidden;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    height: var(--ts-card-preview-height, 220px);
-                    cursor: pointer;
-                }
-
-                .ts-card-media::after {
-                    content: "";
-                    position: absolute;
-                    inset: 0;
-                    background: linear-gradient(180deg, var(--ts-card-overlay-top) 0%, transparent 34%, var(--ts-card-overlay-bottom) 100%);
-                    opacity: 0;
-                    transition: opacity 0.14s ease;
-                    pointer-events: none;
-                }
-
-                .ts-card:hover .ts-card-media::after,
-                .ts-card[data-selected="true"] .ts-card-media::after {
-                    opacity: 1;
-                }
-
-                .ts-card-media img {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: contain;
-                    display: block;
-                }
-
-                .ts-card-media img.ts-workflow-preview {
-                    object-fit: cover;
-                }
-
-                .ts-card-media video {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: contain;
-                    display: block;
-                }
-
-                .ts-card-media video.ts-workflow-preview {
-                    object-fit: cover;
-                }
-
-                .ts-card-placeholder {
-                    display: grid;
-                    place-items: center;
-                    width: 100%;
-                    height: 100%;
-                    color: var(--ts-muted);
-                    padding: 14px;
-                    text-align: center;
-                    font-size: 16px;
-                    line-height: 1.25;
-                    font-weight: 600;
-                    letter-spacing: 0.01em;
-                    word-break: break-word;
-                    overflow-wrap: anywhere;
-                }
-                .ts-card-actions {
-                    position: absolute;
-                    top: var(--ts-card-inset, 8px);
-                    right: var(--ts-card-inset, 8px);
-                    display: flex;
-                    gap: var(--ts-card-action-gap, 4px);
-                    opacity: 0;
-                    transform: translateY(-2px);
-                    transition: opacity 0.14s ease, transform 0.14s ease;
-                    z-index: 2;
-                }
-
-                .ts-card:hover .ts-card-actions,
-                .ts-card[data-selected="true"] .ts-card-actions {
-                    opacity: 1;
-                    transform: translateY(0);
-                }
-                .ts-card-actions button {
-                    min-height: var(--ts-card-action-size, 22px);
-                    width: var(--ts-card-action-size, 22px);
-                    padding: 0;
-                    border-radius: var(--ts-card-action-radius, 5px);
-                    background: var(--ts-surface-overlay-strong);
-                    font-size: var(--ts-card-action-font-size, 10px);
-                    font-weight: 700;
-                }
-
-                .ts-card-badges {
-                    position: absolute;
-                    left: var(--ts-card-inset, 8px);
-                    bottom: var(--ts-card-inset, 8px);
-                    display: flex;
-                    align-items: center;
-                    gap: var(--ts-card-action-gap, 4px);
-                    flex-wrap: wrap;
-                    z-index: 2;
-                    pointer-events: none;
-                }
-
-                .ts-card-badge {
-                    padding: var(--ts-card-badge-pad-y, 3px) var(--ts-card-badge-pad-x, 6px);
-                    border-radius: var(--ts-card-badge-radius, 5px);
-                    background: var(--ts-surface-overlay-strong);
-                    font-size: var(--ts-card-badge-font-size, 10px);
-                    line-height: 1.1;
-                    white-space: nowrap;
-                }
-
-                .ts-card-badge[data-kind="meta"] {
-                    background: var(--ts-surface-overlay-soft);
-                }
-
-                .ts-card-badge[data-kind="workflow-folder"] {
-                    background: var(--ts-surface-overlay-soft);
-                    max-width: calc(100% - (var(--ts-card-inset, 8px) * 2));
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                }
-                .ts-empty {
-                    position: absolute;
-                    inset: 0;
-                    display: grid;
-                    place-items: center;
-                    pointer-events: none;
-                    color: var(--ts-muted);
-                    text-align: center;
-                    padding: 24px;
-                    font-size: 12px;
-                }
-
-                @media (max-width: 960px) {
-                    .ts-body {
-                        grid-template-columns: 1fr;
-                    }
-
-                    .ts-tree-panel {
-                        max-height: 200px;
-                        border-right: 0;
-                        border-bottom: 1px solid var(--ts-border);
-                    }
-
-                    .ts-tree-resizer {
-                        display: none;
-                    }
-                }
-            </style>
+            ${tsPanelStyles}
             <div class="ts-shell" tabindex="0">
                 <div class="ts-toolbar">
                     <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a><span class="ts-version" hidden></span><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a><a class="ts-update-badge" href="https://github.com/AlexYez/comfyui-artius-browser/releases" target="_blank" rel="noreferrer noopener" hidden></a></div>
@@ -1761,7 +1031,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsResolveCardPreviewURL(tsItem) {
         if (tsItem?.type === "3d" && tsItem.viewer_3d_url) {
-            const tsCapturedPreviewURL = this.ts3DThumbnailCache.get(tsItem.viewer_3d_url);
+            const tsCapturedPreviewURL = this.ts3DQueue.tsGetCachedPreviewURL(tsItem.viewer_3d_url);
             if (tsCapturedPreviewURL) {
                 return tsCapturedPreviewURL;
             }
@@ -1796,130 +1066,22 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         return true;
     }
 
-    tsEnqueue3DThumbnailItems(tsItems, tsMaxCount = Number.POSITIVE_INFINITY) {
-        if (this.ts3DThumbnailDisposed || !Array.isArray(tsItems) || tsItems.length === 0) {
-            return 0;
-        }
-        let tsQueuedCount = 0;
-        for (const tsItem of tsItems) {
-            if (!tsItem || tsItem.type !== "3d" || !tsItem.viewer_3d_url) {
-                continue;
-            }
-            const tsCacheKey = tsItem.viewer_3d_url;
-            const tsCachedPreviewURL = this.ts3DThumbnailCache.get(tsCacheKey);
-            if (tsCachedPreviewURL) {
-                this.tsPatchVisibleThumbnail(tsItem.id, tsCachedPreviewURL, tsItem.filename || "");
-                continue;
-            }
-            if (tsItem.preview_is_3d_capture && !tsItem.preview_is_placeholder) {
-                continue;
-            }
-            if (
-                this.ts3DThumbnailFailed.has(tsCacheKey)
-                || this.ts3DThumbnailPending.has(tsCacheKey)
-                || this.ts3DThumbnailInFlight.has(tsCacheKey)
-            ) {
-                continue;
-            }
-            if (tsQueuedCount >= tsMaxCount) {
-                break;
-            }
-            this.ts3DThumbnailPending.add(tsCacheKey);
-            this.ts3DThumbnailQueue.push({
-                tsAssetId: tsItem.id,
-                tsViewerURL: tsCacheKey,
-                tsFilename: tsItem.filename || "",
-            });
-            tsQueuedCount += 1;
-        }
-        if (tsQueuedCount > 0) {
-            this.tsPump3DThumbnailQueue();
-        }
-        return tsQueuedCount;
-    }
-
-    tsScheduleVisible3DThumbnailCapture(tsItems) {
-        this.tsEnqueue3DThumbnailItems(tsItems, Number(ts3DThumbnailSettings.visibleLimit || 4));
-    }
-
-    tsPump3DThumbnailQueue() {
-        const tsConcurrency = Math.max(1, Number(ts3DThumbnailSettings.concurrency || 1));
-        while (!this.ts3DThumbnailDisposed && this.ts3DThumbnailWorkers < tsConcurrency && this.ts3DThumbnailQueue.length > 0) {
-            const tsJob = this.ts3DThumbnailQueue.shift();
-            if (!tsJob?.tsViewerURL) {
-                continue;
-            }
-            if (this.ts3DThumbnailCache.has(tsJob.tsViewerURL) || this.ts3DThumbnailFailed.has(tsJob.tsViewerURL)) {
-                this.ts3DThumbnailPending.delete(tsJob.tsViewerURL);
-                continue;
-            }
-            this.ts3DThumbnailPending.delete(tsJob.tsViewerURL);
-            this.ts3DThumbnailInFlight.add(tsJob.tsViewerURL);
-            this.ts3DThumbnailWorkers += 1;
-            void this.tsRun3DThumbnailJob(tsJob);
-        }
-    }
-
-    async tsPersist3DThumbnail(tsJob, tsPreviewURL) {
-        if (!tsJob?.tsAssetId || !tsPreviewURL || this.ts3DThumbnailPersisting.has(tsJob.tsAssetId)) {
+    tsApplyPersisted3DThumbnail(tsAssetPatch) {
+        // Called by the 3D queue after a capture is saved to the backend: merge
+        // the returned card into the panel's item list and repaint its card.
+        if (!tsAssetPatch?.id) {
             return;
         }
-        this.ts3DThumbnailPersisting.add(tsJob.tsAssetId);
-        try {
-            const tsPayload = await tsSave3DThumbnail(tsJob.tsAssetId, tsPreviewURL);
-            const tsAssetPatch = tsPayload?.asset;
-            if (!tsAssetPatch?.id) {
-                return;
-            }
-            const tsIndex = this.tsItemIndexById.get(tsAssetPatch.id);
-            if (tsIndex === undefined || tsIndex < 0) {
-                return;
-            }
-            this.tsState.tsItems[tsIndex] = {
-                ...this.tsState.tsItems[tsIndex],
-                ...tsAssetPatch,
-            };
-            this.tsItemsRevision += 1;
-            this.tsPatchVisibleCard(this.tsState.tsItems[tsIndex]);
-        } catch (tsError) {
-            tsConsoleWarn("Timesaver Artius Browser 3D thumbnail persist failed", tsError);
-        } finally {
-            this.ts3DThumbnailPersisting.delete(tsJob.tsAssetId);
+        const tsIndex = this.tsItemIndexById.get(tsAssetPatch.id);
+        if (tsIndex === undefined || tsIndex < 0) {
+            return;
         }
-    }
-
-    async tsRun3DThumbnailJob(tsJob) {
-        try {
-            const tsPreviewURL = await tsCapture3DThumbnail(tsJob.tsViewerURL, {
-                width: ts3DThumbnailSettings.captureSize,
-                height: ts3DThumbnailSettings.captureSize,
-                warmFrames: ts3DThumbnailSettings.warmFrames,
-            });
-            if (tsPreviewURL) {
-                this.ts3DThumbnailCache.set(tsJob.tsViewerURL, tsPreviewURL);
-                // Captured thumbnails are data URLs (hundreds of KB each);
-                // evict the oldest entries so a large 3D library cannot grow
-                // the tab's memory without bound. Evicted entries reload from
-                // the persisted backend preview, not via a fresh capture.
-                const tsCacheCapacity = Math.max(8, Number(ts3DThumbnailSettings.cacheCapacity || 64));
-                while (this.ts3DThumbnailCache.size > tsCacheCapacity) {
-                    const tsOldestKey = this.ts3DThumbnailCache.keys().next().value;
-                    this.ts3DThumbnailCache.delete(tsOldestKey);
-                }
-                if (!this.ts3DThumbnailDisposed) {
-                    this.tsPatchVisibleThumbnail(tsJob.tsAssetId, tsPreviewURL, tsJob.tsFilename);
-                }
-                void this.tsPersist3DThumbnail(tsJob, tsPreviewURL);
-            } else {
-                this.ts3DThumbnailFailed.add(tsJob.tsViewerURL);
-            }
-        } catch {
-            this.ts3DThumbnailFailed.add(tsJob.tsViewerURL);
-        } finally {
-            this.ts3DThumbnailInFlight.delete(tsJob.tsViewerURL);
-            this.ts3DThumbnailWorkers = Math.max(0, this.ts3DThumbnailWorkers - 1);
-            this.tsPump3DThumbnailQueue();
-        }
+        this.tsState.tsItems[tsIndex] = {
+            ...this.tsState.tsItems[tsIndex],
+            ...tsAssetPatch,
+        };
+        this.tsItemsRevision += 1;
+        this.tsPatchVisibleCard(this.tsState.tsItems[tsIndex]);
     }
 
     tsHandleAssetUpsertEvent(tsEvent) {
@@ -2244,11 +1406,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsState.tsNextCursor = null;
         this.tsState.tsFolders = [];
         this.tsInvalidateResponseCache();
-        this.ts3DThumbnailPending.clear();
-        this.ts3DThumbnailInFlight.clear();
-        this.ts3DThumbnailFailed.clear();
-        this.ts3DThumbnailCache.clear();
-        this.ts3DThumbnailPersisting.clear();
+        this.ts3DQueue.tsClear();
         this.tsRefs.tsGalleryScroll.scrollTop = 0;
         this.tsItemsRevision += 1;
         this.tsFoldersRevision += 1;
@@ -2823,7 +1981,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
 
         if (!tsForce && this.tsLastGridMarkupKey === tsMarkupKey) {
-            this.tsScheduleVisible3DThumbnailCapture(tsVisibleItems);
+            this.ts3DQueue.tsScheduleVisible(tsVisibleItems);
             if (this.tsState.tsHasMore && !this.tsState.tsLoading && tsScrollTop + tsViewportHeight >= this.tsRefs.tsGallerySpacer.offsetHeight - 480) {
                 this.tsFetchAssets(false);
             }
@@ -2831,7 +1989,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         this.tsLastGridMarkupKey = tsMarkupKey;
         this.tsRefs.tsGalleryContent.innerHTML = tsCards.join("");
-        this.tsScheduleVisible3DThumbnailCapture(tsVisibleItems);
+        this.ts3DQueue.tsScheduleVisible(tsVisibleItems);
         if (this.tsState.tsHasMore && !this.tsState.tsLoading && tsScrollTop + tsViewportHeight >= this.tsRefs.tsGallerySpacer.offsetHeight - 480) {
             this.tsFetchAssets(false);
         }

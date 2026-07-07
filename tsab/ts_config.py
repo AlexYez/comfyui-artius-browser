@@ -174,6 +174,15 @@ class TSConfigStore:
             if ts_preview.get("image_quality") in (42, 82):
                 ts_preview["image_quality"] = ts_default["preview"]["image_quality"]
             ts_result["version"] = 18
+        if TSCurrentVersion() < 19:
+            # v19 adds runtime-toggleable logging switches so support can change
+            # them from config.json (or the TS_ARTIUS_VERBOSE /
+            # TS_ARTIUS_PROGRESS_CONSOLE env vars) without editing source.
+            # Defaults preserve current behavior (verbose off, progress on).
+            ts_logging_section = ts_result.setdefault("logging", {})
+            ts_logging_section.setdefault("enable_verbose", False)
+            ts_logging_section.setdefault("enable_progress_console", True)
+            ts_result["version"] = 19
         self._TSNormalizeTopLevelSections(ts_result, ts_default)
         return ts_result
 
@@ -187,7 +196,7 @@ class TSConfigStore:
         return ts_result
 
     def _TSNormalizeTopLevelSections(self, ts_config: dict, ts_default: dict) -> None:
-        for ts_key in ("roots", "tools", "indexing", "preview", "ui"):
+        for ts_key in ("roots", "tools", "indexing", "preview", "ui", "logging"):
             if not isinstance(ts_config.get(ts_key), dict):
                 ts_config[ts_key] = copy.deepcopy(ts_default[ts_key])
         ts_custom_roots = ts_config.get("custom_roots")

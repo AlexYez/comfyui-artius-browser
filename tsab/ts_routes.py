@@ -3,12 +3,37 @@
 import asyncio
 
 from aiohttp import web as TSWeb
+from .ts_route_errors import TSWrapRouteHandler
 from .ts_settings import TS_DEFAULT_PAGE_SIZE, TS_MAX_3D_CAPTURE_DATA_URL_LENGTH
 from .ts_logging import TSLogVerbose
 from .ts_utils import TSParseAssetCursor, TSParseDateToEpoch, TSParseMaybeInt, TSParseQueryList
 from .ts_version import TSCollectVersionInfo
 
 TSRoutesRegistered = False
+
+# Single source of truth for route registration: (HTTP method, path template,
+# handler function name). Kept as plain data so tooling (check_release route ↔
+# CLAUDE.md Appendix B parity) can read it without importing aiohttp, and so a
+# new route is added in exactly one place. Every path is registered for both
+# the bare and the "/api"-prefixed variant (see TSBuildRouteVariants).
+TS_ROUTE_DEFINITIONS = (
+    ("GET", "/asset_browser/assets", "TSHandleAssets"),
+    ("GET", "/asset_browser/search", "TSHandleAssets"),
+    ("GET", "/asset_browser/asset/{id}", "TSHandleAsset"),
+    ("GET", "/asset_browser/preview/{id}", "TSHandlePreview"),
+    ("POST", "/asset_browser/preview/{id}/warm", "TSHandlePreviewWarm"),
+    ("GET", "/asset_browser/file", "TSHandleFile"),
+    ("POST", "/asset_browser/rescan", "TSHandleRescan"),
+    ("POST", "/asset_browser/rebuild_cache", "TSHandleRebuildCache"),
+    ("POST", "/asset_browser/delete", "TSHandleDelete"),
+    ("GET", "/asset_browser/settings", "TSHandleSettingsGet"),
+    ("POST", "/asset_browser/settings", "TSHandleSettingsPost"),
+    ("POST", "/asset_browser/workflow/delete", "TSHandleWorkflowDelete"),
+    ("GET", "/asset_browser/3d/viewer", "TSHandle3DViewer"),
+    ("POST", "/asset_browser/3d/thumbnail/{id}", "TSHandle3DThumbnail"),
+    ("POST", "/asset_browser/3d/stage/{id}", "TSHandle3DStage"),
+    ("GET", "/asset_browser/version", "TSHandleVersion"),
+)
 
 
 def TSBuildRouteVariants(ts_path: str) -> tuple[str, str]:
@@ -74,6 +99,13 @@ def TSEnforceRequestContentLength(ts_request, ts_max_bytes: int) -> None:
         raise TSWeb.HTTPRequestEntityTooLarge(max_size=ts_max_bytes, actual_size=ts_content_length)
 
 
+def _TSBindRouteHandler(ts_handler, ts_runtime):
+    # Factory (not an inline lambda in the loop) so ts_handler is captured per
+    # call — avoids the classic late-binding closure bug where every route would
+    # end up pointing at the last handler in the loop.
+    return TSWrapRouteHandler(lambda ts_request: ts_handler(ts_runtime, ts_request))
+
+
 def TSRegisterRoutes(ts_runtime) -> None:
     global TSRoutesRegistered
     if TSRoutesRegistered:
@@ -86,61 +118,21 @@ def TSRegisterRoutes(ts_runtime) -> None:
         TSLogVerbose("routes.register.skipped", reason="prompt_server_unavailable")
         return
 
+    ts_method_map = {"GET": TSWeb.get, "POST": TSWeb.post}
+    ts_module_globals = globals()
     ts_routes = []
-    for ts_path in TSBuildRouteVariants("/asset_browser/assets"):
-        ts_routes.append(TSWeb.get(ts_path, lambda ts_request: TSHandleAssets(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/search"):
-        ts_routes.append(TSWeb.get(ts_path, lambda ts_request: TSHandleAssets(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/asset/{id}"):
-        ts_routes.append(TSWeb.get(ts_path, lambda ts_request: TSHandleAsset(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/preview/{id}"):
-        ts_routes.append(TSWeb.get(ts_path, lambda ts_request: TSHandlePreview(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/preview/{id}/warm"):
-        ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandlePreviewWarm(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/file"):
-        ts_routes.append(TSWeb.get(ts_path, lambda ts_request: TSHandleFile(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/rescan"):
-        ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandleRescan(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/rebuild_cache"):
-        ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandleRebuildCache(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/delete"):
-        ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandleDelete(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/settings"):
-        ts_routes.append(TSWeb.get(ts_path, lambda ts_request: TSHandleSettingsGet(ts_runtime, ts_request)))
-        ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandleSettingsPost(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/workflow/delete"):
-        ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandleWorkflowDelete(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/3d/viewer"):
-        ts_routes.append(TSWeb.get(ts_path, lambda ts_request: TSHandle3DViewer(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/3d/thumbnail/{id}"):
-        ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandle3DThumbnail(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/3d/stage/{id}"):
-        ts_routes.append(TSWeb.post(ts_path, lambda ts_request: TSHandle3DStage(ts_runtime, ts_request)))
-    for ts_path in TSBuildRouteVariants("/asset_browser/version"):
-        ts_routes.append(TSWeb.get(ts_path, lambda ts_request: TSHandleVersion(ts_runtime, ts_request)))
+    for ts_method, ts_path_template, ts_handler_name in TS_ROUTE_DEFINITIONS:
+        ts_register = ts_method_map[ts_method]
+        ts_handler = ts_module_globals[ts_handler_name]
+        for ts_path in TSBuildRouteVariants(ts_path_template):
+            ts_routes.append(ts_register(ts_path, _TSBindRouteHandler(ts_handler, ts_runtime)))
 
     ts_server.app.add_routes(ts_routes)
     TSRoutesRegistered = True
     TSLogVerbose(
         "routes.registered",
         route_count=len(ts_routes),
-        route_groups=[
-            "/asset_browser/assets",
-            "/asset_browser/search",
-            "/asset_browser/asset/{id}",
-            "/asset_browser/preview/{id}",
-            "/asset_browser/preview/{id}/warm",
-            "/asset_browser/file",
-            "/asset_browser/rescan",
-            "/asset_browser/rebuild_cache",
-            "/asset_browser/delete",
-            "/asset_browser/settings",
-            "/asset_browser/workflow/delete",
-            "/asset_browser/3d/viewer",
-            "/asset_browser/3d/thumbnail/{id}",
-            "/asset_browser/3d/stage/{id}",
-            "/asset_browser/version",
-        ],
+        route_groups=sorted({ts_path for _, ts_path, _ in TS_ROUTE_DEFINITIONS}),
     )
 
 
@@ -280,4 +272,7 @@ async def TSHandleVersion(ts_runtime, ts_request):
     TSLogVerbose("route.version.get", path=ts_request.path)
     ts_cache_dir = ts_runtime.ts_storage_paths.ts_asset_browser_directory
     ts_payload = await asyncio.to_thread(TSCollectVersionInfo, ts_cache_dir)
+    # Additive diagnostics for bug reports; the version contract keys
+    # (local/remote/update_available/repository_url/release_url) are untouched.
+    ts_payload["diagnostics"] = await asyncio.to_thread(ts_runtime.TSCollectDiagnostics)
     return TSWeb.json_response(ts_payload)

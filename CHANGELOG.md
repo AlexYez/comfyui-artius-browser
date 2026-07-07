@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-07-07
+
+### Added
+- The `GET /asset_browser/version` response now carries a `diagnostics` block
+  (database schema version, config version, resolved `ffmpeg` / `ffprobe`
+  paths, indexed asset counts) so a bug report can include environment state
+  without shell access. The existing version fields are unchanged.
+- Verbose logging and the scan progress console are now runtime-toggleable
+  without editing source: `logging.enable_verbose` /
+  `logging.enable_progress_console` in `config.json`, or the
+  `TS_ARTIUS_VERBOSE` / `TS_ARTIUS_PROGRESS_CONSOLE` environment variables
+  (which override the config). Defaults are unchanged (verbose off, progress
+  on).
+
+### Changed
+- An unhandled server error in any of the browser's own routes now returns a
+  clean `500 {"error": "internal_error"}` JSON response and a logged warning
+  instead of leaking a stack trace or a broken half-response.
+- The scan's hashing phase is pipelined with a sliding window instead of a
+  per-batch barrier, so one slow video no longer stalls a batch of fast
+  images. Behavior and results are unchanged; large libraries index more
+  evenly.
+- Orphaned preview files left behind by a crash or an interrupted scan are now
+  reconciled against the database and removed at the end of a full scan
+  (never on the per-generation autoscan), keeping the preview cache compact.
+
+### Internal
+- Extracted the panel's 3D-thumbnail capture queue and its inline CSS into
+  their own modules, and made the per-section (Assets/Workflows) settings sync
+  table-driven. No user-visible behavior change; covered by new
+  characterization checks and unit tests.
+
 ## [1.6.2] - 2026-07-05
 
 ### Fixed

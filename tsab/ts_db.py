@@ -415,6 +415,15 @@ class TSDatabase:
             (ts_path,),
         ).fetchone()
 
+    def TSGetAllPreviewPaths(self) -> set[str]:
+        ts_connection = self.TSGetConnection()
+        ts_rows = ts_connection.execute(
+            "SELECT DISTINCT preview_path FROM assets WHERE preview_path != ''"
+        ).fetchall()
+        ts_paths = {str(ts_row["preview_path"]) for ts_row in ts_rows if ts_row["preview_path"]}
+        TSLogVerbose("db.preview_paths.collected", count=len(ts_paths))
+        return ts_paths
+
     def TSCountPreviewReferences(self, ts_preview_path: str, ts_exclude_asset_id: int | None = None) -> int:
         if not ts_preview_path:
             return 0

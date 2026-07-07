@@ -13,11 +13,18 @@ from .ts_asset_processing import TSAssetProcessingService
 from .ts_browser_settings import TSBrowserSettingsService
 from .ts_config import TSConfigStore
 from .ts_db import TSDatabase
+from .ts_db_schema import TS_DB_SCHEMA_VERSION
 from .ts_delete import TSDeleteService
 from .ts_handlers import TSHandlerRegistry
 from .ts_indexer import TSIndexer
 from .ts_load3d_stage import TSPrepare3DAssetForLoad3D
-from .ts_logging import TSLogVerbose
+from .ts_logging import (
+    TSIsProgressConsole,
+    TSIsVerboseLogging,
+    TSLogVerbose,
+    TSSetProgressConsole,
+    TSSetVerboseLogging,
+)
 from .ts_preview import TSPreviewCache
 from .ts_routes import TSRegisterRoutes
 from .ts_scan_service import TSScanService
@@ -36,6 +43,7 @@ class TSAssetBrowserRuntime:
     def __init__(self) -> None:
         self.ts_storage_paths = TSStoragePaths()
         self.ts_config_store = TSConfigStore(self.ts_storage_paths.ts_config_path)
+        self._TSApplyVerboseLoggingFromConfig()
         self.ts_browser_settings = TSBrowserSettingsService(self.ts_config_store)
         self.ts_database = TSDatabase(self.ts_storage_paths.ts_database_path)
         self.ts_tools = TSToolLocator(self.ts_config_store)
@@ -86,6 +94,51 @@ class TSAssetBrowserRuntime:
         self.ts_asset_locks_guard = threading.Lock()
         self.ts_3d_viewer_module_urls: dict[str, str | None] = {}
         TSLogVerbose("runtime.initialized")
+
+    def _TSApplyVerboseLoggingFromConfig(self) -> None:
+        try:
+            ts_config = self.ts_config_store.TSLoadConfig()
+            ts_logging_config = ts_config.get("logging", {}) if isinstance(ts_config, dict) else {}
+            TSSetVerboseLogging(bool(ts_logging_config.get("enable_verbose", False)))
+            TSSetProgressConsole(bool(ts_logging_config.get("enable_progress_console", True)))
+        except Exception:
+            # Logging configuration must never block startup.
+            TSLogger.debug("Failed to apply logging configuration", exc_info=True)
+
+    def TSCollectDiagnostics(self) -> dict[str, Any]:
+        # Lightweight, support-oriented snapshot surfaced through /version so a
+        # bug report can include environment state without shell access. All
+        # lookups are cheap and best-effort — a failure in one field must not
+        # blank the whole payload.
+        ts_diagnostics: dict[str, Any] = {
+            "schema_version": TS_DB_SCHEMA_VERSION,
+            "verbose_logging": TSIsVerboseLogging(),
+            "progress_console": TSIsProgressConsole(),
+        }
+        try:
+            ts_config = self.ts_config_store.TSLoadConfig()
+            ts_diagnostics["config_version"] = int(ts_config.get("version", 0) or 0)
+        except Exception:
+            ts_diagnostics["config_version"] = None
+        try:
+            ts_diagnostics["tools"] = {
+                ts_tool_name: self.ts_tools.TSResolveTool(ts_tool_name)
+                for ts_tool_name in ("ffmpeg", "ffprobe")
+            }
+        except Exception:
+            ts_diagnostics["tools"] = {}
+        try:
+            ts_type_counts = self.ts_database.TSCountVisibleByType()
+            ts_diagnostics["asset_counts"] = ts_type_counts
+            ts_diagnostics["asset_total"] = sum(ts_type_counts.values())
+        except Exception:
+            ts_diagnostics["asset_counts"] = {}
+            ts_diagnostics["asset_total"] = None
+        try:
+            ts_diagnostics["root_count"] = len(self.TSGetRoots())
+        except Exception:
+            ts_diagnostics["root_count"] = None
+        return ts_diagnostics
 
     def _TSGetAssetLock(self, ts_asset_id: int) -> threading.Lock:
         with self.ts_asset_locks_guard:

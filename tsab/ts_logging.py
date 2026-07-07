@@ -1,12 +1,63 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from .ts_settings import TS_ENABLE_PROGRESS_CONSOLE, TS_ENABLE_VERBOSE_LOGGING
 from .ts_utils import TSJsonDumps
 
 TSLogger = logging.getLogger("TSArtiusBrowser")
+
+# Verbose logging is runtime-toggleable so support can enable diagnostics
+# without editing source. Resolution order: the TS_ARTIUS_VERBOSE environment
+# variable wins (an explicit "set this and restart" for bug reports); otherwise
+# the value comes from config.json (logging.enable_verbose), applied once at
+# bootstrap via TSSetVerboseLogging; the compile-time default is the fallback.
+_TS_VERBOSE_ENV_RAW = os.environ.get("TS_ARTIUS_VERBOSE")
+_TS_VERBOSE_ENV_SET = _TS_VERBOSE_ENV_RAW is not None
+_TS_VERBOSE_ENABLED = (
+    _TS_VERBOSE_ENV_RAW.strip().lower() in {"1", "true", "yes", "on"}
+    if _TS_VERBOSE_ENV_SET
+    else TS_ENABLE_VERBOSE_LOGGING
+)
+
+
+def TSSetVerboseLogging(ts_enabled: bool) -> None:
+    # The environment variable is an intentional hard override: config must not
+    # silently turn diagnostics back off (or on) once an operator set the var.
+    global _TS_VERBOSE_ENABLED
+    if _TS_VERBOSE_ENV_SET:
+        return
+    _TS_VERBOSE_ENABLED = bool(ts_enabled)
+
+
+def TSIsVerboseLogging() -> bool:
+    return _TS_VERBOSE_ENABLED
+
+
+# The scan progress bar is on by default. It is runtime-toggleable through the
+# same mechanism as verbose logging (config.json logging.enable_progress_console,
+# or the TS_ARTIUS_PROGRESS_CONSOLE env var override) so an operator can silence
+# it without editing source.
+_TS_PROGRESS_ENV_RAW = os.environ.get("TS_ARTIUS_PROGRESS_CONSOLE")
+_TS_PROGRESS_ENV_SET = _TS_PROGRESS_ENV_RAW is not None
+_TS_PROGRESS_ENABLED = (
+    _TS_PROGRESS_ENV_RAW.strip().lower() in {"1", "true", "yes", "on"}
+    if _TS_PROGRESS_ENV_SET
+    else TS_ENABLE_PROGRESS_CONSOLE
+)
+
+
+def TSSetProgressConsole(ts_enabled: bool) -> None:
+    global _TS_PROGRESS_ENABLED
+    if _TS_PROGRESS_ENV_SET:
+        return
+    _TS_PROGRESS_ENABLED = bool(ts_enabled)
+
+
+def TSIsProgressConsole() -> bool:
+    return _TS_PROGRESS_ENABLED
 
 TS_SUPPRESSED_VERBOSE_PREFIXES = (
     "storage.",
@@ -57,7 +108,7 @@ TS_SUPPRESSED_VERBOSE_PREFIXES = (
 
 
 def TSLogVerbose(ts_action: str, **ts_fields: Any) -> None:
-    if not TS_ENABLE_VERBOSE_LOGGING:
+    if not _TS_VERBOSE_ENABLED:
         return
     if any(ts_action.startswith(ts_prefix) for ts_prefix in TS_SUPPRESSED_VERBOSE_PREFIXES):
         return
@@ -69,13 +120,13 @@ def TSLogVerbose(ts_action: str, **ts_fields: Any) -> None:
 
 
 def TSLogInfoIfVerbose(ts_message: str, *ts_args: Any) -> None:
-    if not TS_ENABLE_VERBOSE_LOGGING:
+    if not _TS_VERBOSE_ENABLED:
         return
     TSLogger.info(ts_message, *ts_args)
 
 
 
 def TSLogProgress(ts_message: str, *ts_args: Any) -> None:
-    if not TS_ENABLE_PROGRESS_CONSOLE:
+    if not _TS_PROGRESS_ENABLED:
         return
     TSLogger.info(ts_message, *ts_args)

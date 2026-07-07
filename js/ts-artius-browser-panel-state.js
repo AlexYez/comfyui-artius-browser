@@ -43,40 +43,49 @@ export function tsNormalizeAssetTypeSet(tsValues, tsTypeOrder) {
     );
 }
 
+// Single source of truth for every setting that is persisted independently per
+// browser section (Assets vs Workflows). Each entry maps the "active" state
+// field the UI reads/writes to its per-section mirrors. Sync (active → mirror)
+// and apply (mirror → active) both iterate this table, so adding a new
+// per-section setting is a one-line change here instead of four hand-edited
+// assignment blocks that could silently drift out of sync.
+// `tsCoerceWorkflow` guards the Workflows section, which has no size sort — a
+// size_bytes selection there falls back to created_at.
+const tsSectionSettingFields = [
+    { tsActive: "tsMode", tsAsset: "tsAssetMode", tsWorkflow: "tsWorkflowMode" },
+    {
+        tsActive: "tsSortKey",
+        tsAsset: "tsAssetSortKey",
+        tsWorkflow: "tsWorkflowSortKey",
+        tsCoerceWorkflow: (tsValue) => (tsValue === "size_bytes" ? "created_at" : tsValue),
+    },
+    { tsActive: "tsSortDirection", tsAsset: "tsAssetSortDirection", tsWorkflow: "tsWorkflowSortDirection" },
+    { tsActive: "tsPreviewSize", tsAsset: "tsAssetPreviewSize", tsWorkflow: "tsWorkflowPreviewSize" },
+    { tsActive: "tsSearch", tsAsset: "tsAssetSearch", tsWorkflow: "tsWorkflowSearch" },
+    { tsActive: "tsTreeWidth", tsAsset: "tsAssetTreeWidth", tsWorkflow: "tsWorkflowTreeWidth" },
+];
+
 export function tsSyncSectionSettingsFromActiveState(tsState, tsIsWorkflowSection) {
-    if (tsIsWorkflowSection) {
-        tsState.tsWorkflowMode = tsState.tsMode;
-        tsState.tsWorkflowSortKey = tsState.tsSortKey === "size_bytes" ? "created_at" : tsState.tsSortKey;
-        tsState.tsWorkflowSortDirection = tsState.tsSortDirection;
-        tsState.tsWorkflowPreviewSize = tsState.tsPreviewSize;
-        tsState.tsWorkflowSearch = tsState.tsSearch;
-        tsState.tsWorkflowTreeWidth = tsState.tsTreeWidth;
-        return;
+    const tsMirrorKey = tsIsWorkflowSection ? "tsWorkflow" : "tsAsset";
+    for (const tsField of tsSectionSettingFields) {
+        const tsValue = tsState[tsField.tsActive];
+        tsState[tsField[tsMirrorKey]] = tsIsWorkflowSection && tsField.tsCoerceWorkflow
+            ? tsField.tsCoerceWorkflow(tsValue)
+            : tsValue;
     }
-    tsState.tsAssetMode = tsState.tsMode;
-    tsState.tsAssetSortKey = tsState.tsSortKey;
-    tsState.tsAssetSortDirection = tsState.tsSortDirection;
-    tsState.tsAssetPreviewSize = tsState.tsPreviewSize;
-    tsState.tsAssetSearch = tsState.tsSearch;
-    tsState.tsAssetTreeWidth = tsState.tsTreeWidth;
 }
 
 export function tsApplySectionSettingsToState(tsState, tsOptions = {}) {
-    if (tsOptions.isWorkflowSection) {
-        tsState.tsMode = tsState.tsWorkflowMode;
-        tsState.tsSortKey = tsState.tsWorkflowSortKey === "size_bytes" ? "created_at" : tsState.tsWorkflowSortKey;
-        tsState.tsSortDirection = tsState.tsWorkflowSortDirection;
-        tsState.tsPreviewSize = tsState.tsWorkflowPreviewSize;
-        tsState.tsSearch = tsState.tsWorkflowSearch;
-        tsState.tsTreeWidth = tsState.tsWorkflowTreeWidth;
-        tsState.tsFolder = tsState.tsMode === "tree" ? (tsOptions.workflowSelectedFolder || "") : "";
-        return;
+    const tsIsWorkflowSection = Boolean(tsOptions.isWorkflowSection);
+    const tsMirrorKey = tsIsWorkflowSection ? "tsWorkflow" : "tsAsset";
+    for (const tsField of tsSectionSettingFields) {
+        const tsValue = tsState[tsField[tsMirrorKey]];
+        tsState[tsField.tsActive] = tsIsWorkflowSection && tsField.tsCoerceWorkflow
+            ? tsField.tsCoerceWorkflow(tsValue)
+            : tsValue;
     }
-    tsState.tsMode = tsState.tsAssetMode;
-    tsState.tsSortKey = tsState.tsAssetSortKey;
-    tsState.tsSortDirection = tsState.tsAssetSortDirection;
-    tsState.tsPreviewSize = tsState.tsAssetPreviewSize;
-    tsState.tsSearch = tsState.tsAssetSearch;
-    tsState.tsTreeWidth = tsState.tsAssetTreeWidth;
-    tsState.tsFolder = tsState.tsMode === "tree" ? (tsOptions.lastAssetFolder || "") : "";
+    const tsSelectedFolder = tsIsWorkflowSection
+        ? (tsOptions.workflowSelectedFolder || "")
+        : (tsOptions.lastAssetFolder || "");
+    tsState.tsFolder = tsState.tsMode === "tree" ? tsSelectedFolder : "";
 }

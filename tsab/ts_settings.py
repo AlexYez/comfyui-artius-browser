@@ -135,7 +135,11 @@ TS_EVENT_ASSET_REMOVE = f"{TS_EVENT_PREFIX}:asset-remove"
 TS_EVENT_HEALTH = f"{TS_EVENT_PREFIX}:health"
 
 TS_DEFAULT_CONFIG = {
-    "version": 18,
+    "version": 19,
+    "logging": {
+        "enable_verbose": False,
+        "enable_progress_console": True,
+    },
     "roots": {
         "output": {"enabled": True, "allow_delete": True},
         "input": {"enabled": True, "allow_delete": True},

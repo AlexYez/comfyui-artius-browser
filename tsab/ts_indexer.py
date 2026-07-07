@@ -4,7 +4,7 @@ import asyncio
 import logging
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from typing import Any, Iterable
 
 from .ts_indexer_discovery import TSIterAssetStats
@@ -228,13 +228,34 @@ class TSIndexer:
                 ts_batch_size = int(ts_config.get("indexing", {}).get("batch_size", TS_DEFAULT_SCAN_BATCH))
                 self._TSEmitScanProgress(force_event=True, force_log=True)
 
+                # Sliding-window pipeline instead of a per-batch barrier: with
+                # executor.map on fixed batches, a batch could not advance until
+                # its slowest candidate finished (one 4K video stalled 127 fast
+                # images). Here a fresh candidate is submitted as soon as any
+                # in-flight one completes, so workers never idle on a barrier.
+                # Memory stays bounded by the window (worker_count * 2 futures)
+                # plus one pending upsert batch — important for 100k-file
+                # rebuilds. Semantics are unchanged: the same payloads are
+                # upserted, previews for re-hashed assets are purged the same
+                # way, progress is counted per result, and DB writes are still
+                # grouped in batch_size chunks (companion-flag recompute per
+                # touched folder is idempotent, so grouping/order does not affect
+                # the final state — matching the previous per-batch behavior).
+                ts_max_in_flight = max(1, ts_worker_count) * 2
+                ts_candidate_iterator = iter(ts_candidate_stats)
+                ts_upsert_payloads: list[TSAssetPayload] = []
                 with ThreadPoolExecutor(max_workers=max(1, ts_worker_count)) as ts_executor:
-                    for ts_batch_start in range(0, len(ts_candidate_stats), ts_batch_size):
-                        ts_batch = ts_candidate_stats[ts_batch_start : ts_batch_start + ts_batch_size]
-                        ts_executor_batch = list(ts_batch)
-                        ts_processed_results = list(ts_executor.map(self._TSProcessCandidateTuple, ts_executor_batch))
-                        ts_upsert_payloads: list[TSAssetPayload] = []
-                        for ts_payload, ts_existing_row in ts_processed_results:
+                    ts_in_flight = set()
+                    for _ts_slot in range(ts_max_in_flight):
+                        ts_next_candidate = next(ts_candidate_iterator, None)
+                        if ts_next_candidate is None:
+                            break
+                        ts_in_flight.add(ts_executor.submit(self._TSProcessCandidateTuple, ts_next_candidate))
+
+                    while ts_in_flight:
+                        ts_completed, ts_in_flight = wait(ts_in_flight, return_when=FIRST_COMPLETED)
+                        for ts_future in ts_completed:
+                            ts_payload, ts_existing_row = ts_future.result()
                             self.ts_status.ts_processed_candidates += 1
                             if ts_payload is not None:
                                 if ts_existing_row is not None and str(ts_existing_row["hash"] or "") != ts_payload.ts_hash:
@@ -247,9 +268,16 @@ class TSIndexer:
                                 or self.ts_status.ts_processed_candidates >= self.ts_status.ts_total_candidates
                             ):
                                 self._TSEmitScanProgress()
-                        if ts_upsert_payloads:
-                            self.ts_database.TSUpsertAssets(ts_upsert_payloads, ts_return_rows=False)
-                            self.ts_status.ts_changed += len(ts_upsert_payloads)
+                            ts_next_candidate = next(ts_candidate_iterator, None)
+                            if ts_next_candidate is not None:
+                                ts_in_flight.add(ts_executor.submit(self._TSProcessCandidateTuple, ts_next_candidate))
+                            if len(ts_upsert_payloads) >= ts_batch_size:
+                                self.ts_database.TSUpsertAssets(ts_upsert_payloads, ts_return_rows=False)
+                                self.ts_status.ts_changed += len(ts_upsert_payloads)
+                                ts_upsert_payloads = []
+                if ts_upsert_payloads:
+                    self.ts_database.TSUpsertAssets(ts_upsert_payloads, ts_return_rows=False)
+                    self.ts_status.ts_changed += len(ts_upsert_payloads)
 
                 self.ts_status.ts_running = False
                 self.ts_status.ts_phase = "idle"
@@ -258,6 +286,23 @@ class TSIndexer:
                 self.ts_status.ts_completed_at = time.time()
                 ts_type_counts = self.ts_database.TSCountVisibleByType([ts_root.ts_root_id for ts_root in ts_roots])
                 ts_total_visible = sum(ts_type_counts.values())
+                # Reconcile orphaned preview files only on a full scan (all
+                # roots): the post-generation autoscan is scoped to a single
+                # root and runs after every prompt, so gating on a full scan
+                # keeps a whole-cache directory walk off that hot path while
+                # still cleaning up crash/interrupt orphans at startup and on a
+                # manual "All Folders" rescan.
+                if ts_scope is None and ts_root_id is None:
+                    try:
+                        ts_referenced_previews = self.ts_database.TSGetAllPreviewPaths()
+                        ts_purged_previews = self.ts_preview_cache.TSPurgeOrphanedPreviews(ts_referenced_previews)
+                        if ts_purged_previews:
+                            TSLogInfoIfVerbose(
+                                "TS preview cache maintenance removed %s orphaned previews",
+                                ts_purged_previews,
+                            )
+                    except Exception:
+                        TSLogger.exception("TS preview cache maintenance failed")
                 self._TSEmitScanProgress(force_event=True, force_log=True)
                 TSLogInfoIfVerbose(
                     "TS asset scan complete: scanned=%s changed=%s deleted=%s candidates=%s",
