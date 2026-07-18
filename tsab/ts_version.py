@@ -109,25 +109,33 @@ def _TSWriteVersionCheckFile(ts_cache_dir: Path, ts_payload: dict[str, Any]) -> 
 
 
 def _TSResolveRemoteVersion(ts_cache_dir: Path) -> str | None:
+    ts_now = time.time()
     with _TS_VERSION_CACHE_LOCK:
-        ts_now = time.time()
         ts_cached = _TSReadVersionCheckFile(ts_cache_dir)
         ts_last_attempt_at = float(ts_cached.get("last_attempt_at") or 0.0)
         ts_age = ts_now - ts_last_attempt_at
         if 0 <= ts_age < TS_REMOTE_CACHE_TTL_SECONDS:
             ts_remote_value = ts_cached.get("remote")
             return ts_remote_value if isinstance(ts_remote_value, str) else None
-        ts_fresh_remote = TSFetchRemoteVersionString()
+
+    # The network round-trip (up to TS_REMOTE_FETCH_TIMEOUT_SECONDS) runs
+    # OUTSIDE the lock so a second caller (e.g. a second tab loading at
+    # startup) is not blocked for the whole timeout. With a 24h TTL a
+    # concurrent double-fetch is rare and harmless; the cache is re-read under
+    # the lock before writing so the last write stays consistent.
+    ts_fresh_remote = TSFetchRemoteVersionString()
+    with _TS_VERSION_CACHE_LOCK:
+        ts_cached = _TSReadVersionCheckFile(ts_cache_dir)
         ts_updated = dict(ts_cached)
         ts_updated["last_attempt_at"] = ts_now
         if ts_fresh_remote is not None:
             ts_updated["remote"] = ts_fresh_remote
             ts_updated["checked_at"] = ts_now
         _TSWriteVersionCheckFile(ts_cache_dir, ts_updated)
-        if ts_fresh_remote is not None:
-            return ts_fresh_remote
-        ts_stale_remote = ts_cached.get("remote")
-        return ts_stale_remote if isinstance(ts_stale_remote, str) else None
+    if ts_fresh_remote is not None:
+        return ts_fresh_remote
+    ts_stale_remote = ts_cached.get("remote")
+    return ts_stale_remote if isinstance(ts_stale_remote, str) else None
 
 
 def TSCollectVersionInfo(ts_cache_dir: Path) -> dict[str, Any]:

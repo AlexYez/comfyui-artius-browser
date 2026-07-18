@@ -329,11 +329,15 @@ class TSDatabase:
                 ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id = self._TSDoUpsertAsset(ts_payload, ts_lookup_cache)
                 ts_asset_ids.append(ts_asset_id)
                 ts_touched_folders.add((ts_root_lookup_id, ts_folder_lookup_id))
+            # Recompute inside the transaction so the companion flags commit
+            # atomically with the upserts they describe: a crash between COMMIT
+            # and the recompute would otherwise leave stale is_companion_image
+            # values until the next time each folder is touched.
+            self._TSRecomputeCompanionFlags(ts_touched_folders)
         except Exception:
             ts_connection.execute("ROLLBACK")
             raise
         ts_connection.execute("COMMIT")
-        self._TSRecomputeCompanionFlags(ts_touched_folders)
         if not ts_return_rows:
             # Hot-path variant for callers that ignore the rows (scan hash
             # phase): skips one assets_view SELECT per upserted asset.

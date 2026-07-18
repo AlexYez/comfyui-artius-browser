@@ -59,6 +59,12 @@ def TSSetProgressConsole(ts_enabled: bool) -> None:
 def TSIsProgressConsole() -> bool:
     return _TS_PROGRESS_ENABLED
 
+# Verbose actions whose prefix matches any entry here are dropped even when
+# verbose logging is ON — they are high-frequency, low-signal events (per-asset
+# upserts, per-request route hits, scan bookkeeping) that would drown out the
+# rare events worth reading. This is an UNCONDITIONAL filter: enabling verbose
+# will not surface these. To debug one of them, temporarily remove its prefix
+# from this tuple.
 TS_SUPPRESSED_VERBOSE_PREFIXES = (
     "storage.",
     "db.connection.",

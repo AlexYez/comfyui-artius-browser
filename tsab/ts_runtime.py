@@ -1,7 +1,6 @@
 ﻿from __future__ import annotations
 
 import logging
-import threading
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +31,7 @@ from .ts_settings import TS_EVENT_ASSET_UPSERT
 from .ts_storage import TSStoragePaths
 from .ts_tools import TSToolLocator
 from .ts_types import TSAssetStat
-from .ts_utils import TSNormalizePathString, TSRelativePosixPath
+from .ts_utils import TSKeyedLockRegistry, TSNormalizePathString, TSRelativePosixPath
 from .ts_workflows import TSWorkflowService
 
 TSLogger = logging.getLogger("TSArtiusBrowser")
@@ -90,8 +89,11 @@ class TSAssetBrowserRuntime:
             ts_ensure_metadata=self._TSEnsureMetadata,
         )
         self.ts_bootstrapped = False
-        self.ts_asset_locks: dict[int, threading.Lock] = {}
-        self.ts_asset_locks_guard = threading.Lock()
+        # Per-asset locks are reference-counted and reclaimed once released so
+        # the map cannot grow without bound across a long session on a large
+        # library (one Lock per asset id ever touched used to leak until
+        # restart).
+        self.ts_asset_lock_registry = TSKeyedLockRegistry()
         self.ts_3d_viewer_module_urls: dict[str, str | None] = {}
         TSLogVerbose("runtime.initialized")
 
@@ -140,13 +142,10 @@ class TSAssetBrowserRuntime:
             ts_diagnostics["root_count"] = None
         return ts_diagnostics
 
-    def _TSGetAssetLock(self, ts_asset_id: int) -> threading.Lock:
-        with self.ts_asset_locks_guard:
-            ts_lock = self.ts_asset_locks.get(ts_asset_id)
-            if ts_lock is None:
-                ts_lock = threading.Lock()
-                self.ts_asset_locks[ts_asset_id] = ts_lock
-            return ts_lock
+    def _TSGetAssetLock(self, ts_asset_id: int):
+        # Returns a context manager (reference-counted lock handle). Callers use
+        # `with self._TSGetAssetLock(id):`, matching the previous raw-Lock usage.
+        return self.ts_asset_lock_registry(ts_asset_id)
 
     def TSBootstrap(self) -> None:
         if self.ts_bootstrapped:

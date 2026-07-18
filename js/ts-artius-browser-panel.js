@@ -1612,6 +1612,15 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return;
         }
         const tsIncomingItems = Array.isArray(tsPayload.items) ? tsPayload.items : [];
+        // The revalidated payload is only the first page. If the user scrolled
+        // and appended pages while the revalidation was in flight (tsLoading
+        // only guards the current fetch), tsItems holds more than one page —
+        // replacing it with the first page alone would collapse the list and
+        // jump the scroll position. Skip the swap; the appended tail stays
+        // authoritative and the next full reset picks up any first-page change.
+        if (this.tsState.tsItems.length > tsIncomingItems.length) {
+            return;
+        }
         const tsBuildItemKey = (tsItem) => `${tsItem?.id ?? ""}:${tsItem?.mtime_ns ?? ""}:${tsItem?.has_preview ?? ""}`;
         const tsCurrentKey = this.tsState.tsItems.map(tsBuildItemKey).join("|");
         const tsIncomingKey = tsIncomingItems.map(tsBuildItemKey).join("|");

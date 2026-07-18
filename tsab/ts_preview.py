@@ -5,7 +5,7 @@ import hashlib
 import io
 import logging
 import shutil
-import threading
+import time
 from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
 
@@ -51,8 +51,14 @@ from .ts_settings import (
     TS_WAVEFORM_WIDTH_MAX,
     TS_WAVEFORM_WIDTH_MIN,
 )
-from .ts_utils import TSNormalizePathString, TSRelativePosixPath
+from .ts_utils import TSKeyedLockRegistry, TSNormalizePathString, TSRelativePosixPath
 
+
+# Orphaned-preview reconciliation skips files younger than this: an on-demand
+# preview generated after the referenced-paths snapshot but before the
+# end-of-scan directory walk would otherwise be deleted as a false orphan and
+# have to be regenerated (a visible preview flicker).
+TS_ORPHAN_MIN_AGE_SECONDS = 600
 
 # SoundCloud-style waveform rendering: discrete vertical bars filled with a
 # greenish steel gradient. Geometry is in source pixels (waveform_width/height);
@@ -92,23 +98,17 @@ class TSPreviewCache:
             "audio": ("placeholder-audio", "AUD"),
             "3d": ("placeholder-3d", "3D"),
         }
-        self.ts_preview_key_locks: dict[tuple[str, str], threading.Lock] = {}
-        self.ts_preview_key_locks_guard = threading.Lock()
-
-    def _TSGetPreviewKeyLock(self, ts_folder_name: str, ts_preview_key: str) -> threading.Lock:
         # Scan hash-workers can hit two identical files concurrently (same
         # content hash => same preview key => same output and temp paths).
         # Serializing generation per output key prevents interleaved writes
         # from persisting a corrupt preview; the second worker then sees the
-        # finished file and returns it. Lock objects are tiny and bounded by
-        # the number of distinct previews generated in this process.
-        ts_lock_key = (ts_folder_name, ts_preview_key)
-        with self.ts_preview_key_locks_guard:
-            ts_lock = self.ts_preview_key_locks.get(ts_lock_key)
-            if ts_lock is None:
-                ts_lock = threading.Lock()
-                self.ts_preview_key_locks[ts_lock_key] = ts_lock
-            return ts_lock
+        # finished file and returns it. The registry reference-counts and frees
+        # per-key locks so a 100k-file rebuild does not leak one Lock per
+        # distinct preview until the process restarts.
+        self.ts_preview_key_lock_registry = TSKeyedLockRegistry()
+
+    def _TSGetPreviewKeyLock(self, ts_folder_name: str, ts_preview_key: str):
+        return self.ts_preview_key_lock_registry((ts_folder_name, ts_preview_key))
 
     def TSBuildPreviewPath(self, ts_preview_key: str, ts_folder_name: str, ts_extension: str | None = None) -> Path:
         ts_base_directory = {
@@ -399,7 +399,11 @@ class TSPreviewCache:
             TSLogVerbose("preview.placeholder.failed", label=ts_label, preview_path=str(ts_output_path), error=str(ts_error))
             return ""
 
-    def TSPurgeOrphanedPreviews(self, ts_referenced_preview_paths: set[str]) -> int:
+    def TSPurgeOrphanedPreviews(
+        self,
+        ts_referenced_preview_paths: set[str],
+        ts_min_age_seconds: float = TS_ORPHAN_MIN_AGE_SECONDS,
+    ) -> int:
         # Reconcile generated preview files against the paths the database still
         # references, deleting the orphans. Inline purging already handles the
         # common cases (asset deleted / re-hashed); this is the safety net for
@@ -413,6 +417,7 @@ class TSPreviewCache:
             if ts_path
         }
         ts_removed = 0
+        ts_now = time.time()
         for ts_directory in (
             self.ts_storage_paths.ts_thumbnail_directory,
             self.ts_storage_paths.ts_video_frame_directory,
@@ -428,6 +433,12 @@ class TSPreviewCache:
                         continue
                     ts_relative_path = self.TSRelativePreviewPath(ts_file_path)
                     if ts_relative_path in ts_referenced:
+                        continue
+                    # A file freshly written by a concurrent on-demand generator
+                    # (created after the DB snapshot, not yet in ts_referenced)
+                    # is not an orphan; skip it and let the next full scan
+                    # reconcile it once the DB row is guaranteed visible.
+                    if ts_min_age_seconds > 0 and (ts_now - ts_file_path.stat().st_mtime) < ts_min_age_seconds:
                         continue
                     ts_file_path.unlink()
                     ts_removed += 1
@@ -520,14 +531,12 @@ class TSPreviewCache:
         self,
         ts_source_preview_path: Path,
         ts_output_path: Path,
-        ts_resize_to_thumbnail: bool = True,
     ) -> None:
         try:
             with Image.open(ts_source_preview_path) as ts_image:
                 self._TSPrepareSourceImageForThumbnail(ts_image, self._TSThumbnailSize())
                 ts_image = ImageOps.exif_transpose(ts_image)
-                if ts_resize_to_thumbnail:
-                    self._TSApplyThumbnailResize(ts_image)
+                self._TSApplyThumbnailResize(ts_image)
                 self._TSSavePreviewImage(ts_image, ts_output_path)
         finally:
             if ts_source_preview_path.exists():

@@ -4,9 +4,11 @@ import json
 import math
 import os
 import re
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 def TSNormalizePathString(ts_path_value: str | os.PathLike[str]) -> str:
@@ -116,6 +118,51 @@ def TSParseDateToEpoch(ts_value: str | None, ts_end_of_day: bool = False) -> int
         ts_date = ts_date.replace(hour=23, minute=59, second=59)
     ts_date = ts_date.replace(tzinfo=timezone.utc)
     return int(ts_date.timestamp())
+
+
+class TSKeyedLockRegistry:
+    """Hand out one lock per key and reclaim it once no caller holds it.
+
+    Prevents unbounded growth of a per-key lock dict on a long-lived server
+    with a very large library (asset locks, preview-key locks): an entry is
+    created on first use, reference-counted while callers hold the returned
+    context manager, and removed when the last holder releases it.
+
+    The reference count is incremented under the guard *before* the handle is
+    returned, so an entry can never be evicted while a live handle still points
+    at its lock — that invariant is what makes eviction safe. If it were
+    dropped, two callers could obtain two different lock objects for the same
+    key (one from the dict, one freshly created after eviction) and both enter
+    the critical section at once.
+    """
+
+    def __init__(self) -> None:
+        self._ts_guard = threading.Lock()
+        self._ts_entries: dict[Any, list] = {}
+
+    def __call__(self, ts_key: Any):
+        with self._ts_guard:
+            ts_entry = self._ts_entries.get(ts_key)
+            if ts_entry is None:
+                ts_entry = [threading.Lock(), 0]
+                self._ts_entries[ts_key] = ts_entry
+            ts_entry[1] += 1
+            ts_lock = ts_entry[0]
+        return self._TSHold(ts_key, ts_lock)
+
+    @contextmanager
+    def _TSHold(self, ts_key: Any, ts_lock: threading.Lock) -> Iterator[threading.Lock]:
+        ts_lock.acquire()
+        try:
+            yield ts_lock
+        finally:
+            ts_lock.release()
+            with self._ts_guard:
+                ts_entry = self._ts_entries.get(ts_key)
+                if ts_entry is not None:
+                    ts_entry[1] -= 1
+                    if ts_entry[1] <= 0:
+                        del self._ts_entries[ts_key]
 
 
 def TSParseAssetCursor(ts_query: Any) -> dict[str, Any] | None:

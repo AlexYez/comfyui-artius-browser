@@ -50,18 +50,12 @@ export const tsPanelSettings = Object.freeze({
         ttlMs: 30000,
         capacity: 10,
     },
-    previewWarmup: {
-        concurrency: 2,
-        maxVisibleRequests: 8,
-        debounceMs: 120,
-    },
     threeDThumbnails: {
         concurrency: 1,
         visibleLimit: 4,
         captureSize: 480,
         warmFrames: 2,
         backgroundPageSize: 8,
-        idlePollMs: 120,
         cacheCapacity: 64,
     },
     previewSizeRange: {

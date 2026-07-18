@@ -1,6 +1,10 @@
 export function tsBuildStageMarkup(tsAsset, tsDeps) {
-    const tsFileURL = tsDeps.apiURL(tsAsset.file_url);
-    const tsPreviewURL = tsDeps.apiURL(tsAsset.preview_url);
+    // Asset/preview URLs are backend-generated and safe today, but they are
+    // interpolated into HTML attributes just like alt/aria-label — escape them
+    // the same way so a future URL-format change cannot silently break out of
+    // the attribute. Escaping is a no-op for the current "&"-free/id-based URLs.
+    const tsFileURL = tsDeps.escapeAttribute(tsDeps.apiURL(tsAsset.file_url));
+    const tsPreviewURL = tsDeps.escapeAttribute(tsDeps.apiURL(tsAsset.preview_url));
     const tsAssetLabel = tsDeps.t("label.asset", "Asset");
     if (tsAsset.type === "image") {
         if (tsDeps.isImageCompareMode()) {
@@ -11,8 +15,8 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                 return `
                     <div class="ts-image-compare-shell" data-count="2">
                         <div class="ts-image-compare-wipe">
-                            <img class="ts-image-compare-before" src="${tsDeps.apiURL(tsBeforeItem.file_url)}" alt="${tsDeps.escapeAttribute(tsBeforeItem.filename || tsImageLabel)}">
-                            <img class="ts-image-compare-after" src="${tsDeps.apiURL(tsAfterItem.file_url)}" alt="${tsDeps.escapeAttribute(tsAfterItem.filename || tsImageLabel)}">
+                            <img class="ts-image-compare-before" src="${tsDeps.escapeAttribute(tsDeps.apiURL(tsBeforeItem.file_url))}" alt="${tsDeps.escapeAttribute(tsBeforeItem.filename || tsImageLabel)}">
+                            <img class="ts-image-compare-after" src="${tsDeps.escapeAttribute(tsDeps.apiURL(tsAfterItem.file_url))}" alt="${tsDeps.escapeAttribute(tsAfterItem.filename || tsImageLabel)}">
                             <div class="ts-image-compare-divider"></div>
                             <input class="ts-image-compare-range" type="range" min="0" max="100" value="50" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.imageCompareWipe", "Image comparison slider"))}">
                         </div>
@@ -23,7 +27,7 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                 <div class="ts-image-compare-shell ts-image-compare-grid" data-count="${tsCompareItems.length}">
                     ${tsCompareItems.map((tsCompareItem) => `
                         <div class="ts-image-compare-card">
-                            <img src="${tsDeps.apiURL(tsCompareItem.file_url)}" alt="${tsDeps.escapeAttribute(tsCompareItem.filename || tsImageLabel)}">
+                            <img src="${tsDeps.escapeAttribute(tsDeps.apiURL(tsCompareItem.file_url))}" alt="${tsDeps.escapeAttribute(tsCompareItem.filename || tsImageLabel)}">
                         </div>
                     `).join("")}
                 </div>
@@ -39,7 +43,7 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                 <div class="ts-video-compare-shell" data-count="${tsCompareItems.length}">
                     <div class="ts-video-compare-grid">
                         ${tsCompareItems.map((tsCompareItem) => {
-                            const tsCompareURL = tsDeps.apiURL(tsCompareItem.file_url);
+                            const tsCompareURL = tsDeps.escapeAttribute(tsDeps.apiURL(tsCompareItem.file_url));
                             const tsPrimary = tsCompareItem.id === tsAsset.id;
                             return `
                                 <div class="ts-video-compare-card" data-primary="${String(tsPrimary)}">
@@ -79,7 +83,7 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
         return `
             <div class="ts-audio-shell">
                 <div class="ts-audio-waveform-shell" data-audio-seek="true">
-                    <div class="ts-audio-waveform-image" style="background-image:url('${tsDeps.escapeAttribute(tsPreviewURL)}')" aria-label="${tsDeps.escapeAttribute(tsAsset.filename || tsDeps.t("label.audioWaveform", "Audio waveform"))}"></div>
+                    <div class="ts-audio-waveform-image" style="background-image:url('${tsPreviewURL}')" aria-label="${tsDeps.escapeAttribute(tsAsset.filename || tsDeps.t("label.audioWaveform", "Audio waveform"))}"></div>
                     <div class="ts-audio-progress"></div>
                     <div class="ts-audio-playhead"></div>
                 </div>

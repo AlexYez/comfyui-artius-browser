@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-07-18
+
+### Fixed
+- Opening the detail view / lightbox for an image with no PNG prompt metadata
+  no longer re-reads the file, re-writes its database row and re-emits an
+  asset-upsert event on every single open. The empty metadata blob is now
+  treated as a finished state; the one-time `prompt_parts_version` 5 upgrade for
+  images that do carry prompt data is unchanged.
+- Stale-while-revalidate no longer collapses the asset grid back to the first
+  page (losing the scroll position) when a revalidation completes after the user
+  has scrolled and appended more pages.
+- The `GET /asset_browser/version` remote check no longer serializes concurrent
+  callers on the network round-trip: the HTTP fetch now runs outside the cache
+  lock.
+- End-of-scan orphaned-preview reconciliation now skips preview files younger
+  than 10 minutes, so a preview generated on demand mid-scan is not deleted as a
+  false orphan and immediately regenerated.
+- Batch asset upserts now recompute the `is_companion_image` flags inside the
+  same transaction, so the flags always commit atomically with the rows they
+  describe.
+
+### Changed
+- Per-asset and per-preview-key locks are now reference-counted and reclaimed
+  when released, so their registries no longer grow for the lifetime of the
+  process on very large libraries.
+- Internal cleanup: removed dead front-end settings (`previewWarmup`,
+  `threeDThumbnails.idlePollMs`) and an unused preview-normalization parameter;
+  decoupled `Content-Length` parsing from asset-id parsing; asset URLs in the
+  lightbox stage markup are now HTML-attribute-escaped for consistency with the
+  surrounding attributes.
+
 ## [1.6.3] - 2026-07-07
 
 ### Added

@@ -40,16 +40,20 @@ def TSBuildRouteVariants(ts_path: str) -> tuple[str, str]:
     return ts_path, f"/api{ts_path}"
 
 
+def TSParsePositiveInt(ts_value) -> int | None:
+    ts_text = str(ts_value or "").strip()
+    if not ts_text.isdigit():
+        return None
+    ts_parsed = int(ts_text)
+    return ts_parsed if ts_parsed > 0 else None
+
+
 def TSParsePositiveAssetId(ts_value) -> int | None:
     if isinstance(ts_value, bool):
         return None
     if isinstance(ts_value, int):
         return ts_value if ts_value > 0 else None
-    ts_text = str(ts_value or "").strip()
-    if not ts_text.isdigit():
-        return None
-    ts_asset_id = int(ts_text)
-    return ts_asset_id if ts_asset_id > 0 else None
+    return TSParsePositiveInt(ts_value)
 
 
 def TSParseRouteAssetId(ts_request) -> int:
@@ -94,7 +98,7 @@ def TSRejectUnsupportedAssetQueryParams(ts_query) -> None:
 
 def TSEnforceRequestContentLength(ts_request, ts_max_bytes: int) -> None:
     ts_headers = getattr(ts_request, "headers", {}) or {}
-    ts_content_length = TSParsePositiveAssetId(ts_headers.get("Content-Length") or ts_headers.get("content-length"))
+    ts_content_length = TSParsePositiveInt(ts_headers.get("Content-Length") or ts_headers.get("content-length"))
     if ts_content_length is not None and ts_content_length > ts_max_bytes:
         raise TSWeb.HTTPRequestEntityTooLarge(max_size=ts_max_bytes, actual_size=ts_content_length)
 
