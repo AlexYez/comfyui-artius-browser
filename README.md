@@ -51,6 +51,10 @@
 | 🗑️ **Safe delete** | Sends to system trash via `send2trash` — never hard-delete |
 | 🔄 **Autoscan / Rebuild Cache** | Refresh on demand, or rebuild from scratch |
 | 🏷️ **Version label + update badge** | Current version next to the title; checks GitHub once a day, surfaces a `New version available` chip when a newer release ships |
+| 🧲 **Multi-select drag** | Drag a whole selection onto the canvas — one native node per asset, auto-arranged in a grid |
+| 🔔 **Action feedback** | Toast notifications when a copy / delete / load / rescan succeeds or fails — no more silent failures |
+| 🌍 **Localized UI** | Follows ComfyUI's own language setting — English and Russian ship today |
+| ♿ **Accessible grid** | Screen-reader listbox semantics with selection state, plus a keyboard focus ring |
 
 ### 📁 Supported formats
 
@@ -88,24 +92,42 @@ Then **restart ComfyUI** and **hard refresh** the browser with `Ctrl+F5`.
 >
 > Restart ComfyUI after installing, then verify with `ffmpeg -version`.
 
-### ⌨️ Keyboard shortcuts
+### ⌨️ Keyboard & card actions
 
-#### On asset cards
-
-| Key | Action |
-|:---:|---|
-| <kbd>P</kbd> | Copy prompt |
-| <kbd>W</kbd> | Copy workflow *(only when the PNG actually has workflow data)* |
-| <kbd>D</kbd> | Download |
-| <kbd>X</kbd> | Send to system trash *(only where the root allows deletion)* |
-
-#### On workflow cards
+#### Keyboard — asset grid
 
 | Key | Action |
 |:---:|---|
-| <kbd>L</kbd> · double-click | Load workflow into ComfyUI |
-| <kbd>D</kbd> | Download workflow JSON |
-| <kbd>X</kbd> | Trash workflow + matching preview sidecars |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Move the selection |
+| <kbd>Enter</kbd> | Open the lightbox *(or load the workflow in the `Workflows` tab)* |
+
+#### Keyboard — lightbox
+
+| Key | Action |
+|:---:|---|
+| <kbd>Esc</kbd> | Close |
+| <kbd>←</kbd> <kbd>→</kbd> | Previous / next asset *(steps frames in video compare mode)* |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Step one video frame |
+| <kbd>Delete</kbd> | Send to system trash |
+
+#### Card buttons
+
+> These are **buttons on the card** (hover to reveal), not keyboard keys.
+
+| Button | Action |
+|:---:|---|
+| `P` | Copy prompt |
+| `W` | Copy workflow *(only when the PNG actually has workflow data)* |
+| `D` | Download |
+| `X` | Send to system trash *(only where the root allows deletion)* |
+
+#### Workflow card buttons
+
+| Button | Action |
+|:---:|---|
+| `L` · double-click | Load workflow into ComfyUI |
+| `D` | Download workflow JSON |
+| `X` | Trash workflow + matching preview sidecars |
 
 ### 🎯 Native ComfyUI integration
 
@@ -266,6 +288,10 @@ See [CHANGELOG.md](CHANGELOG.md). Format: [Keep a Changelog](https://keepachange
 | 🗑️ **Безопасное удаление** | В системную корзину через `send2trash`, не навсегда |
 | 🔄 **Autoscan / Rebuild Cache** | Обновление по запросу или полная пересборка |
 | 🏷️ **Версия + бейдж обновления** | Текущая версия рядом с заголовком; раз в сутки проверяется GitHub, появляется чип `New version available` при выходе нового релиза |
+| 🧲 **Drag выделения** | Перетащите всё выделение на канвас — по одной нативной ноде на ассет, автоматически разложенные сеткой |
+| 🔔 **Обратная связь** | Всплывающие уведомления при копировании / удалении / загрузке / сканировании — больше никаких «молчаливых» ошибок |
+| 🌍 **Локализация** | Следует языку, выбранному в ComfyUI — уже есть английский и русский |
+| ♿ **Доступность** | Семантика listbox для скринридеров с состоянием выбора и кольцо фокуса для клавиатуры |
 
 ### 🚀 Установка
 
@@ -295,24 +321,42 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 >
 > После установки перезапустите ComfyUI и проверьте: `ffmpeg -version`.
 
-### ⌨️ Горячие клавиши
+### ⌨️ Клавиатура и кнопки карточек
 
-#### На карточке ассета
-
-| Клавиша | Действие |
-|:---:|---|
-| <kbd>P</kbd> | Скопировать `Prompt` |
-| <kbd>W</kbd> | Скопировать workflow *(только если PNG реально содержит workflow)* |
-| <kbd>D</kbd> | Скачать |
-| <kbd>X</kbd> | В системную корзину *(только там, где root разрешает удаление)* |
-
-#### На карточке workflow
+#### Клавиатура — сетка ассетов
 
 | Клавиша | Действие |
 |:---:|---|
-| <kbd>L</kbd> · двойной клик | Загрузить в ComfyUI |
-| <kbd>D</kbd> | Скачать JSON |
-| <kbd>X</kbd> | В корзину workflow + sidecar-превью |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Переместить выделение |
+| <kbd>Enter</kbd> | Открыть лайтбокс *(или загрузить workflow во вкладке `Workflows`)* |
+
+#### Клавиатура — лайтбокс
+
+| Клавиша | Действие |
+|:---:|---|
+| <kbd>Esc</kbd> | Закрыть |
+| <kbd>←</kbd> <kbd>→</kbd> | Предыдущий / следующий ассет *(покадрово в режиме сравнения видео)* |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Шаг на один кадр видео |
+| <kbd>Delete</kbd> | В системную корзину |
+
+#### Кнопки на карточке
+
+> Это **кнопки на карточке** (появляются при наведении), а не горячие клавиши.
+
+| Кнопка | Действие |
+|:---:|---|
+| `P` | Скопировать `Prompt` |
+| `W` | Скопировать workflow *(только если PNG реально содержит workflow)* |
+| `D` | Скачать |
+| `X` | В системную корзину *(только там, где root разрешает удаление)* |
+
+#### Кнопки на карточке workflow
+
+| Кнопка | Действие |
+|:---:|---|
+| `L` · двойной клик | Загрузить в ComfyUI |
+| `D` | Скачать JSON |
+| `X` | В корзину workflow + sidecar-превью |
 
 ### 🛡️ Совместимость
 
@@ -389,6 +433,10 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | 🗑️ **Borrado seguro** | A la papelera del sistema vía `send2trash` — nunca borrado definitivo |
 | 🔄 **Autoscan / Rebuild Cache** | Refresco bajo demanda, o reconstrucción desde cero |
 | 🏷️ **Etiqueta de versión + chip de actualización** | Versión actual junto al título; comprueba GitHub una vez al día y muestra `New version available` cuando hay una nueva |
+| 🧲 **Arrastre de selección múltiple** | Arrastra toda la selección al canvas — un nodo nativo por asset, colocados automáticamente en cuadrícula |
+| 🔔 **Feedback de acciones** | Notificaciones cuando copiar / borrar / cargar / reescanear tiene éxito o falla — se acabaron los fallos silenciosos |
+| 🌍 **Interfaz localizada** | Sigue el idioma configurado en ComfyUI — inglés y ruso disponibles |
+| ♿ **Cuadrícula accesible** | Semántica de listbox para lectores de pantalla con estado de selección, y anillo de foco de teclado |
 
 ### 📁 Formatos soportados
 
@@ -426,24 +474,42 @@ Luego **reinicia ComfyUI** y haz un **hard refresh** del navegador con `Ctrl+F5`
 >
 > Reinicia ComfyUI tras instalarlo y comprueba con `ffmpeg -version`.
 
-### ⌨️ Atajos de teclado
+### ⌨️ Teclado y botones de tarjeta
 
-#### En tarjetas de asset
-
-| Tecla | Acción |
-|:---:|---|
-| <kbd>P</kbd> | Copiar prompt |
-| <kbd>W</kbd> | Copiar workflow *(solo cuando el PNG realmente contiene datos de workflow)* |
-| <kbd>D</kbd> | Descargar |
-| <kbd>X</kbd> | Enviar a la papelera *(solo donde el root permite borrado)* |
-
-#### En tarjetas de workflow
+#### Teclado — cuadrícula de assets
 
 | Tecla | Acción |
 |:---:|---|
-| <kbd>L</kbd> · doble clic | Cargar workflow en ComfyUI |
-| <kbd>D</kbd> | Descargar JSON del workflow |
-| <kbd>X</kbd> | Enviar a la papelera workflow + previews sidecar coincidentes |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Mover la selección |
+| <kbd>Enter</kbd> | Abrir el lightbox *(o cargar el workflow en la pestaña `Workflows`)* |
+
+#### Teclado — lightbox
+
+| Tecla | Acción |
+|:---:|---|
+| <kbd>Esc</kbd> | Cerrar |
+| <kbd>←</kbd> <kbd>→</kbd> | Asset anterior / siguiente *(avanza fotogramas en modo comparación de vídeo)* |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Avanzar un fotograma de vídeo |
+| <kbd>Delete</kbd> | Enviar a la papelera |
+
+#### Botones de la tarjeta
+
+> Son **botones en la tarjeta** (aparecen al pasar el cursor), no teclas.
+
+| Botón | Acción |
+|:---:|---|
+| `P` | Copiar prompt |
+| `W` | Copiar workflow *(solo cuando el PNG realmente contiene datos de workflow)* |
+| `D` | Descargar |
+| `X` | Enviar a la papelera *(solo donde el root permite borrado)* |
+
+#### Botones de la tarjeta de workflow
+
+| Botón | Acción |
+|:---:|---|
+| `L` · doble clic | Cargar workflow en ComfyUI |
+| `D` | Descargar JSON del workflow |
+| `X` | Enviar a la papelera workflow + previews sidecar coincidentes |
 
 ### 🎯 Integración nativa con ComfyUI
 
@@ -596,6 +662,10 @@ Consulta [CHANGELOG.md](CHANGELOG.md). Formato: [Keep a Changelog](https://keepa
 | 🗑️ **安全删除** | 通过 `send2trash` 移至系统回收站 — 永不硬删除 |
 | 🔄 **自动扫描 / 重建缓存** | 按需刷新或从零重建 |
 | 🏷️ **版本标签 + 更新提示** | 标题旁显示当前版本;每天检查一次 GitHub,新版本发布时显示 `New version available` |
+| 🧲 **多选拖拽** | 将整个选择拖到画布 — 每个资产一个原生节点,自动网格排列 |
+| 🔔 **操作反馈** | 复制 / 删除 / 加载 / 扫描成功或失败时弹出提示 — 不再有静默失败 |
+| 🌍 **界面本地化** | 跟随 ComfyUI 的语言设置 — 目前提供英文与俄文 |
+| ♿ **无障碍网格** | 面向屏幕阅读器的 listbox 语义(含选中状态),以及键盘焦点环 |
 
 ### 📁 支持的格式
 
@@ -633,24 +703,42 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 >
 > 安装后重启 ComfyUI,并用 `ffmpeg -version` 验证。
 
-### ⌨️ 快捷键
+### ⌨️ 键盘与卡片按钮
 
-#### 资产卡片上
-
-| 按键 | 操作 |
-|:---:|---|
-| <kbd>P</kbd> | 复制 prompt |
-| <kbd>W</kbd> | 复制 workflow *(仅当 PNG 真正包含 workflow 数据时)* |
-| <kbd>D</kbd> | 下载 |
-| <kbd>X</kbd> | 移至系统回收站 *(仅在 root 允许删除的位置)* |
-
-#### Workflow 卡片上
+#### 键盘 — 资产网格
 
 | 按键 | 操作 |
 |:---:|---|
-| <kbd>L</kbd> · 双击 | 加载到 ComfyUI |
-| <kbd>D</kbd> | 下载 workflow JSON |
-| <kbd>X</kbd> | 将 workflow 与匹配的预览 sidecar 移至回收站 |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | 移动选择 |
+| <kbd>Enter</kbd> | 打开灯箱 *(在 `Workflows` 标签页则加载 workflow)* |
+
+#### 键盘 — 灯箱
+
+| 按键 | 操作 |
+|:---:|---|
+| <kbd>Esc</kbd> | 关闭 |
+| <kbd>←</kbd> <kbd>→</kbd> | 上一个 / 下一个资产 *(视频对比模式下为逐帧)* |
+| <kbd>↑</kbd> <kbd>↓</kbd> | 视频逐帧步进 |
+| <kbd>Delete</kbd> | 移至系统回收站 |
+
+#### 卡片按钮
+
+> 这些是**卡片上的按钮**(悬停显示),不是键盘快捷键。
+
+| 按钮 | 操作 |
+|:---:|---|
+| `P` | 复制 prompt |
+| `W` | 复制 workflow *(仅当 PNG 真正包含 workflow 数据时)* |
+| `D` | 下载 |
+| `X` | 移至系统回收站 *(仅在 root 允许删除的位置)* |
+
+#### Workflow 卡片按钮
+
+| 按钮 | 操作 |
+|:---:|---|
+| `L` · 双击 | 加载到 ComfyUI |
+| `D` | 下载 workflow JSON |
+| `X` | 将 workflow 与匹配的预览 sidecar 移至回收站 |
 
 ### 🎯 ComfyUI 原生集成
 
@@ -804,6 +892,10 @@ ComfyUI/output/.ts_artius_browser/
 | 🗑️ **安全な削除** | `send2trash` 経由でシステムのゴミ箱へ — 完全削除はしません |
 | 🔄 **自動スキャン / キャッシュ再構築** | オンデマンドの更新、またはゼロからの再構築 |
 | 🏷️ **バージョンラベル + 更新通知** | タイトル横に現在のバージョン;1 日 1 回 GitHub をチェックし、新しいリリースがあれば `New version available` チップを表示 |
+| 🧲 **複数選択のドラッグ** | 選択全体をキャンバスにドラッグ — アセットごとにネイティブノードを 1 つ、自動でグリッド配置 |
+| 🔔 **操作フィードバック** | コピー / 削除 / 読み込み / 再スキャンの成功・失敗をトースト表示 — 無言の失敗をなくします |
+| 🌍 **UI ローカライズ** | ComfyUI の言語設定に追従 — 現在は英語とロシア語を同梱 |
+| ♿ **アクセシブルなグリッド** | 選択状態を持つスクリーンリーダー向け listbox セマンティクスとキーボードフォーカスリング |
 
 ### 📁 対応フォーマット
 
@@ -841,24 +933,42 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 >
 > インストール後に ComfyUI を再起動し、`ffmpeg -version` で確認してください。
 
-### ⌨️ キーボードショートカット
+### ⌨️ キーボードとカードボタン
 
-#### アセットカード上
-
-| キー | 動作 |
-|:---:|---|
-| <kbd>P</kbd> | プロンプトをコピー |
-| <kbd>W</kbd> | workflow をコピー *(PNG が実際に workflow データを持っている場合のみ)* |
-| <kbd>D</kbd> | ダウンロード |
-| <kbd>X</kbd> | システムのゴミ箱へ *(root が削除を許可している場所のみ)* |
-
-#### Workflow カード上
+#### キーボード — アセットグリッド
 
 | キー | 動作 |
 |:---:|---|
-| <kbd>L</kbd> · ダブルクリック | ComfyUI に読み込む |
-| <kbd>D</kbd> | workflow JSON をダウンロード |
-| <kbd>X</kbd> | workflow + 一致するプレビューサイドカーをゴミ箱へ |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | 選択を移動 |
+| <kbd>Enter</kbd> | ライトボックスを開く *(`Workflows` タブでは workflow を読み込む)* |
+
+#### キーボード — ライトボックス
+
+| キー | 動作 |
+|:---:|---|
+| <kbd>Esc</kbd> | 閉じる |
+| <kbd>←</kbd> <kbd>→</kbd> | 前 / 次のアセット *(動画比較モードではフレーム送り)* |
+| <kbd>↑</kbd> <kbd>↓</kbd> | 動画を 1 フレーム送る |
+| <kbd>Delete</kbd> | システムのゴミ箱へ |
+
+#### カードのボタン
+
+> これらは**カード上のボタン**(ホバーで表示)であり、キーボードショートカットではありません。
+
+| ボタン | 動作 |
+|:---:|---|
+| `P` | プロンプトをコピー |
+| `W` | workflow をコピー *(PNG が実際に workflow データを持っている場合のみ)* |
+| `D` | ダウンロード |
+| `X` | システムのゴミ箱へ *(root が削除を許可している場所のみ)* |
+
+#### Workflow カードのボタン
+
+| ボタン | 動作 |
+|:---:|---|
+| `L` · ダブルクリック | ComfyUI に読み込む |
+| `D` | workflow JSON をダウンロード |
+| `X` | workflow + 一致するプレビューサイドカーをゴミ箱へ |
 
 ### 🎯 ComfyUI ネイティブ統合
 
@@ -1012,6 +1122,10 @@ ComfyUI/output/.ts_artius_browser/
 | 🗑️ **안전한 삭제** | `send2trash`를 통해 시스템 휴지통으로 — 영구 삭제 안 함 |
 | 🔄 **자동 스캔 / 캐시 재구성** | 필요시 새로고침, 또는 처음부터 재구성 |
 | 🏷️ **버전 라벨 + 업데이트 칩** | 제목 옆에 현재 버전; GitHub 을 하루 1 회 확인하고 새 릴리스가 있으면 `New version available` 칩 표시 |
+| 🧲 **다중 선택 드래그** | 선택 전체를 캔버스로 드래그 — 에셋마다 네이티브 노드 1 개, 자동 격자 배치 |
+| 🔔 **동작 피드백** | 복사 / 삭제 / 불러오기 / 재스캔의 성공·실패를 토스트로 알림 — 조용한 실패 없음 |
+| 🌍 **UI 현지화** | ComfyUI 의 언어 설정을 따름 — 현재 영어와 러시아어 제공 |
+| ♿ **접근성 그리드** | 선택 상태를 포함한 스크린 리더용 listbox 시맨틱과 키보드 포커스 링 |
 
 ### 📁 지원 형식
 
@@ -1049,24 +1163,42 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 >
 > 설치 후 ComfyUI 를 재시작하고 `ffmpeg -version` 으로 확인하세요.
 
-### ⌨️ 키보드 단축키
+### ⌨️ 키보드와 카드 버튼
 
-#### 에셋 카드에서
-
-| 키 | 동작 |
-|:---:|---|
-| <kbd>P</kbd> | 프롬프트 복사 |
-| <kbd>W</kbd> | workflow 복사 *(PNG 에 실제로 workflow 데이터가 있을 때만)* |
-| <kbd>D</kbd> | 다운로드 |
-| <kbd>X</kbd> | 시스템 휴지통으로 *(root 가 삭제를 허용하는 경우에만)* |
-
-#### Workflow 카드에서
+#### 키보드 — 에셋 그리드
 
 | 키 | 동작 |
 |:---:|---|
-| <kbd>L</kbd> · 더블 클릭 | ComfyUI 로 불러오기 |
-| <kbd>D</kbd> | workflow JSON 다운로드 |
-| <kbd>X</kbd> | workflow + 일치하는 미리보기 sidecar 를 휴지통으로 |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | 선택 이동 |
+| <kbd>Enter</kbd> | 라이트박스 열기 *(`Workflows` 탭에서는 workflow 불러오기)* |
+
+#### 키보드 — 라이트박스
+
+| 키 | 동작 |
+|:---:|---|
+| <kbd>Esc</kbd> | 닫기 |
+| <kbd>←</kbd> <kbd>→</kbd> | 이전 / 다음 에셋 *(영상 비교 모드에서는 프레임 이동)* |
+| <kbd>↑</kbd> <kbd>↓</kbd> | 영상 한 프레임 이동 |
+| <kbd>Delete</kbd> | 시스템 휴지통으로 |
+
+#### 카드 버튼
+
+> 이는 **카드 위의 버튼**(마우스를 올리면 표시)이며 키보드 단축키가 아닙니다.
+
+| 버튼 | 동작 |
+|:---:|---|
+| `P` | 프롬프트 복사 |
+| `W` | workflow 복사 *(PNG 에 실제로 workflow 데이터가 있을 때만)* |
+| `D` | 다운로드 |
+| `X` | 시스템 휴지통으로 *(root 가 삭제를 허용하는 경우에만)* |
+
+#### Workflow 카드 버튼
+
+| 버튼 | 동작 |
+|:---:|---|
+| `L` · 더블 클릭 | ComfyUI 로 불러오기 |
+| `D` | workflow JSON 다운로드 |
+| `X` | workflow + 일치하는 미리보기 sidecar 를 휴지통으로 |
 
 ### 🎯 ComfyUI 네이티브 통합
 
@@ -1220,6 +1352,10 @@ ComfyUI/output/.ts_artius_browser/
 | 🗑️ **Sicheres Löschen** | In den Systempapierkorb via `send2trash` — niemals endgültig |
 | 🔄 **Autoscan / Cache neu aufbauen** | Aktualisierung auf Abruf oder kompletter Neuaufbau |
 | 🏷️ **Versionslabel + Update-Chip** | Aktuelle Version neben dem Titel; prüft GitHub einmal täglich und blendet `New version available` ein, wenn eine neuere Version erscheint |
+| 🧲 **Mehrfachauswahl ziehen** | Ganze Auswahl auf die Canvas ziehen — ein nativer Node pro Asset, automatisch im Raster angeordnet |
+| 🔔 **Aktions-Feedback** | Toast-Meldungen, wenn Kopieren / Löschen / Laden / Rescan gelingt oder fehlschlägt — keine stillen Fehler mehr |
+| 🌍 **Lokalisierte Oberfläche** | Folgt der Spracheinstellung von ComfyUI — Englisch und Russisch sind enthalten |
+| ♿ **Barrierefreies Raster** | Listbox-Semantik für Screenreader inkl. Auswahlstatus, plus Tastatur-Fokusring |
 
 ### 📁 Unterstützte Formate
 
@@ -1257,24 +1393,42 @@ Danach **ComfyUI neu starten** und im Browser mit `Ctrl+F5` einen **Hard Refresh
 >
 > Starte ComfyUI nach der Installation neu und prüfe mit `ffmpeg -version`.
 
-### ⌨️ Tastaturkürzel
+### ⌨️ Tastatur und Karten-Buttons
 
-#### Auf Asset-Karten
-
-| Taste | Aktion |
-|:---:|---|
-| <kbd>P</kbd> | Prompt kopieren |
-| <kbd>W</kbd> | Workflow kopieren *(nur wenn das PNG tatsächlich Workflow-Daten enthält)* |
-| <kbd>D</kbd> | Herunterladen |
-| <kbd>X</kbd> | In den Systempapierkorb *(nur dort, wo das Root das Löschen erlaubt)* |
-
-#### Auf Workflow-Karten
+#### Tastatur — Asset-Raster
 
 | Taste | Aktion |
 |:---:|---|
-| <kbd>L</kbd> · Doppelklick | Workflow in ComfyUI laden |
-| <kbd>D</kbd> | Workflow-JSON herunterladen |
-| <kbd>X</kbd> | Workflow + passende Vorschau-Sidecars in den Papierkorb |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Auswahl bewegen |
+| <kbd>Enter</kbd> | Lightbox öffnen *(im Tab `Workflows` den Workflow laden)* |
+
+#### Tastatur — Lightbox
+
+| Taste | Aktion |
+|:---:|---|
+| <kbd>Esc</kbd> | Schließen |
+| <kbd>←</kbd> <kbd>→</kbd> | Vorheriges / nächstes Asset *(im Video-Vergleich Einzelbildschritte)* |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Ein Videobild weiter |
+| <kbd>Delete</kbd> | In den Systempapierkorb |
+
+#### Karten-Buttons
+
+> Das sind **Buttons auf der Karte** (erscheinen beim Hovern), keine Tastaturkürzel.
+
+| Button | Aktion |
+|:---:|---|
+| `P` | Prompt kopieren |
+| `W` | Workflow kopieren *(nur wenn das PNG tatsächlich Workflow-Daten enthält)* |
+| `D` | Herunterladen |
+| `X` | In den Systempapierkorb *(nur dort, wo das Root das Löschen erlaubt)* |
+
+#### Buttons auf Workflow-Karten
+
+| Button | Aktion |
+|:---:|---|
+| `L` · Doppelklick | Workflow in ComfyUI laden |
+| `D` | Workflow-JSON herunterladen |
+| `X` | Workflow + passende Vorschau-Sidecars in den Papierkorb |
 
 ### 🎯 Native ComfyUI-Integration
 
@@ -1428,6 +1582,10 @@ Siehe [CHANGELOG.md](CHANGELOG.md). Format: [Keep a Changelog](https://keepachan
 | 🗑️ **Eliminazione sicura** | Inviato al cestino di sistema tramite `send2trash` — mai eliminato definitivamente |
 | 🔄 **Autoscan / Ricostruzione cache** | Aggiornamento on-demand, o ricostruzione da zero |
 | 🏷️ **Etichetta versione + chip aggiornamento** | Versione corrente accanto al titolo; controlla GitHub una volta al giorno e mostra `New version available` quando esce una nuova release |
+| 🧲 **Trascinamento multi-selezione** | Trascina l'intera selezione sul canvas — un nodo nativo per asset, disposti automaticamente a griglia |
+| 🔔 **Feedback delle azioni** | Notifiche quando copia / elimina / carica / riscansione riesce o fallisce — niente più errori silenziosi |
+| 🌍 **Interfaccia localizzata** | Segue la lingua impostata in ComfyUI — inglese e russo già inclusi |
+| ♿ **Griglia accessibile** | Semantica listbox per screen reader con stato di selezione, più anello di focus da tastiera |
 
 ### 📁 Formati supportati
 
@@ -1465,24 +1623,42 @@ Poi **riavvia ComfyUI** e fai un **hard refresh** del browser con `Ctrl+F5`.
 >
 > Riavvia ComfyUI dopo l'installazione e verifica con `ffmpeg -version`.
 
-### ⌨️ Scorciatoie da tastiera
+### ⌨️ Tastiera e pulsanti della card
 
-#### Su card di asset
-
-| Tasto | Azione |
-|:---:|---|
-| <kbd>P</kbd> | Copia prompt |
-| <kbd>W</kbd> | Copia workflow *(solo quando il PNG contiene davvero dati di workflow)* |
-| <kbd>D</kbd> | Scarica |
-| <kbd>X</kbd> | Invia al cestino di sistema *(solo dove il root permette l'eliminazione)* |
-
-#### Su card di workflow
+#### Tastiera — griglia degli asset
 
 | Tasto | Azione |
 |:---:|---|
-| <kbd>L</kbd> · doppio clic | Carica workflow in ComfyUI |
-| <kbd>D</kbd> | Scarica JSON del workflow |
-| <kbd>X</kbd> | Sposta workflow + anteprime sidecar corrispondenti nel cestino |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Sposta la selezione |
+| <kbd>Enter</kbd> | Apri il lightbox *(nella scheda `Workflows` carica il workflow)* |
+
+#### Tastiera — lightbox
+
+| Tasto | Azione |
+|:---:|---|
+| <kbd>Esc</kbd> | Chiudi |
+| <kbd>←</kbd> <kbd>→</kbd> | Asset precedente / successivo *(avanza per fotogrammi nel confronto video)* |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Avanza di un fotogramma video |
+| <kbd>Delete</kbd> | Invia al cestino di sistema |
+
+#### Pulsanti della card
+
+> Sono **pulsanti sulla card** (compaiono al passaggio del mouse), non tasti.
+
+| Pulsante | Azione |
+|:---:|---|
+| `P` | Copia prompt |
+| `W` | Copia workflow *(solo quando il PNG contiene davvero dati di workflow)* |
+| `D` | Scarica |
+| `X` | Invia al cestino di sistema *(solo dove il root permette l'eliminazione)* |
+
+#### Pulsanti della card workflow
+
+| Pulsante | Azione |
+|:---:|---|
+| `L` · doppio clic | Carica workflow in ComfyUI |
+| `D` | Scarica JSON del workflow |
+| `X` | Sposta workflow + anteprime sidecar corrispondenti nel cestino |
 
 ### 🎯 Integrazione nativa con ComfyUI
 
@@ -1637,6 +1813,10 @@ Vedi [CHANGELOG.md](CHANGELOG.md). Formato: [Keep a Changelog](https://keepachan
 | 🗑️ **Suppression sûre** | Envoyé à la corbeille système via `send2trash` — jamais de suppression définitive |
 | 🔄 **Autoscan / Reconstruction du cache** | Rafraîchissement à la demande, ou reconstruction depuis zéro |
 | 🏷️ **Étiquette de version + chip de mise à jour** | Version actuelle à côté du titre ; vérifie GitHub une fois par jour et affiche `New version available` quand une nouvelle release sort |
+| 🧲 **Glisser une sélection multiple** | Glissez toute la sélection sur le canvas — un nœud natif par asset, disposés automatiquement en grille |
+| 🔔 **Retour d'action** | Notifications quand copier / supprimer / charger / rescanner réussit ou échoue — fini les échecs silencieux |
+| 🌍 **Interface localisée** | Suit la langue configurée dans ComfyUI — anglais et russe déjà fournis |
+| ♿ **Grille accessible** | Sémantique listbox pour lecteurs d'écran avec état de sélection, plus un anneau de focus clavier |
 
 ### 📁 Formats pris en charge
 
@@ -1674,24 +1854,42 @@ Puis **redémarrez ComfyUI** et faites un **rafraîchissement forcé** du naviga
 >
 > Redémarrez ComfyUI après l'installation, puis vérifiez avec `ffmpeg -version`.
 
-### ⌨️ Raccourcis clavier
+### ⌨️ Clavier et boutons de carte
 
-#### Sur les cartes d'asset
-
-| Touche | Action |
-|:---:|---|
-| <kbd>P</kbd> | Copier le prompt |
-| <kbd>W</kbd> | Copier le workflow *(uniquement quand le PNG contient vraiment des données de workflow)* |
-| <kbd>D</kbd> | Télécharger |
-| <kbd>X</kbd> | Envoyer à la corbeille système *(uniquement là où le root autorise la suppression)* |
-
-#### Sur les cartes de workflow
+#### Clavier — grille d'assets
 
 | Touche | Action |
 |:---:|---|
-| <kbd>L</kbd> · double-clic | Charger le workflow dans ComfyUI |
-| <kbd>D</kbd> | Télécharger le JSON du workflow |
-| <kbd>X</kbd> | Envoyer à la corbeille le workflow + sidecars d'aperçu correspondants |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Déplacer la sélection |
+| <kbd>Enter</kbd> | Ouvrir la lightbox *(dans l'onglet `Workflows`, charger le workflow)* |
+
+#### Clavier — lightbox
+
+| Touche | Action |
+|:---:|---|
+| <kbd>Esc</kbd> | Fermer |
+| <kbd>←</kbd> <kbd>→</kbd> | Asset précédent / suivant *(image par image en mode comparaison vidéo)* |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Avancer d'une image vidéo |
+| <kbd>Delete</kbd> | Envoyer à la corbeille système |
+
+#### Boutons de la carte
+
+> Ce sont des **boutons sur la carte** (au survol), pas des raccourcis clavier.
+
+| Bouton | Action |
+|:---:|---|
+| `P` | Copier le prompt |
+| `W` | Copier le workflow *(uniquement quand le PNG contient vraiment des données de workflow)* |
+| `D` | Télécharger |
+| `X` | Envoyer à la corbeille système *(uniquement là où le root autorise la suppression)* |
+
+#### Boutons de la carte workflow
+
+| Bouton | Action |
+|:---:|---|
+| `L` · double-clic | Charger le workflow dans ComfyUI |
+| `D` | Télécharger le JSON du workflow |
+| `X` | Envoyer à la corbeille le workflow + sidecars d'aperçu correspondants |
 
 ### 🎯 Intégration native avec ComfyUI
 
@@ -1846,6 +2044,10 @@ Voir [CHANGELOG.md](CHANGELOG.md). Format : [Keep a Changelog](https://keepachan
 | 🗑️ **Eliminação segura** | Enviado para o lixo do sistema via `send2trash` — nunca eliminado permanentemente |
 | 🔄 **Autoscan / Reconstruir cache** | Refresh on-demand ou reconstrução do zero |
 | 🏷️ **Etiqueta de versão + chip de actualização** | Versão actual ao lado do título; verifica o GitHub uma vez por dia e mostra `New version available` quando sai uma versão mais recente |
+| 🧲 **Arrastar selecção múltipla** | Arraste toda a selecção para o canvas — um nó nativo por asset, dispostos automaticamente em grelha |
+| 🔔 **Feedback das acções** | Notificações quando copiar / eliminar / carregar / reanalisar tem sucesso ou falha — sem falhas silenciosas |
+| 🌍 **Interface localizada** | Segue o idioma configurado no ComfyUI — inglês e russo já incluídos |
+| ♿ **Grelha acessível** | Semântica listbox para leitores de ecrã com estado de selecção, e anel de foco de teclado |
 
 ### 📁 Formatos suportados
 
@@ -1883,24 +2085,42 @@ Depois **reinicia o ComfyUI** e faz um **hard refresh** no browser com `Ctrl+F5`
 >
 > Reinicia o ComfyUI após instalar e confirma com `ffmpeg -version`.
 
-### ⌨️ Atalhos de teclado
+### ⌨️ Teclado e botões do card
 
-#### Em cards de asset
-
-| Tecla | Acção |
-|:---:|---|
-| <kbd>P</kbd> | Copiar prompt |
-| <kbd>W</kbd> | Copiar workflow *(só quando o PNG realmente contém dados de workflow)* |
-| <kbd>D</kbd> | Transferir |
-| <kbd>X</kbd> | Enviar para o lixo do sistema *(só onde o root permite eliminação)* |
-
-#### Em cards de workflow
+#### Teclado — grelha de assets
 
 | Tecla | Acção |
 |:---:|---|
-| <kbd>L</kbd> · duplo clique | Carregar workflow no ComfyUI |
-| <kbd>D</kbd> | Transferir JSON do workflow |
-| <kbd>X</kbd> | Enviar para o lixo o workflow + sidecars de preview correspondentes |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> | Mover a selecção |
+| <kbd>Enter</kbd> | Abrir o lightbox *(no separador `Workflows`, carregar o workflow)* |
+
+#### Teclado — lightbox
+
+| Tecla | Acção |
+|:---:|---|
+| <kbd>Esc</kbd> | Fechar |
+| <kbd>←</kbd> <kbd>→</kbd> | Asset anterior / seguinte *(avança fotogramas no modo de comparação de vídeo)* |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Avançar um fotograma de vídeo |
+| <kbd>Delete</kbd> | Enviar para o lixo do sistema |
+
+#### Botões do card
+
+> São **botões no card** (aparecem ao passar o cursor), não teclas.
+
+| Botão | Acção |
+|:---:|---|
+| `P` | Copiar prompt |
+| `W` | Copiar workflow *(só quando o PNG realmente contém dados de workflow)* |
+| `D` | Transferir |
+| `X` | Enviar para o lixo do sistema *(só onde o root permite eliminação)* |
+
+#### Botões do card de workflow
+
+| Botão | Acção |
+|:---:|---|
+| `L` · duplo clique | Carregar workflow no ComfyUI |
+| `D` | Transferir JSON do workflow |
+| `X` | Enviar para o lixo o workflow + sidecars de preview correspondentes |
 
 ### 🎯 Integração nativa com o ComfyUI
 
