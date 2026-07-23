@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-07-23
+
+### Added
+- User-facing toast notifications (via ComfyUI's native toast service) for the
+  common actions that previously failed silently: copy prompt / workflow,
+  delete asset or workflow, load workflow, rescan, and rebuild cache. The helper
+  is a safe no-op on ComfyUI builds without the toast service.
+- Russian localization (`ru.json`). The panel now follows ComfyUI's own locale
+  automatically (falling back to the `ui.language` config value, then English),
+  so a Russian ComfyUI shows a Russian panel.
+- Multi-asset drag-and-drop: dragging a card that is part of a multi-selection
+  drops every selected asset onto the graph, one native node per asset, laid out
+  in a grid from the drop point. Single-asset drag is unchanged.
+- A bounded in-memory ring of the most recent non-fatal warnings, captured
+  regardless of the debug console flag and exposed as
+  `window.tsArtiusBrowser.getRecentErrors()` / `window.__tsArtiusErrors` for
+  self-contained bug reports.
+- Accessibility: the asset grid is now a `listbox` and each card an `option`
+  with `aria-selected`, and the panel shows a keyboard focus ring.
+- Continuous integration (`.github/workflows/ci.yml`): byte-compiles and lints
+  the backend (ruff) and syntax-checks every frontend module on push / PR.
+
+### Fixed
+- The lightbox delete action now handles a failed delete (toast + no-op) instead
+  of leaving an unhandled promise rejection and a stale on-screen asset.
+
+### Documentation
+- Corrected the README in all ten languages: `P` / `W` / `D` / `X` / `L` were
+  documented as *keyboard shortcuts*, but they are labels on the card's hover
+  buttons — pressing those keys never did anything. Each language now lists the
+  real keyboard shortcuts (arrows / `Enter` in the grid; `Esc`, arrows and
+  `Delete` in the lightbox) separately from the card buttons.
+
 ## [1.6.4] - 2026-07-18
 
 ### Fixed
