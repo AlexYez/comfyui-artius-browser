@@ -8,6 +8,17 @@ export function tsNormalizeFolderPath(tsValue) {
     return String(tsValue || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
 }
 
+export function tsResolveLocaleCode(tsUILanguage, tsComfyLocale) {
+    // Which locale JSON to load. ComfyUI's own locale wins (it reflects the
+    // user's app-wide language choice, so a Russian ComfyUI shows a Russian
+    // panel automatically); an explicit ui.language is the fallback override;
+    // English is the final default. Region suffixes are dropped ("ru-RU" ->
+    // "ru"). An unsupported code still round-trips — tsLoadLocale falls back to
+    // English if the file is missing.
+    const tsNormalize = (tsValue) => String(tsValue || "").trim().toLowerCase().split(/[-_]/)[0];
+    return tsNormalize(tsComfyLocale) || tsNormalize(tsUILanguage) || "en";
+}
+
 export function tsResolvePreviewSize(tsValue, tsFallback, tsPreviewSizeRange) {
     const tsSize = Number(tsValue || 0);
     return Number.isFinite(tsSize) && tsSize > 0

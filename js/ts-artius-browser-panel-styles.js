@@ -41,6 +41,11 @@ export const tsPanelStyles = `<style>
                     background: var(--ts-bg-0);
                 }
 
+                .ts-shell:focus-visible {
+                    outline: 2px solid var(--ts-accent);
+                    outline-offset: -2px;
+                }
+
                 .ts-toolbar {
                     display: grid;
                     gap: 6px;

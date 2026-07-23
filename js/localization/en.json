@@ -109,5 +109,19 @@
     "meta.audioTrack": "Audio Track",
     "meta.channels": "Channels",
     "meta.bitrate": "Bitrate",
-    "meta.noTechnical": "No ffprobe metadata found."
+    "meta.noTechnical": "No ffprobe metadata found.",
+
+    "aria.gallery": "Asset grid",
+
+    "toast.copied": "Copied",
+    "toast.promptCopied": "Prompt copied",
+    "toast.workflowCopied": "Workflow copied",
+    "toast.noPrompt": "No prompt to copy",
+    "toast.noWorkflow": "No workflow to copy",
+    "toast.copyFailed": "Copy failed",
+    "toast.deleteFailed": "Delete failed",
+    "toast.workflowLoadFailed": "Failed to load workflow",
+    "toast.workflowDeleteFailed": "Failed to delete workflow",
+    "toast.rescanFailed": "Rescan failed",
+    "toast.rebuildFailed": "Rebuild cache failed"
 }

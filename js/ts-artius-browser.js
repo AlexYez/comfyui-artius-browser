@@ -7,6 +7,7 @@ import {
     tsEnsureSidebarIconStyle,
     tsFetchBrowserSettings,
     tsFetchJSON,
+    tsGetRecentErrors,
     tsPostJSON,
 } from "./ts-artius-browser-api.js";
 import {
@@ -103,6 +104,11 @@ app.registerExtension({
         tsEnsurePanelElement();
         tsEnsureCanvasDropBridge();
         tsStartGlobal3DThumbnailWorker();
+        // Console-accessible bug-report helper: dumps the bounded ring of the
+        // most recent non-fatal warnings even when the debug console is off.
+        window.tsArtiusBrowser = Object.assign(window.tsArtiusBrowser || {}, {
+            getRecentErrors: tsGetRecentErrors,
+        });
         try {
             const tsSettingsPayload = await tsFetchBrowserSettings();
             tsSetAutoscanEnabled(tsSettingsPayload?.ui?.autoscan !== false);

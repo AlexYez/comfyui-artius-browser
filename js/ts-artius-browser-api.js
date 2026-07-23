@@ -19,6 +19,7 @@ import {
 import {
     tsAddComfyGraphNode,
     tsBuildAssetFetchPath,
+    tsComputeDropGridOffsets,
     tsCreateComfyGraphNode,
     tsGetComfyCanvasDropGraphPosition,
     tsGetComfyCanvasElement,
@@ -60,9 +61,64 @@ function tsComfyAdapterDeps() {
     };
 }
 
+const TS_MAX_RECENT_ERRORS = 50;
+const tsRecentErrors = [];
+
+export function tsRecordError(...tsArgs) {
+    // Capture non-fatal warnings into a bounded in-memory ring — ALWAYS, even
+    // when the debug console is off — so a bug report can dump the last N
+    // errors from `window.__tsArtiusErrors` without asking the user to first
+    // flip a debug flag and reproduce.
+    try {
+        const tsMessage = tsArgs
+            .map((tsArg) => (tsArg instanceof Error ? `${tsArg.name}: ${tsArg.message}` : String(tsArg)))
+            .join(" ");
+        tsRecentErrors.push({ at: new Date().toISOString(), message: tsMessage });
+        if (tsRecentErrors.length > TS_MAX_RECENT_ERRORS) {
+            tsRecentErrors.splice(0, tsRecentErrors.length - TS_MAX_RECENT_ERRORS);
+        }
+        if (typeof window !== "undefined") {
+            window.__tsArtiusErrors = tsRecentErrors;
+        }
+    } catch {
+        // Diagnostics capture must never throw into a caller's error path.
+    }
+}
+
+export function tsGetRecentErrors() {
+    return tsRecentErrors.map((tsEntry) => ({ ...tsEntry }));
+}
+
 export function tsConsoleWarn(...tsArgs) {
+    tsRecordError(...tsArgs);
     if (tsEnableConsoleDebug) {
         console.warn(...tsArgs);
+    }
+}
+
+const TS_TOAST_SEVERITIES = new Set(["success", "info", "warn", "error"]);
+
+export function tsShowToast(tsSeverity, tsSummary, tsDetail = "", tsLifeMs = undefined) {
+    // Surface a short user-facing notification through ComfyUI's native toast
+    // service. Guarded on every access: on an older ComfyUI build (or a
+    // headless context) the service is absent and this is a silent no-op, so
+    // callers can fire it unconditionally.
+    try {
+        const tsToast = app?.extensionManager?.toast;
+        if (!tsToast || typeof tsToast.add !== "function") {
+            return false;
+        }
+        const tsResolvedSeverity = TS_TOAST_SEVERITIES.has(tsSeverity) ? tsSeverity : "info";
+        tsToast.add({
+            severity: tsResolvedSeverity,
+            summary: String(tsSummary || ""),
+            detail: tsDetail ? String(tsDetail) : undefined,
+            life: Number.isFinite(tsLifeMs) ? tsLifeMs : (tsResolvedSeverity === "error" ? 6000 : 3000),
+        });
+        return true;
+    } catch (tsError) {
+        tsRecordError("Timesaver Artius Browser toast failed", tsError);
+        return false;
     }
 }
 
@@ -74,6 +130,18 @@ export function tsConsoleDebug(...tsArgs) {
 
 export function tsApiURL(tsPath) {
     return typeof api?.apiURL === "function" ? api.apiURL(tsPath) : tsPath;
+}
+
+export function tsResolveComfyLocale() {
+    // Best-effort read of ComfyUI's own locale setting; any failure (older
+    // build, setting service absent) degrades to "" so the caller falls back.
+    try {
+        const tsSetting = app?.extensionManager?.setting;
+        const tsValue = typeof tsSetting?.get === "function" ? tsSetting.get("Comfy.Locale") : "";
+        return typeof tsValue === "string" ? tsValue : "";
+    } catch {
+        return "";
+    }
 }
 
 function tsBuildUserdataFileURL(tsRelativePath) {
@@ -483,7 +551,7 @@ async function tsTryLoadIntoSelectedNode(tsAsset, tsExcludedNodes = []) {
     return tsTryLoadIntoNodes(tsAsset, tsSelectedNodes);
 }
 
-async function tsCreateWorkflowNode(tsAsset, tsEvent = undefined) {
+async function tsCreateWorkflowNode(tsAsset, tsEvent = undefined, tsPositionOverride = null) {
     const tsNativeTarget = tsNativeWorkflowTargets[tsAsset.type] || null;
     const tsFallbackTarget = tsFallbackWorkflowTargets[tsAsset.type] || null;
     const tsTarget = tsNativeTarget || tsFallbackTarget;
@@ -498,7 +566,9 @@ async function tsCreateWorkflowNode(tsAsset, tsEvent = undefined) {
     if (!tsAddComfyGraphNode(tsNode, tsDeps)) {
         return false;
     }
-    const tsPosition = tsGetComfyCanvasDropGraphPosition(tsEvent, tsDeps) || [160, 160];
+    const tsPosition = Array.isArray(tsPositionOverride)
+        ? tsPositionOverride
+        : (tsGetComfyCanvasDropGraphPosition(tsEvent, tsDeps) || [160, 160]);
     tsNode.pos = tsPosition;
     window.setTimeout(async () => {
         if (tsNativeTarget) {
@@ -522,7 +592,7 @@ async function tsCreateWorkflowNode(tsAsset, tsEvent = undefined) {
     return true;
 }
 
-export async function tsLoadAssetIntoWorkflow(tsAsset, tsEvent = undefined) {
+async function tsLoadSingleAssetIntoWorkflow(tsAsset, tsEvent = undefined) {
     if (!tsAsset) {
         return false;
     }
@@ -537,6 +607,32 @@ export async function tsLoadAssetIntoWorkflow(tsAsset, tsEvent = undefined) {
         return true;
     }
     return tsCreateWorkflowNode(tsAsset, tsEvent);
+}
+
+export async function tsLoadAssetIntoWorkflow(tsAssetOrList, tsEvent = undefined) {
+    // Accepts a single asset (object) or a multi-drag payload (array). The
+    // single-asset path is unchanged; dropping several selected assets creates
+    // one native node per asset, offset in a grid from the drop point so they
+    // do not stack.
+    const tsAssets = (Array.isArray(tsAssetOrList) ? tsAssetOrList : [tsAssetOrList]).filter(Boolean);
+    if (tsAssets.length === 0) {
+        return false;
+    }
+    if (tsAssets.length === 1) {
+        return tsLoadSingleAssetIntoWorkflow(tsAssets[0], tsEvent);
+    }
+    const tsBasePosition = tsGetCanvasDropGraphPosition(tsEvent) || [160, 160];
+    const tsOffsets = tsComputeDropGridOffsets(tsAssets.length);
+    let tsCreatedAny = false;
+    for (let tsIndex = 0; tsIndex < tsAssets.length; tsIndex += 1) {
+        const [tsOffsetX, tsOffsetY] = tsOffsets[tsIndex] || [0, 0];
+        const tsPosition = [tsBasePosition[0] + tsOffsetX, tsBasePosition[1] + tsOffsetY];
+        // eslint-disable-next-line no-await-in-loop -- node creation must be
+        // sequential so LiteGraph assigns stable ids and positions in order.
+        const tsCreated = await tsCreateWorkflowNode(tsAssets[tsIndex], tsEvent, tsPosition);
+        tsCreatedAny = tsCreated || tsCreatedAny;
+    }
+    return tsCreatedAny;
 }
 
 export function tsEnsureCanvasDropBridge() {

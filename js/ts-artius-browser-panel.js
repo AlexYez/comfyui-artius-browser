@@ -18,9 +18,11 @@ import {
     tsOpenDownload,
     tsDeleteWorkflowFile,
     tsPostJSON,
+    tsResolveComfyLocale,
     tsRouteBase,
     tsSave3DThumbnail,
     tsSaveBrowserSettings,
+    tsShowToast,
 } from "./ts-artius-browser-api.js";
 import { tsCapture3DThumbnail } from "./ts-artius-browser-3d.js";
 import {
@@ -42,6 +44,7 @@ import {
     tsNormalizeSortDirection,
     tsNormalizeViewMode,
     tsNormalizeWorkflowSortKey,
+    tsResolveLocaleCode,
     tsResolvePreviewSize,
     tsSyncSectionSettingsFromActiveState,
 } from "./ts-artius-browser-panel-state.js";
@@ -49,6 +52,7 @@ import {
     tsBuildItemIndexById,
     tsFindItemById,
     tsGetSelectedItems,
+    tsResolveDragAssets,
 } from "./ts-artius-browser-panel-selection.js";
 import {
     tsBuildWorkflowFolders,
@@ -103,6 +107,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsHealth: [],
             tsScanStatus: null,
             tsExpandedFolders: new Set(tsPanelSettings.defaultExpandedFolders),
+            tsLanguage: "en",
             tsLocale: {},
             tsGridColumns: 1,
             tsGridRowHeight: 296,
@@ -228,7 +233,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     async tsInitAsync() {
         await this.tsLoadUISettings();
-        this.tsState.tsLocale = await tsLoadLocale(tsProjectSettings.defaultLocale);
+        const tsLocaleCode = tsResolveLocaleCode(this.tsState.tsLanguage, tsResolveComfyLocale());
+        this.tsState.tsLocale = await tsLoadLocale(tsLocaleCode);
         this.tsHydrateText();
         await this.tsFetchAssets(true);
         void this.tsMaybeBootstrapScan();
@@ -446,6 +452,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         try {
             const tsPayload = await tsFetchBrowserSettings();
             const tsUI = tsPayload?.ui || {};
+            if (typeof tsUI.language === "string" && tsUI.language) {
+                this.tsState.tsLanguage = tsUI.language;
+            }
             if (tsIsBrowserSection(tsUI.browser_section)) {
                 this.tsState.tsSection = tsUI.browser_section;
             }
@@ -764,7 +773,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     <div class="ts-gallery-wrap">
                         <div class="ts-gallery-scroll">
                             <div class="ts-gallery-spacer"></div>
-                            <div class="ts-gallery-content"></div>
+                            <div class="ts-gallery-content" role="listbox" aria-multiselectable="true"></div>
                         </div>
                         <div class="ts-empty"></div>
                     </div>
@@ -1154,6 +1163,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsDeleteSelected.textContent = this.tsT("button.deleteSelected", "Delete Selected");
         this.tsRefs.tsDeleteSelected.title = this.tsT("tooltip.deleteSelected", "Delete selected assets from allowed roots.");
         this.tsRefs.tsToolbarResizer.title = this.tsT("tooltip.toolbarResize", "Drag to resize the toolbar.");
+        this.tsRefs.tsGalleryContent.setAttribute("aria-label", this.tsT("aria.gallery", "Asset grid"));
         this.tsApplyToolbarScale();
         this.tsRenderSectionButtons();
         this.tsRenderToolbarForSection();
@@ -1358,6 +1368,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             await tsPostJSON(`${tsRouteBase}/rescan`, tsPayload);
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser rescan failed", tsError);
+            tsShowToast("error", this.tsT("toast.rescanFailed", "Rescan failed"), String(tsError?.message || tsError || ""));
             // The optimistic local status above never gets corrected by
             // tsab:index-* events when the POST itself failed (no scan
             // started), so drop it here or Rescan/Rebuild stay disabled.
@@ -1421,6 +1432,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             await this.tsFetchAssets(true);
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser rebuild cache failed", tsError);
+            tsShowToast("error", this.tsT("toast.rebuildFailed", "Rebuild cache failed"), String(tsError?.message || tsError || ""));
             if (!tsRebuildStarted) {
                 // POST failed — no scan is running server-side, so no
                 // tsab:index-* event will clear the optimistic status.
@@ -1959,6 +1971,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsCards.push(`
                 <div
                     class="ts-card"
+                    role="option"
+                    aria-selected="${String(tsSelected)}"
+                    aria-label="${this.tsEscapeAttribute(tsItem.filename || "")}"
                     data-card-id="${tsItem.id}"
                     data-card-index="${tsIndex}"
                     data-selected="${String(tsSelected)}"
@@ -2046,22 +2061,34 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     async tsCopyAssetPrompt(tsAssetId) {
         const tsAsset = await this.tsEnsureAssetDetail(tsAssetId);
         if (!tsAsset?.prompt_text) {
+            tsShowToast("info", this.tsT("toast.noPrompt", "No prompt to copy"));
             return;
         }
-        await tsCopyText(tsAsset.prompt_text);
+        const tsCopied = await tsCopyText(tsAsset.prompt_text);
+        tsShowToast(
+            tsCopied ? "success" : "error",
+            tsCopied ? this.tsT("toast.promptCopied", "Prompt copied") : this.tsT("toast.copyFailed", "Copy failed"),
+        );
     }
 
     async tsCopyAssetWorkflow(tsAssetId) {
         const tsAsset = await this.tsEnsureAssetDetail(tsAssetId);
         if (!tsAsset?.workflow_text) {
+            tsShowToast("info", this.tsT("toast.noWorkflow", "No workflow to copy"));
             return;
         }
-        await tsCopyText(tsAsset.workflow_text);
+        const tsCopied = await tsCopyText(tsAsset.workflow_text);
+        tsShowToast(
+            tsCopied ? "success" : "error",
+            tsCopied ? this.tsT("toast.workflowCopied", "Workflow copied") : this.tsT("toast.copyFailed", "Copy failed"),
+        );
     }
     tsRefreshCardSelection() {
         this.tsRefs.tsGalleryContent.querySelectorAll("[data-card-id]").forEach((tsCard) => {
             const tsCardId = Number(tsCard.dataset.cardId);
-            tsCard.dataset.selected = String(this.tsState.tsSelection.has(tsCardId));
+            const tsIsSelected = this.tsState.tsSelection.has(tsCardId);
+            tsCard.dataset.selected = String(tsIsSelected);
+            tsCard.setAttribute("aria-selected", String(tsIsSelected));
         });
     }
 
@@ -2139,11 +2166,20 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (!tsCard) {
             return;
         }
-        const tsAsset = this.tsFindItemById(Number(tsCard.dataset.cardId));
-        if (!tsAsset) {
+        const tsDraggedId = Number(tsCard.dataset.cardId);
+        // Drag the whole selection when the grabbed card is part of a
+        // multi-selection; otherwise just the grabbed card. Single-asset
+        // payload stays an object (unchanged); a multi payload is an array.
+        const tsDragAssets = tsResolveDragAssets(
+            this.tsState.tsItems,
+            this.tsItemIndexById,
+            this.tsState.tsSelection,
+            tsDraggedId,
+        );
+        if (tsDragAssets.length === 0) {
             return;
         }
-        const tsPayload = JSON.stringify(tsAsset);
+        const tsPayload = JSON.stringify(tsDragAssets.length === 1 ? tsDragAssets[0] : tsDragAssets);
         try {
             tsEvent.dataTransfer?.clearData();
         } catch {
@@ -2287,9 +2323,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             const tsLoaded = await tsLoadWorkflowIntoComfy(tsWorkflow.relative_path);
             if (!tsLoaded) {
                 tsConsoleWarn("Timesaver Artius Browser workflow load API is unavailable");
+                tsShowToast("error", this.tsT("toast.workflowLoadFailed", "Failed to load workflow"));
             }
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser failed to load workflow", tsError);
+            tsShowToast("error", this.tsT("toast.workflowLoadFailed", "Failed to load workflow"), String(tsError?.message || tsError || ""));
         }
     }
 
@@ -2303,6 +2341,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             await tsDeleteWorkflowFile(tsWorkflow.relative_path);
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser failed to delete workflow", tsError);
+            tsShowToast("error", this.tsT("toast.workflowDeleteFailed", "Failed to delete workflow"), String(tsError?.message || tsError || ""));
             return;
         }
         // Surgically remove from the workflow library cache so re-entering the
@@ -2327,6 +2366,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             await tsPostJSON(`${tsRouteBase}/delete`, { ids: tsDeletedIds });
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser failed to delete assets", tsError);
+            tsShowToast("error", this.tsT("toast.deleteFailed", "Delete failed"), String(tsError?.message || tsError || ""));
             return;
         }
         // Surgical removal instead of `tsFetchAssets(true)` — preserves scroll

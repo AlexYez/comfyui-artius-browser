@@ -6,6 +6,7 @@ import {
     tsFormatBytes,
     tsOpenAssetInNewTab,
     tsOpenDownload,
+    tsShowToast,
 } from "./ts-artius-browser-api.js";
 import {
     tsLoad3DViewerClass,
@@ -986,9 +987,14 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             : tsField === "seed"
                 ? tsAsset.seed
             : tsAsset.prompt_text;
-        if (tsValue) {
-            await tsCopyText(tsValue);
+        if (!tsValue) {
+            return;
         }
+        const tsCopied = await tsCopyText(tsValue);
+        tsShowToast(
+            tsCopied ? "success" : "error",
+            tsCopied ? this.tsT("toast.copied", "Copied") : this.tsT("toast.copyFailed", "Copy failed"),
+        );
     }
 
     tsDownloadCurrent() {
@@ -1013,7 +1019,14 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         }
         const tsDeletedAssetId = tsAsset.id;
         const tsNextIndexHint = Math.max(0, Math.min(this.tsIndex, this.tsItems.length - 2));
-        await tsDeleteAssetIds([tsDeletedAssetId]);
+        try {
+            await tsDeleteAssetIds([tsDeletedAssetId]);
+        } catch (tsError) {
+            // Previously uncaught: a failed delete rejected tsDeleteCurrent and
+            // left the lightbox showing an asset the user thinks is gone.
+            tsShowToast("error", this.tsT("toast.deleteFailed", "Delete failed"), String(tsError?.message || tsError || ""));
+            return;
+        }
         this.tsItems = this.tsItems.filter((tsItem) => tsItem.id !== tsDeletedAssetId);
         this.tsCompareItems = this.tsCompareItems.filter((tsItem) => tsItem.id !== tsDeletedAssetId);
         if (typeof this.tsGetItems === "function") {

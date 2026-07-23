@@ -1,3 +1,20 @@
+export function tsComputeDropGridOffsets(tsCount, tsOptions = {}) {
+    // Grid offsets (relative to the drop point) for laying out N nodes created
+    // from a multi-asset drag, so they do not stack on top of each other.
+    const tsColumns = Math.max(1, Math.floor(Number(tsOptions.columns) || 4));
+    const tsStepX = Number(tsOptions.stepX) || 60;
+    const tsStepY = Number(tsOptions.stepY) || 60;
+    const tsResolvedCount = Math.max(0, Math.floor(Number(tsCount) || 0));
+    const tsOffsets = [];
+    for (let tsIndex = 0; tsIndex < tsResolvedCount; tsIndex += 1) {
+        tsOffsets.push([
+            (tsIndex % tsColumns) * tsStepX,
+            Math.floor(tsIndex / tsColumns) * tsStepY,
+        ]);
+    }
+    return tsOffsets;
+}
+
 export function tsSplitRelativePath(tsRelativePath) {
     const tsNormalized = String(tsRelativePath || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
     if (!tsNormalized) {
