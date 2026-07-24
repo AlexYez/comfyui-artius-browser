@@ -1,3 +1,4 @@
+// @ts-check
 export function tsLerp(tsStart, tsEnd, tsRatio) {
     return tsStart + ((tsEnd - tsStart) * tsRatio);
 }

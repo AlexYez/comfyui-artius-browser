@@ -5,7 +5,7 @@ import math
 import os
 import re
 import threading
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
@@ -138,9 +138,9 @@ class TSKeyedLockRegistry:
 
     def __init__(self) -> None:
         self._ts_guard = threading.Lock()
-        self._ts_entries: dict[Any, list] = {}
+        self._ts_entries: dict[Any, list[Any]] = {}
 
-    def __call__(self, ts_key: Any):
+    def __call__(self, ts_key: Any) -> "AbstractContextManager[threading.Lock]":
         with self._ts_guard:
             ts_entry = self._ts_entries.get(ts_key)
             if ts_entry is None:

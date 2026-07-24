@@ -1,3 +1,4 @@
+// @ts-check
 export function tsDebounce(tsFunction, tsWaitMs = 250, tsWindow = window) {
     let tsTimeoutId = 0;
     return (...tsArgs) => {
