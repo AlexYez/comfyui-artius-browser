@@ -33,7 +33,12 @@ TS_ROUTE_DEFINITIONS = (
     ("POST", "/asset_browser/3d/thumbnail/{id}", "TSHandle3DThumbnail"),
     ("POST", "/asset_browser/3d/stage/{id}", "TSHandle3DStage"),
     ("GET", "/asset_browser/version", "TSHandleVersion"),
+    ("POST", "/asset_browser/client_log", "TSHandleClientLog"),
 )
+
+# Frontend client-log body cap (bounded so a runaway page cannot flood the
+# backend ring). 64 KiB comfortably fits the 50-entry frontend ring.
+TS_MAX_CLIENT_LOG_BYTES = 64 * 1024
 
 
 def TSBuildRouteVariants(ts_path: str) -> tuple[str, str]:
@@ -270,6 +275,13 @@ async def TSHandle3DStage(ts_runtime, ts_request):
     ts_asset_id = TSParseRouteAssetId(ts_request)
     TSLogVerbose("route.3d_stage.post", asset_id=ts_asset_id, path=ts_request.path)
     return TSWeb.json_response(await asyncio.to_thread(ts_runtime.TSPrepare3DAssetForLoad3D, ts_asset_id))
+
+
+async def TSHandleClientLog(ts_runtime, ts_request):
+    TSEnforceRequestContentLength(ts_request, TS_MAX_CLIENT_LOG_BYTES)
+    ts_payload = await TSReadJsonObject(ts_request, ts_required=True)
+    TSLogVerbose("route.client_log.post", path=ts_request.path)
+    return TSWeb.json_response(await asyncio.to_thread(ts_runtime.TSRecordClientErrors, ts_payload))
 
 
 async def TSHandleVersion(ts_runtime, ts_request):

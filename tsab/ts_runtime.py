@@ -10,6 +10,7 @@ from .ts_3d_thumbnail import TSSave3DThumbnail
 from .ts_asset_catalog import TSAssetCatalogService
 from .ts_asset_processing import TSAssetProcessingService
 from .ts_browser_settings import TSBrowserSettingsService
+from .ts_client_log import TSClientErrorLog
 from .ts_config import TSConfigStore
 from .ts_db import TSDatabase
 from .ts_db_schema import TS_DB_SCHEMA_VERSION
@@ -94,6 +95,7 @@ class TSAssetBrowserRuntime:
         # library (one Lock per asset id ever touched used to leak until
         # restart).
         self.ts_asset_lock_registry = TSKeyedLockRegistry()
+        self.ts_client_error_log = TSClientErrorLog()
         self.ts_3d_viewer_module_urls: dict[str, str | None] = {}
         TSLogVerbose("runtime.initialized")
 
@@ -140,7 +142,16 @@ class TSAssetBrowserRuntime:
             ts_diagnostics["root_count"] = len(self.TSGetRoots())
         except Exception:
             ts_diagnostics["root_count"] = None
+        try:
+            ts_diagnostics["client_errors"] = self.ts_client_error_log.TSSnapshot()
+        except Exception:
+            ts_diagnostics["client_errors"] = []
         return ts_diagnostics
+
+    def TSRecordClientErrors(self, ts_payload: dict[str, Any]) -> dict[str, Any]:
+        ts_errors = ts_payload.get("errors") if isinstance(ts_payload, dict) else None
+        ts_recorded = self.ts_client_error_log.TSRecord(ts_errors)
+        return {"recorded": ts_recorded}
 
     def _TSGetAssetLock(self, ts_asset_id: int):
         # Returns a context manager (reference-counted lock handle). Callers use

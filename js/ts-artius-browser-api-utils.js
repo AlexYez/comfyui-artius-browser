@@ -10,6 +10,20 @@ export function tsClamp(tsValue, tsMin, tsMax) {
     return Math.max(tsMin, Math.min(tsMax, tsValue));
 }
 
+// Single source of truth for HTML/attribute escaping. The panel and viewer both
+// build markup via template strings; keeping one implementation here prevents
+// the two copies from drifting apart (e.g. one escaping `"` and the other not).
+export function tsEscapeHTML(tsText) {
+    return String(tsText || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+}
+
+export function tsEscapeAttribute(tsText) {
+    return tsEscapeHTML(tsText).replaceAll('"', "&quot;");
+}
+
 export function tsFormatBytes(tsBytes) {
     if (!Number.isFinite(tsBytes) || tsBytes <= 0) {
         return "0 B";

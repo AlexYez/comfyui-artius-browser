@@ -7,6 +7,8 @@ import {
     tsConsoleWarn,
     tsCopyText,
     tsDebounce,
+    tsEscapeAttribute,
+    tsEscapeHTML,
     tsFetchAssetDetail,
     tsFetchVersionInfo,
     tsFetchWorkflowBrowserLibrary,
@@ -218,6 +220,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             window.cancelAnimationFrame?.(this.tsGridRenderFrame);
             this.tsGridRenderFrame = 0;
         }
+        window.clearTimeout(this.tsGridEntranceTimer);
         this.tsResizeObserver?.disconnect?.();
         this.tsToolbarResizeObserver?.disconnect?.();
         this.tsBrowserWidthObserver?.disconnect?.();
@@ -1882,6 +1885,54 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         return `<img${tsImageClass} src="${this.tsEscapeAttribute(tsPreviewURL)}" alt="${this.tsEscapeAttribute(tsItem?.filename || "")}" loading="eager" decoding="async" fetchpriority="low" draggable="false">`;
     }
 
+    tsPlayGridEntrance() {
+        const tsContent = this.tsRefs?.tsGalleryContent;
+        if (!tsContent) {
+            return;
+        }
+        tsContent.dataset.entering = "true";
+        // Clear the flag after the CSS animation window so it never sticks and
+        // does not replay on the next scroll re-render.
+        window.clearTimeout(this.tsGridEntranceTimer);
+        this.tsGridEntranceTimer = window.setTimeout(() => {
+            if (this.tsRefs?.tsGalleryContent) {
+                delete this.tsRefs.tsGalleryContent.dataset.entering;
+            }
+        }, 260);
+    }
+
+    tsRenderSkeletonGrid(tsMetrics) {
+        const tsGap = tsMetrics.tsGap;
+        const tsPaddingTop = tsMetrics.tsPaddingTop;
+        const tsPaddingLeft = tsMetrics.tsPaddingLeft;
+        const tsCardWidth = tsMetrics.tsCardWidth;
+        const tsCardHeight = tsMetrics.tsCardHeight;
+        const tsColumns = Math.max(1, tsMetrics.tsColumns);
+        const tsRowHeight = tsMetrics.tsRowHeight;
+        const tsViewportHeight = Math.max(0, Number(this.tsRefs.tsGalleryScroll.clientHeight || 0));
+        // Enough skeletons to cover roughly one viewport, rounded up to a full
+        // row and capped so a huge window never renders hundreds of nodes.
+        const tsRows = Math.min(6, Math.max(2, Math.ceil((tsViewportHeight + tsRowHeight) / tsRowHeight)));
+        const tsCount = tsColumns * tsRows;
+        const tsSkeletonKey = `skeleton:${tsColumns}:${tsCardWidth}:${tsCount}`;
+        this.tsRefs.tsGallerySpacer.style.height = `${tsPaddingTop + tsRows * tsRowHeight}px`;
+        if (this.tsLastGridMarkupKey === tsSkeletonKey) {
+            return;
+        }
+        this.tsLastGridMarkupKey = tsSkeletonKey;
+        const tsCards = [];
+        for (let tsIndex = 0; tsIndex < tsCount; tsIndex += 1) {
+            const tsColumn = tsIndex % tsColumns;
+            const tsRow = Math.floor(tsIndex / tsColumns);
+            const tsLeft = tsPaddingLeft + tsColumn * (tsCardWidth + tsGap);
+            const tsTop = tsPaddingTop + tsRow * tsRowHeight;
+            tsCards.push(
+                `<div class="ts-card ts-card-skeleton" aria-hidden="true" style="width:${tsCardWidth}px;height:${tsCardHeight}px;transform:translate(${tsLeft}px,${tsTop}px);"><div class="ts-card-media"></div></div>`,
+            );
+        }
+        this.tsRefs.tsGalleryContent.innerHTML = tsCards.join("");
+    }
+
     tsRenderGrid(tsForce = false) {
         const tsItems = this.tsState.tsItems;
         const tsWorkflowSection = this.tsIsWorkflowSection();
@@ -1898,6 +1949,19 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsRowCount = Math.ceil(tsItems.length / tsColumns);
         const tsSpacerHeight = Math.max(0, tsPaddingTop + tsPaddingBottom + tsRowCount * tsRowHeight);
         this.tsRefs.tsGallerySpacer.style.height = `${tsSpacerHeight}px`;
+
+        // First-load skeletons: while the very first page is in flight and the
+        // list is still empty, show shimmer placeholders instead of an empty
+        // panel that then snaps to a full grid. Only when the list is genuinely
+        // empty (not loading) do we fall back to the empty message.
+        const tsShowSkeletons = tsItems.length === 0
+            && this.tsState.tsLoading
+            && this.tsState.tsSettingsHydrated;
+        if (tsShowSkeletons) {
+            this.tsRefs.tsEmpty.textContent = "";
+            this.tsRenderSkeletonGrid(tsMetrics);
+            return;
+        }
 
         const tsEmptyMessage = tsWorkflowSection
             ? this.tsT("empty.workflows", "No workflows match the current filters.")
@@ -2011,8 +2075,15 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             }
             return;
         }
+        // One-shot fade only when the real grid replaces skeletons (fresh
+        // data) — never on virtualized scroll re-renders, so scrolling stays
+        // flicker-free.
+        const tsEnteringFromSkeleton = String(this.tsLastGridMarkupKey || "").startsWith("skeleton:");
         this.tsLastGridMarkupKey = tsMarkupKey;
         this.tsRefs.tsGalleryContent.innerHTML = tsCards.join("");
+        if (tsEnteringFromSkeleton) {
+            this.tsPlayGridEntrance();
+        }
         this.ts3DQueue.tsScheduleVisible(tsVisibleItems);
         if (this.tsState.tsHasMore && !this.tsState.tsLoading && tsScrollTop + tsViewportHeight >= this.tsRefs.tsGallerySpacer.offsetHeight - 480) {
             this.tsFetchAssets(false);
@@ -2466,14 +2537,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsEscapeHTML(tsText) {
-        return String(tsText || "")
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;");
+        return tsEscapeHTML(tsText);
     }
 
     tsEscapeAttribute(tsText) {
-        return this.tsEscapeHTML(tsText).replaceAll('"', "&quot;");
+        return tsEscapeAttribute(tsText);
     }
 }
 

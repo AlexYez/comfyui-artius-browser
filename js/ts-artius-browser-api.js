@@ -14,6 +14,8 @@ import { tsBuildFolderTree as tsBuildFolderTreeImpl } from "./ts-artius-browser-
 import {
     tsClamp as tsClampImpl,
     tsDebounce as tsDebounceImpl,
+    tsEscapeAttribute as tsEscapeAttributeImpl,
+    tsEscapeHTML as tsEscapeHTMLImpl,
     tsFormatBytes as tsFormatBytesImpl,
 } from "./ts-artius-browser-api-utils.js";
 import {
@@ -64,22 +66,56 @@ function tsComfyAdapterDeps() {
 const TS_MAX_RECENT_ERRORS = 50;
 const tsRecentErrors = [];
 
+const tsPendingClientLog = [];
+let tsClientLogTimer = 0;
+
+function tsFlushClientLog() {
+    if (tsPendingClientLog.length === 0) {
+        return;
+    }
+    const tsBatch = tsPendingClientLog.splice(0, tsPendingClientLog.length);
+    // Raw request that NEVER routes failures back through tsConsoleWarn /
+    // tsRecordError — otherwise a failing client-log POST would record its own
+    // failure and loop. A dropped batch is acceptable; this is best-effort
+    // diagnostics.
+    tsFetchResponse(`${tsRouteBase}/client_log`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ errors: tsBatch }),
+    }).catch(() => {});
+}
+
+function tsScheduleClientLogFlush(tsEntry) {
+    if (typeof window === "undefined") {
+        return;
+    }
+    tsPendingClientLog.push(tsEntry);
+    if (tsPendingClientLog.length > TS_MAX_RECENT_ERRORS) {
+        tsPendingClientLog.splice(0, tsPendingClientLog.length - TS_MAX_RECENT_ERRORS);
+    }
+    window.clearTimeout(tsClientLogTimer);
+    tsClientLogTimer = window.setTimeout(tsFlushClientLog, 1500);
+}
+
 export function tsRecordError(...tsArgs) {
     // Capture non-fatal warnings into a bounded in-memory ring — ALWAYS, even
     // when the debug console is off — so a bug report can dump the last N
-    // errors from `window.__tsArtiusErrors` without asking the user to first
-    // flip a debug flag and reproduce.
+    // errors from `window.__tsArtiusErrors`. The same entries are mirrored to
+    // the backend (debounced) so `GET /asset_browser/version` diagnostics are
+    // self-contained without opening the browser console.
     try {
         const tsMessage = tsArgs
             .map((tsArg) => (tsArg instanceof Error ? `${tsArg.name}: ${tsArg.message}` : String(tsArg)))
             .join(" ");
-        tsRecentErrors.push({ at: new Date().toISOString(), message: tsMessage });
+        const tsEntry = { at: new Date().toISOString(), message: tsMessage };
+        tsRecentErrors.push(tsEntry);
         if (tsRecentErrors.length > TS_MAX_RECENT_ERRORS) {
             tsRecentErrors.splice(0, tsRecentErrors.length - TS_MAX_RECENT_ERRORS);
         }
         if (typeof window !== "undefined") {
             window.__tsArtiusErrors = tsRecentErrors;
         }
+        tsScheduleClientLogFlush(tsEntry);
     } catch {
         // Diagnostics capture must never throw into a caller's error path.
     }
@@ -283,6 +319,14 @@ export function tsClamp(tsValue, tsMin, tsMax) {
 
 export function tsFormatBytes(tsBytes) {
     return tsFormatBytesImpl(tsBytes);
+}
+
+export function tsEscapeHTML(tsText) {
+    return tsEscapeHTMLImpl(tsText);
+}
+
+export function tsEscapeAttribute(tsText) {
+    return tsEscapeAttributeImpl(tsText);
 }
 
 export async function tsCopyText(tsText) {

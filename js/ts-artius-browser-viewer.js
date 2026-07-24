@@ -2,6 +2,8 @@ import {
     tsApiURL,
     tsCopyText,
     tsDeleteAssetIds,
+    tsEscapeAttribute,
+    tsEscapeHTML,
     tsFetchAssetDetail,
     tsFormatBytes,
     tsOpenAssetInNewTab,
@@ -1985,14 +1987,11 @@ export class TSArtiusBrowserViewer extends HTMLElement {
     }
 
     tsEscapeHTML(tsText) {
-        return String(tsText || "")
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;");
+        return tsEscapeHTML(tsText);
     }
 
     tsEscapeAttribute(tsText) {
-        return this.tsEscapeHTML(tsText).replaceAll('"', "&quot;");
+        return tsEscapeAttribute(tsText);
     }
 }
 

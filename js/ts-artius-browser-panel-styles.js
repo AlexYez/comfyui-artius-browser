@@ -563,6 +563,23 @@ export const tsPanelStyles = `<style>
                     width: 100%;
                 }
 
+                /* One-shot entrance when a fresh list replaces skeletons. Only
+                   opacity/transform animate (no layout thrash); the flag is
+                   cleared after the animation so scrolling never re-triggers it. */
+                @keyframes ts-grid-enter {
+                    from { opacity: 0; transform: translateY(6px); }
+                    to { opacity: 1; transform: none; }
+                }
+
+                .ts-gallery-content[data-entering="true"] {
+                    animation: ts-grid-enter 0.22s ease both;
+                }
+
+                @keyframes ts-skeleton-shimmer {
+                    0% { background-position: -160% 0; }
+                    100% { background-position: 160% 0; }
+                }
+
                 .ts-card {
                     position: absolute;
                     border-radius: var(--ts-card-radius, 10px);
@@ -572,6 +589,31 @@ export const tsPanelStyles = `<style>
                     overflow: hidden;
                     transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
                     user-select: none;
+                    /* Skip painting cards scrolled out of view (perf on big libraries). */
+                    content-visibility: auto;
+                    contain-intrinsic-size: var(--ts-card-preview-height, 220px);
+                }
+
+                .ts-card-skeleton {
+                    cursor: default;
+                    pointer-events: none;
+                }
+
+                .ts-card-skeleton .ts-card-media {
+                    cursor: default;
+                    background-image: linear-gradient(
+                        100deg,
+                        var(--ts-bg-2) 30%,
+                        color-mix(in srgb, var(--ts-text) 8%, var(--ts-bg-2)) 50%,
+                        var(--ts-bg-2) 70%
+                    );
+                    background-size: 220% 100%;
+                    animation: ts-skeleton-shimmer 1.15s ease-in-out infinite;
+                }
+
+                @media (prefers-reduced-motion: reduce) {
+                    .ts-gallery-content[data-entering="true"] { animation: none; }
+                    .ts-card-skeleton .ts-card-media { animation: none; }
                 }
 
                 .ts-card:hover {
