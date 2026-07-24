@@ -132,6 +132,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsQueuedFetchAppend: false,
         };
         this.tsBootstrapScanRequested = false;
+        // First-load skeletons show only until the very first fetch settles;
+        // after that an empty result is a real "no matches" state, not a
+        // still-loading one, so it must show the empty message — never
+        // skeletons (which would otherwise stick when a search/filter legitimately
+        // returns zero, because the render runs while tsLoading is still true).
+        this.tsHasLoadedOnce = false;
         this.tsItemsRevision = 0;
         this.tsFoldersRevision = 0;
         this.tsGridRenderFrame = 0;
@@ -1800,6 +1806,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 tsConsoleWarn("Timesaver Artius Browser fetch failed", tsError);
             } finally {
                 this.tsState.tsLoading = false;
+                // The first fetch has settled: from now on an empty grid is a
+                // real "no matches" state, so skeletons stop and the empty
+                // message takes over.
+                this.tsHasLoadedOnce = true;
+                // A grid rendered mid-fetch (while loading) may be showing
+                // skeletons or a stale empty; once settled, force one render so
+                // the correct empty message / cards replace them.
+                if (this.tsState.tsItems.length === 0) {
+                    this.tsScheduleGridRender(true);
+                }
                 this.tsRenderSelectionButtons();
                 const tsShouldReset = this.tsState.tsQueuedFetchReset;
                 const tsShouldAppend = !tsShouldReset && this.tsState.tsQueuedFetchAppend;
@@ -2181,6 +2197,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         // empty (not loading) do we fall back to the empty message.
         const tsShowSkeletons = tsItems.length === 0
             && this.tsState.tsLoading
+            && !this.tsHasLoadedOnce
             && this.tsState.tsSettingsHydrated;
         if (tsShowSkeletons) {
             this.tsRefs.tsEmpty.textContent = "";
@@ -2528,8 +2545,20 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 if (tsDismissEvent.type === "keydown" && tsDismissEvent.key !== "Escape") {
                     return;
                 }
-                if (tsDismissEvent.type === "pointerdown" && tsMenu.contains(tsDismissEvent.target)) {
-                    return;
+                if (tsDismissEvent.type === "pointerdown") {
+                    // The menu lives in this component's shadow DOM, so a real
+                    // pointerdown is retargeted to the host and `tsMenu.contains`
+                    // (which also throws on a non-Node target such as window)
+                    // cannot see clicks inside the menu. composedPath() pierces
+                    // the shadow boundary, so a click ON the menu is correctly
+                    // treated as "inside" and does not dismiss it before the
+                    // item's own click handler runs.
+                    const tsPath = typeof tsDismissEvent.composedPath === "function"
+                        ? tsDismissEvent.composedPath()
+                        : [];
+                    if (tsPath.includes(tsMenu)) {
+                        return;
+                    }
                 }
                 this.tsCloseContextMenu();
             };
