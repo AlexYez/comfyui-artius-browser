@@ -17,6 +17,7 @@ import {
     tsFetchJSON,
     tsLoadWorkflowIntoComfy,
     tsLoadLocale,
+    tsOpenAssetInNewTab,
     tsOpenDownload,
     tsDeleteWorkflowFile,
     tsPostJSON,
@@ -221,6 +222,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsGridRenderFrame = 0;
         }
         window.clearTimeout(this.tsGridEntranceTimer);
+        this.tsCloseContextMenu();
         this.tsResizeObserver?.disconnect?.();
         this.tsToolbarResizeObserver?.disconnect?.();
         this.tsBrowserWidthObserver?.disconnect?.();
@@ -781,6 +783,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         <div class="ts-empty"></div>
                     </div>
                 </div>
+                <div class="ts-context-menu" role="menu" data-open="false" hidden></div>
+                <div class="ts-shortcuts" data-open="false" role="dialog" aria-modal="true" hidden>
+                    <div class="ts-shortcuts-panel">
+                        <div class="ts-shortcuts-head">
+                            <h3 class="ts-shortcuts-title"></h3>
+                            <button class="ts-shortcuts-close" type="button" aria-label=""></button>
+                        </div>
+                        <div class="ts-shortcuts-body"></div>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -823,6 +835,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsGallerySpacer: this.shadowRoot.querySelector(".ts-gallery-spacer"),
             tsGalleryContent: this.shadowRoot.querySelector(".ts-gallery-content"),
             tsEmpty: this.shadowRoot.querySelector(".ts-empty"),
+            tsContextMenu: this.shadowRoot.querySelector(".ts-context-menu"),
+            tsShortcuts: this.shadowRoot.querySelector(".ts-shortcuts"),
+            tsShortcutsTitle: this.shadowRoot.querySelector(".ts-shortcuts-title"),
+            tsShortcutsClose: this.shadowRoot.querySelector(".ts-shortcuts-close"),
+            tsShortcutsBody: this.shadowRoot.querySelector(".ts-shortcuts-body"),
         };
 
         this.tsResizeObserver = new ResizeObserver((tsEntries) => {
@@ -947,6 +964,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsGalleryScroll.addEventListener("scroll", () => this.tsHandleGalleryScroll(), { passive: true });
         this.tsRefs.tsGalleryContent.addEventListener("click", (tsEvent) => this.tsHandleGalleryClick(tsEvent));
         this.tsRefs.tsGalleryContent.addEventListener("dblclick", (tsEvent) => this.tsHandleGalleryDoubleClick(tsEvent));
+        this.tsRefs.tsGalleryContent.addEventListener("contextmenu", (tsEvent) => this.tsHandleGalleryContextMenu(tsEvent));
+        this.tsRefs.tsContextMenu.addEventListener("click", (tsEvent) => this.tsHandleContextMenuClick(tsEvent));
+        this.tsRefs.tsShortcutsClose.addEventListener("click", () => this.tsToggleShortcutHelp(false));
+        this.tsRefs.tsShortcuts.addEventListener("click", (tsEvent) => {
+            if (tsEvent.target === this.tsRefs.tsShortcuts) {
+                this.tsToggleShortcutHelp(false);
+            }
+        });
         this.tsRefs.tsGalleryContent.addEventListener(
             "dragstart",
             (tsEvent) => this.tsHandleDragStart(tsEvent),
@@ -1167,6 +1192,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsDeleteSelected.title = this.tsT("tooltip.deleteSelected", "Delete selected assets from allowed roots.");
         this.tsRefs.tsToolbarResizer.title = this.tsT("tooltip.toolbarResize", "Drag to resize the toolbar.");
         this.tsRefs.tsGalleryContent.setAttribute("aria-label", this.tsT("aria.gallery", "Asset grid"));
+        this.tsRefs.tsShortcutsTitle.textContent = this.tsT("shortcuts.title", "Keyboard shortcuts");
+        this.tsRefs.tsShortcutsClose.textContent = "×";
+        this.tsRefs.tsShortcutsClose.setAttribute("aria-label", this.tsT("button.close", "Close"));
         this.tsApplyToolbarScale();
         this.tsRenderSectionButtons();
         this.tsRenderToolbarForSection();
@@ -2213,6 +2241,218 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefreshCardSelection();
     }
 
+    tsBuildContextMenuItems(tsAsset) {
+        // Larger, discoverable click targets that mirror the tiny hover buttons.
+        if (this.tsIsWorkflowSection()) {
+            return [
+                { tsAction: "load-workflow", tsLabel: this.tsT("menu.loadWorkflow", "Load workflow") },
+                { tsAction: "download", tsLabel: this.tsT("menu.download", "Download") },
+                { tsAction: "delete", tsLabel: this.tsT("menu.delete", "Delete"), tsDanger: true },
+            ];
+        }
+        const tsItems = [];
+        if (tsAsset.type !== "video" && tsAsset.type !== "audio") {
+            tsItems.push({ tsAction: "copy", tsLabel: this.tsT("menu.copyPrompt", "Copy prompt") });
+        }
+        if (tsAsset.type === "image" && String(tsAsset.extension || "").toLowerCase() === ".png" && tsAsset.has_workflow) {
+            tsItems.push({ tsAction: "workflow", tsLabel: this.tsT("menu.copyWorkflow", "Copy workflow") });
+        }
+        tsItems.push({ tsAction: "download", tsLabel: this.tsT("menu.download", "Download") });
+        if (tsAsset.type !== "3d") {
+            tsItems.push({ tsAction: "open-tab", tsLabel: this.tsT("menu.openInNewTab", "Open in new tab") });
+        }
+        tsItems.push({
+            tsAction: "delete",
+            tsLabel: this.tsT("menu.delete", "Delete"),
+            tsDisabled: !tsAsset.allow_delete,
+            tsDanger: true,
+        });
+        return tsItems;
+    }
+
+    tsHandleGalleryContextMenu(tsEvent) {
+        const tsCard = tsEvent.target.closest("[data-card-id]");
+        if (!tsCard) {
+            this.tsCloseContextMenu();
+            return;
+        }
+        const tsAsset = this.tsFindItemById(Number(tsCard.dataset.cardId));
+        if (!tsAsset) {
+            return;
+        }
+        tsEvent.preventDefault();
+        // Right-clicking an unselected card selects just it, so the menu action
+        // and any follow-up (e.g. delete) operate on the expected target.
+        if (!this.tsState.tsSelection.has(tsAsset.id)) {
+            this.tsState.tsSelection.clear();
+            this.tsState.tsSelection.add(tsAsset.id);
+            this.tsState.tsLastSelectedIndex = Number(tsCard.dataset.cardIndex);
+            this.tsRenderSelectionButtons();
+            this.tsRefreshCardSelection();
+        }
+        this.tsOpenContextMenu(tsEvent.clientX, tsEvent.clientY, tsAsset);
+    }
+
+    tsOpenContextMenu(tsClientX, tsClientY, tsAsset) {
+        const tsMenu = this.tsRefs.tsContextMenu;
+        const tsItems = this.tsBuildContextMenuItems(tsAsset);
+        tsMenu.innerHTML = tsItems
+            .map((tsItem) => `
+                <button
+                    class="ts-context-item"
+                    type="button"
+                    role="menuitem"
+                    data-menu-action="${this.tsEscapeAttribute(tsItem.tsAction)}"
+                    data-menu-asset-id="${tsAsset.id}"
+                    data-danger="${String(Boolean(tsItem.tsDanger))}"
+                    ${tsItem.tsDisabled ? "disabled" : ""}
+                >${this.tsEscapeHTML(tsItem.tsLabel)}</button>
+            `)
+            .join("");
+        tsMenu.hidden = false;
+        tsMenu.dataset.open = "true";
+        // Position within the shell, flipping if it would overflow the viewport.
+        const tsShellRect = this.tsRefs.tsShell.getBoundingClientRect();
+        const tsMenuRect = tsMenu.getBoundingClientRect();
+        let tsLeft = tsClientX - tsShellRect.left;
+        let tsTop = tsClientY - tsShellRect.top;
+        if (tsLeft + tsMenuRect.width > tsShellRect.width) {
+            tsLeft = Math.max(0, tsShellRect.width - tsMenuRect.width - 4);
+        }
+        if (tsTop + tsMenuRect.height > tsShellRect.height) {
+            tsTop = Math.max(0, tsShellRect.height - tsMenuRect.height - 4);
+        }
+        tsMenu.style.left = `${Math.max(0, tsLeft)}px`;
+        tsMenu.style.top = `${Math.max(0, tsTop)}px`;
+        // Dismissal listeners live only while the menu is open (teardown: they
+        // are removed in tsCloseContextMenu). Bound once and reused.
+        if (!this.tsContextMenuDismiss) {
+            this.tsContextMenuDismiss = (tsDismissEvent) => {
+                if (tsDismissEvent.type === "keydown" && tsDismissEvent.key !== "Escape") {
+                    return;
+                }
+                if (tsDismissEvent.type === "pointerdown" && tsMenu.contains(tsDismissEvent.target)) {
+                    return;
+                }
+                this.tsCloseContextMenu();
+            };
+        }
+        window.addEventListener("pointerdown", this.tsContextMenuDismiss, true);
+        window.addEventListener("keydown", this.tsContextMenuDismiss, true);
+        window.addEventListener("resize", this.tsContextMenuDismiss, true);
+        this.tsRefs.tsGalleryScroll.addEventListener("scroll", this.tsContextMenuDismiss, true);
+    }
+
+    tsCloseContextMenu() {
+        const tsMenu = this.tsRefs?.tsContextMenu;
+        if (!tsMenu || tsMenu.dataset.open !== "true") {
+            return;
+        }
+        tsMenu.dataset.open = "false";
+        tsMenu.hidden = true;
+        tsMenu.innerHTML = "";
+        if (this.tsContextMenuDismiss) {
+            window.removeEventListener("pointerdown", this.tsContextMenuDismiss, true);
+            window.removeEventListener("keydown", this.tsContextMenuDismiss, true);
+            window.removeEventListener("resize", this.tsContextMenuDismiss, true);
+            this.tsRefs.tsGalleryScroll?.removeEventListener("scroll", this.tsContextMenuDismiss, true);
+        }
+    }
+
+    tsHandleContextMenuClick(tsEvent) {
+        const tsButton = tsEvent.target.closest("[data-menu-action]");
+        if (!tsButton || tsButton.disabled) {
+            return;
+        }
+        const tsAsset = this.tsFindItemById(Number(tsButton.dataset.menuAssetId));
+        this.tsCloseContextMenu();
+        if (!tsAsset) {
+            return;
+        }
+        const tsAction = tsButton.dataset.menuAction;
+        if (tsAction === "copy") {
+            void this.tsCopyAssetPrompt(tsAsset.id);
+        } else if (tsAction === "workflow") {
+            void this.tsCopyAssetWorkflow(tsAsset.id);
+        } else if (tsAction === "load-workflow") {
+            void this.tsOpenWorkflowById(tsAsset.id);
+        } else if (tsAction === "download") {
+            tsOpenDownload(tsAsset);
+        } else if (tsAction === "open-tab") {
+            tsOpenAssetInNewTab(tsAsset);
+        } else if (tsAction === "delete") {
+            if (this.tsIsWorkflowSection()) {
+                void this.tsDeleteWorkflowById(tsAsset.id);
+            } else {
+                this.tsDeleteAssets(this.tsGetSelectedItems().length > 0 ? this.tsGetSelectedItems() : [tsAsset]);
+            }
+        }
+    }
+
+    tsRenderShortcutHelp() {
+        const tsSections = [
+            {
+                tsHeading: this.tsT("shortcuts.grid", "Asset grid"),
+                tsRows: [
+                    ["↑ ↓ ← →", this.tsT("shortcuts.move", "Move the selection")],
+                    ["Enter", this.tsT("shortcuts.open", "Open the lightbox / load the workflow")],
+                ],
+            },
+            {
+                tsHeading: this.tsT("shortcuts.lightbox", "Lightbox"),
+                tsRows: [
+                    ["Esc", this.tsT("shortcuts.close", "Close")],
+                    ["← →", this.tsT("shortcuts.nav", "Previous / next asset")],
+                    ["↑ ↓", this.tsT("shortcuts.frame", "Step one video frame")],
+                    ["Delete", this.tsT("shortcuts.trash", "Send to system trash")],
+                ],
+            },
+            {
+                tsHeading: this.tsT("shortcuts.cardButtons", "Card buttons (hover)"),
+                tsRows: [
+                    ["P", this.tsT("shortcuts.copyPrompt", "Copy prompt")],
+                    ["W", this.tsT("shortcuts.copyWorkflow", "Copy workflow (PNG)")],
+                    ["D", this.tsT("shortcuts.download", "Download")],
+                    ["X", this.tsT("shortcuts.delete", "Send to trash")],
+                    ["L", this.tsT("shortcuts.loadWorkflow", "Load workflow")],
+                ],
+            },
+            {
+                tsHeading: this.tsT("shortcuts.compareHeading", "Compare"),
+                tsRows: [
+                    [this.tsT("shortcuts.selectN", "Select 2 or 4"), this.tsT("shortcuts.compare", "Compare images or videos in the lightbox")],
+                ],
+            },
+        ];
+        this.tsRefs.tsShortcutsBody.innerHTML = tsSections
+            .map((tsSection) => `
+                <div class="ts-shortcuts-section">
+                    <h4>${this.tsEscapeHTML(tsSection.tsHeading)}</h4>
+                    ${tsSection.tsRows.map(([tsKeys, tsDesc]) => `
+                        <div class="ts-shortcuts-row">
+                            <kbd>${this.tsEscapeHTML(tsKeys)}</kbd>
+                            <span>${this.tsEscapeHTML(tsDesc)}</span>
+                        </div>
+                    `).join("")}
+                </div>
+            `)
+            .join("");
+    }
+
+    tsToggleShortcutHelp(tsForce = undefined) {
+        const tsOverlay = this.tsRefs?.tsShortcuts;
+        if (!tsOverlay) {
+            return;
+        }
+        const tsNextOpen = typeof tsForce === "boolean" ? tsForce : tsOverlay.dataset.open !== "true";
+        if (tsNextOpen) {
+            this.tsCloseContextMenu();
+            this.tsRenderShortcutHelp();
+        }
+        tsOverlay.dataset.open = String(tsNextOpen);
+        tsOverlay.hidden = !tsNextOpen;
+    }
+
     tsHandleGalleryDoubleClick(tsEvent) {
         const tsCard = tsEvent.target.closest("[data-card-id]");
         if (!tsCard) {
@@ -2290,6 +2530,18 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
 
     tsHandleKeydown(tsEvent) {
+        // "?" toggles the shortcut help; Escape closes it. Handled before the
+        // empty-list guard so help works even with no assets loaded.
+        if (tsEvent.key === "?") {
+            tsEvent.preventDefault();
+            this.tsToggleShortcutHelp();
+            return;
+        }
+        if (tsEvent.key === "Escape" && this.tsRefs.tsShortcuts?.dataset.open === "true") {
+            tsEvent.preventDefault();
+            this.tsToggleShortcutHelp(false);
+            return;
+        }
         if (this.tsState.tsItems.length === 0) {
             return;
         }

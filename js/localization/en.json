@@ -123,5 +123,31 @@
     "toast.workflowLoadFailed": "Failed to load workflow",
     "toast.workflowDeleteFailed": "Failed to delete workflow",
     "toast.rescanFailed": "Rescan failed",
-    "toast.rebuildFailed": "Rebuild cache failed"
+    "toast.rebuildFailed": "Rebuild cache failed",
+
+    "menu.copyPrompt": "Copy prompt",
+    "menu.copyWorkflow": "Copy workflow",
+    "menu.download": "Download",
+    "menu.openInNewTab": "Open in new tab",
+    "menu.delete": "Delete",
+    "menu.loadWorkflow": "Load workflow",
+
+    "shortcuts.title": "Keyboard shortcuts",
+    "shortcuts.grid": "Asset grid",
+    "shortcuts.move": "Move the selection",
+    "shortcuts.open": "Open the lightbox / load the workflow",
+    "shortcuts.lightbox": "Lightbox",
+    "shortcuts.close": "Close",
+    "shortcuts.nav": "Previous / next asset",
+    "shortcuts.frame": "Step one video frame",
+    "shortcuts.trash": "Send to system trash",
+    "shortcuts.cardButtons": "Card buttons (hover)",
+    "shortcuts.copyPrompt": "Copy prompt",
+    "shortcuts.copyWorkflow": "Copy workflow (PNG)",
+    "shortcuts.download": "Download",
+    "shortcuts.delete": "Send to trash",
+    "shortcuts.loadWorkflow": "Load workflow",
+    "shortcuts.compareHeading": "Compare",
+    "shortcuts.selectN": "Select 2 or 4",
+    "shortcuts.compare": "Compare images or videos in the lightbox"
 }

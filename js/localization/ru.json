@@ -123,5 +123,31 @@
     "toast.workflowLoadFailed": "Не удалось загрузить воркфлоу",
     "toast.workflowDeleteFailed": "Не удалось удалить воркфлоу",
     "toast.rescanFailed": "Не удалось выполнить сканирование",
-    "toast.rebuildFailed": "Не удалось пересобрать кэш"
+    "toast.rebuildFailed": "Не удалось пересобрать кэш",
+
+    "menu.copyPrompt": "Копировать промпт",
+    "menu.copyWorkflow": "Копировать воркфлоу",
+    "menu.download": "Скачать",
+    "menu.openInNewTab": "Открыть в новой вкладке",
+    "menu.delete": "Удалить",
+    "menu.loadWorkflow": "Загрузить воркфлоу",
+
+    "shortcuts.title": "Горячие клавиши",
+    "shortcuts.grid": "Сетка ассетов",
+    "shortcuts.move": "Переместить выделение",
+    "shortcuts.open": "Открыть лайтбокс / загрузить воркфлоу",
+    "shortcuts.lightbox": "Лайтбокс",
+    "shortcuts.close": "Закрыть",
+    "shortcuts.nav": "Предыдущий / следующий ассет",
+    "shortcuts.frame": "Шаг на один кадр видео",
+    "shortcuts.trash": "В системную корзину",
+    "shortcuts.cardButtons": "Кнопки карточки (при наведении)",
+    "shortcuts.copyPrompt": "Копировать промпт",
+    "shortcuts.copyWorkflow": "Копировать воркфлоу (PNG)",
+    "shortcuts.download": "Скачать",
+    "shortcuts.delete": "В корзину",
+    "shortcuts.loadWorkflow": "Загрузить воркфлоу",
+    "shortcuts.compareHeading": "Сравнение",
+    "shortcuts.selectN": "Выберите 2 или 4",
+    "shortcuts.compare": "Сравнение изображений или видео в лайтбоксе"
 }

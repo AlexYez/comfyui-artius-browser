@@ -46,6 +46,149 @@ export const tsPanelStyles = `<style>
                     outline-offset: -2px;
                 }
 
+                .ts-context-menu {
+                    position: absolute;
+                    z-index: 40;
+                    min-width: 168px;
+                    padding: 4px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 1px;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 10px;
+                    background: var(--ts-surface-overlay-strong);
+                    backdrop-filter: blur(10px);
+                    box-shadow: var(--ts-shadow);
+                }
+
+                .ts-context-menu[data-open="false"] {
+                    display: none;
+                }
+
+                .ts-context-item {
+                    appearance: none;
+                    border: 0;
+                    background: transparent;
+                    color: var(--ts-text);
+                    text-align: left;
+                    font: inherit;
+                    font-size: 12px;
+                    padding: 7px 10px;
+                    border-radius: 7px;
+                    cursor: pointer;
+                }
+
+                .ts-context-item:hover:not(:disabled),
+                .ts-context-item:focus-visible {
+                    background: color-mix(in srgb, var(--ts-accent) 18%, transparent);
+                    outline: none;
+                }
+
+                .ts-context-item[data-danger="true"] {
+                    color: var(--ts-danger);
+                }
+
+                .ts-context-item[data-danger="true"]:hover:not(:disabled) {
+                    background: var(--ts-danger-surface);
+                }
+
+                .ts-context-item:disabled {
+                    opacity: 0.4;
+                    cursor: default;
+                }
+
+                .ts-shortcuts {
+                    position: absolute;
+                    inset: 0;
+                    z-index: 60;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                    background: color-mix(in srgb, var(--ts-bg-0) 55%, transparent);
+                    backdrop-filter: blur(3px);
+                }
+
+                .ts-shortcuts[data-open="false"] {
+                    display: none;
+                }
+
+                .ts-shortcuts-panel {
+                    width: min(440px, 100%);
+                    max-height: 100%;
+                    overflow: auto;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 14px;
+                    background: var(--ts-bg-1);
+                    box-shadow: var(--ts-shadow);
+                }
+
+                .ts-shortcuts-head {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 12px 16px;
+                    border-bottom: 1px solid var(--ts-border);
+                }
+
+                .ts-shortcuts-head h3 {
+                    margin: 0;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                .ts-shortcuts-close {
+                    appearance: none;
+                    border: 0;
+                    background: transparent;
+                    color: var(--ts-muted);
+                    font-size: 20px;
+                    line-height: 1;
+                    cursor: pointer;
+                    padding: 2px 6px;
+                    border-radius: 6px;
+                }
+
+                .ts-shortcuts-close:hover {
+                    color: var(--ts-text);
+                    background: var(--ts-surface-ghost);
+                }
+
+                .ts-shortcuts-body {
+                    padding: 8px 16px 16px;
+                    display: grid;
+                    gap: 14px;
+                }
+
+                .ts-shortcuts-section h4 {
+                    margin: 8px 0 6px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.06em;
+                    color: var(--ts-muted);
+                }
+
+                .ts-shortcuts-row {
+                    display: grid;
+                    grid-template-columns: 108px 1fr;
+                    gap: 10px;
+                    align-items: baseline;
+                    padding: 3px 0;
+                    font-size: 12px;
+                }
+
+                .ts-shortcuts-row kbd {
+                    justify-self: start;
+                    padding: 2px 7px;
+                    border: 1px solid var(--ts-border);
+                    border-bottom-width: 2px;
+                    border-radius: 6px;
+                    background: var(--ts-bg-2);
+                    font: 600 11px/1.4 "Cascadia Code", "Consolas", monospace;
+                    color: var(--ts-text);
+                }
+
                 .ts-toolbar {
                     display: grid;
                     gap: 6px;
