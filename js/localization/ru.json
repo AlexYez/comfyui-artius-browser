@@ -149,5 +149,16 @@
     "shortcuts.loadWorkflow": "Загрузить воркфлоу",
     "shortcuts.compareHeading": "Сравнение",
     "shortcuts.selectN": "Выберите 2 или 4",
-    "shortcuts.compare": "Сравнение изображений или видео в лайтбоксе"
+    "shortcuts.compare": "Сравнение изображений или видео в лайтбоксе",
+
+    "button.filters": "Фильтры",
+    "tooltip.filters": "Фильтр ассетов по дате и разрешению.",
+    "filter.date": "Дата",
+    "filter.width": "Ширина",
+    "filter.height": "Высота",
+    "filter.clear": "Сбросить",
+    "filter.dateFrom": "С",
+    "filter.dateTo": "По",
+    "filter.min": "мин",
+    "filter.max": "макс"
 }

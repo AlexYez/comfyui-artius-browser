@@ -46,6 +46,67 @@ export const tsPanelStyles = `<style>
                     outline-offset: -2px;
                 }
 
+                .ts-filter-panel {
+                    display: flex;
+                    flex-wrap: wrap;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 8px 10px;
+                    border-top: 1px solid var(--ts-border);
+                    background: var(--ts-surface-ghost);
+                }
+
+                .ts-filter-panel[data-open="false"] {
+                    display: none;
+                }
+
+                .ts-filter-field {
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+
+                .ts-filter-label {
+                    font-size: 11px;
+                    color: var(--ts-muted);
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
+                }
+
+                .ts-filter-dash {
+                    color: var(--ts-muted);
+                }
+
+                .ts-filter-panel input {
+                    background: var(--ts-bg-2);
+                    color: var(--ts-text);
+                    border: 1px solid var(--ts-border);
+                    border-radius: 6px;
+                    padding: 3px 6px;
+                    font: inherit;
+                    font-size: 12px;
+                }
+
+                .ts-filter-panel input[type="number"] {
+                    width: 68px;
+                }
+
+                .ts-filter-clear {
+                    appearance: none;
+                    border: 1px solid var(--ts-border);
+                    background: var(--ts-bg-2);
+                    color: var(--ts-text);
+                    border-radius: 7px;
+                    padding: 4px 12px;
+                    font: inherit;
+                    font-size: 12px;
+                    cursor: pointer;
+                }
+
+                .ts-filter-clear:hover {
+                    border-color: var(--ts-accent);
+                }
+
                 .ts-context-menu {
                     position: absolute;
                     z-index: 40;

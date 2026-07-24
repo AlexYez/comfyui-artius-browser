@@ -36,6 +36,33 @@ export function tsBuildAssetSearchParams(tsOptions = {}) {
     if (tsFolder) {
         tsParams.set("folder", String(tsFolder));
     }
+    // Optional metadata filters (assets only). Empty date / 0 dimension means
+    // "no filter" and is omitted so the query stays minimal.
+    const tsFilters = Object.prototype.hasOwnProperty.call(tsOverrides, "filters")
+        ? tsOverrides.filters
+        : tsOptions.filters;
+    if (tsFilters) {
+        const tsDateFrom = String(tsFilters.dateFrom || "").trim();
+        const tsDateTo = String(tsFilters.dateTo || "").trim();
+        if (tsDateFrom) {
+            tsParams.set("date_from", tsDateFrom);
+        }
+        if (tsDateTo) {
+            tsParams.set("date_to", tsDateTo);
+        }
+        const tsDimensions = [
+            ["min_width", tsFilters.minWidth],
+            ["max_width", tsFilters.maxWidth],
+            ["min_height", tsFilters.minHeight],
+            ["max_height", tsFilters.maxHeight],
+        ];
+        for (const [tsKey, tsValue] of tsDimensions) {
+            const tsNumber = Number(tsValue || 0);
+            if (Number.isFinite(tsNumber) && tsNumber > 0) {
+                tsParams.set(tsKey, String(Math.floor(tsNumber)));
+            }
+        }
+    }
     if (tsCursorAfter
         && tsCursorAfter.sort_value !== undefined
         && tsCursorAfter.sort_value !== null

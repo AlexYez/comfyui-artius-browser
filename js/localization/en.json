@@ -149,5 +149,16 @@
     "shortcuts.loadWorkflow": "Load workflow",
     "shortcuts.compareHeading": "Compare",
     "shortcuts.selectN": "Select 2 or 4",
-    "shortcuts.compare": "Compare images or videos in the lightbox"
+    "shortcuts.compare": "Compare images or videos in the lightbox",
+
+    "button.filters": "Filters",
+    "tooltip.filters": "Filter assets by date and resolution.",
+    "filter.date": "Date",
+    "filter.width": "Width",
+    "filter.height": "Height",
+    "filter.clear": "Clear",
+    "filter.dateFrom": "From",
+    "filter.dateTo": "To",
+    "filter.min": "min",
+    "filter.max": "max"
 }

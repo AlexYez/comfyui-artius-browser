@@ -94,6 +94,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsAutoscan: Boolean(tsPanelSettings.defaultAutoscan),
             tsFolder: "",
             tsTypes: new Set(),
+            tsFilterDateFrom: "",
+            tsFilterDateTo: "",
+            tsFilterMinWidth: 0,
+            tsFilterMaxWidth: 0,
+            tsFilterMinHeight: 0,
+            tsFilterMaxHeight: 0,
+            tsFiltersOpen: false,
             tsSortKey: tsPanelSettings.defaultSort.key,
             tsSortDirection: tsPanelSettings.defaultSort.direction,
             tsPreviewSize: tsPreviewSizeRange.default,
@@ -484,6 +491,17 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             if (tsAssetTypes) {
                 this.tsState.tsTypes = tsAssetTypes;
             }
+            if (typeof tsUI.asset_date_from === "string") {
+                this.tsState.tsFilterDateFrom = tsUI.asset_date_from;
+            }
+            if (typeof tsUI.asset_date_to === "string") {
+                this.tsState.tsFilterDateTo = tsUI.asset_date_to;
+            }
+            this.tsState.tsFilterMinWidth = Math.max(0, Math.floor(Number(tsUI.asset_min_width) || 0));
+            this.tsState.tsFilterMaxWidth = Math.max(0, Math.floor(Number(tsUI.asset_max_width) || 0));
+            this.tsState.tsFilterMinHeight = Math.max(0, Math.floor(Number(tsUI.asset_min_height) || 0));
+            this.tsState.tsFilterMaxHeight = Math.max(0, Math.floor(Number(tsUI.asset_max_height) || 0));
+            this.tsState.tsFiltersOpen = this.tsHasActiveFilters();
             if (typeof tsUI.selected_root_id === "string" && tsUI.selected_root_id) {
                 this.tsState.tsRootId = tsUI.selected_root_id;
                 if (tsUI.selected_root_id !== "workflows") {
@@ -569,6 +587,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 workflow_preview_size: this.tsState.tsWorkflowPreviewSize,
                 workflow_search: this.tsState.tsWorkflowSearch,
                 asset_types: [...this.tsState.tsTypes],
+                asset_date_from: this.tsState.tsFilterDateFrom || "",
+                asset_date_to: this.tsState.tsFilterDateTo || "",
+                asset_min_width: this.tsState.tsFilterMinWidth || 0,
+                asset_max_width: this.tsState.tsFilterMaxWidth || 0,
+                asset_min_height: this.tsState.tsFilterMinHeight || 0,
+                asset_max_height: this.tsState.tsFilterMaxHeight || 0,
                 selected_root_id: tsSelectedRootId,
                 selected_folder_path: tsSelectedFolderPath,
                 workflow_selected_folder_path: this.tsWorkflowSelectedFolder || "",
@@ -757,6 +781,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                             <button class="ts-mode-button ts-mode-tree" type="button"></button>
                         </div>
                         <input class="ts-preview-size" type="range" min="${tsPreviewSizeRange.min}" max="${tsPreviewSizeRange.max}" step="${tsPreviewSizeRange.step}" value="${tsPreviewSizeRange.default}">
+                        <button class="ts-toggle-button ts-filters-toggle" type="button" data-active="false"></button>
                         <button class="ts-toggle-button ts-autoscan" type="button" data-active="true">
                             <span class="ts-autoscan-label"></span>
                         </button>
@@ -766,6 +791,27 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     </div>
                     </div>
                     <div class="ts-toolbar-resizer" role="separator" aria-orientation="horizontal" title=""></div>
+                    <div class="ts-filter-panel" data-open="false" hidden>
+                        <div class="ts-filter-field ts-filter-dates">
+                            <span class="ts-filter-label ts-filter-label-date"></span>
+                            <input class="ts-filter-date-from" type="date">
+                            <span class="ts-filter-dash">–</span>
+                            <input class="ts-filter-date-to" type="date">
+                        </div>
+                        <div class="ts-filter-field ts-filter-res">
+                            <span class="ts-filter-label ts-filter-label-width"></span>
+                            <input class="ts-filter-min-width" type="number" min="0" step="1" inputmode="numeric">
+                            <span class="ts-filter-dash">–</span>
+                            <input class="ts-filter-max-width" type="number" min="0" step="1" inputmode="numeric">
+                        </div>
+                        <div class="ts-filter-field ts-filter-res">
+                            <span class="ts-filter-label ts-filter-label-height"></span>
+                            <input class="ts-filter-min-height" type="number" min="0" step="1" inputmode="numeric">
+                            <span class="ts-filter-dash">–</span>
+                            <input class="ts-filter-max-height" type="number" min="0" step="1" inputmode="numeric">
+                        </div>
+                        <button class="ts-filter-clear" type="button"></button>
+                    </div>
                     <div class="ts-progress" data-visible="false" data-indeterminate="false">
                         <div class="ts-progress-track"><div class="ts-progress-fill"></div></div>
                         <div class="ts-progress-caption"></div>
@@ -822,6 +868,18 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsAutoscan: this.shadowRoot.querySelector(".ts-autoscan"),
             tsAutoscanLabel: this.shadowRoot.querySelector(".ts-autoscan-label"),
             tsRescan: this.shadowRoot.querySelector(".ts-rescan"),
+            tsFiltersToggle: this.shadowRoot.querySelector(".ts-filters-toggle"),
+            tsFilterPanel: this.shadowRoot.querySelector(".ts-filter-panel"),
+            tsFilterDateFrom: this.shadowRoot.querySelector(".ts-filter-date-from"),
+            tsFilterDateTo: this.shadowRoot.querySelector(".ts-filter-date-to"),
+            tsFilterMinWidth: this.shadowRoot.querySelector(".ts-filter-min-width"),
+            tsFilterMaxWidth: this.shadowRoot.querySelector(".ts-filter-max-width"),
+            tsFilterMinHeight: this.shadowRoot.querySelector(".ts-filter-min-height"),
+            tsFilterMaxHeight: this.shadowRoot.querySelector(".ts-filter-max-height"),
+            tsFilterClear: this.shadowRoot.querySelector(".ts-filter-clear"),
+            tsFilterLabelDate: this.shadowRoot.querySelector(".ts-filter-label-date"),
+            tsFilterLabelWidth: this.shadowRoot.querySelector(".ts-filter-label-width"),
+            tsFilterLabelHeight: this.shadowRoot.querySelector(".ts-filter-label-height"),
             tsRebuildCache: this.shadowRoot.querySelector(".ts-rebuild-cache"),
             tsDeleteSelected: this.shadowRoot.querySelector(".ts-delete-selected"),
             tsProgress: this.shadowRoot.querySelector(".ts-progress"),
@@ -957,6 +1015,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 await this.tsMaybeBootstrapScan();
             }
         });
+        this.tsRefs.tsFiltersToggle.addEventListener("click", () => this.tsToggleFilterPanel());
+        this.tsBindFilterInputs();
+        this.tsRefs.tsFilterClear.addEventListener("click", () => this.tsClearFilters());
         this.tsRefs.tsRescan.addEventListener("click", () => this.tsRequestRescan());
         this.tsRefs.tsRebuildCache.addEventListener("click", () => this.tsRequestRebuildCache());
         this.tsRefs.tsDeleteSelected.addEventListener("click", () => this.tsDeleteSelected());
@@ -1192,6 +1253,18 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsDeleteSelected.title = this.tsT("tooltip.deleteSelected", "Delete selected assets from allowed roots.");
         this.tsRefs.tsToolbarResizer.title = this.tsT("tooltip.toolbarResize", "Drag to resize the toolbar.");
         this.tsRefs.tsGalleryContent.setAttribute("aria-label", this.tsT("aria.gallery", "Asset grid"));
+        this.tsRefs.tsFiltersToggle.textContent = this.tsT("button.filters", "Filters");
+        this.tsRefs.tsFiltersToggle.title = this.tsT("tooltip.filters", "Filter assets by date and resolution.");
+        this.tsRefs.tsFilterLabelDate.textContent = this.tsT("filter.date", "Date");
+        this.tsRefs.tsFilterLabelWidth.textContent = this.tsT("filter.width", "Width");
+        this.tsRefs.tsFilterLabelHeight.textContent = this.tsT("filter.height", "Height");
+        this.tsRefs.tsFilterClear.textContent = this.tsT("filter.clear", "Clear");
+        this.tsRefs.tsFilterDateFrom.title = this.tsT("filter.dateFrom", "From");
+        this.tsRefs.tsFilterDateTo.title = this.tsT("filter.dateTo", "To");
+        this.tsRefs.tsFilterMinWidth.placeholder = this.tsT("filter.min", "min");
+        this.tsRefs.tsFilterMaxWidth.placeholder = this.tsT("filter.max", "max");
+        this.tsRefs.tsFilterMinHeight.placeholder = this.tsT("filter.min", "min");
+        this.tsRefs.tsFilterMaxHeight.placeholder = this.tsT("filter.max", "max");
         this.tsRefs.tsShortcutsTitle.textContent = this.tsT("shortcuts.title", "Keyboard shortcuts");
         this.tsRefs.tsShortcutsClose.textContent = "×";
         this.tsRefs.tsShortcutsClose.setAttribute("aria-label", this.tsT("button.close", "Close"));
@@ -1228,6 +1301,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRescan.hidden = tsWorkflowSection;
         this.tsRefs.tsRebuildCache.hidden = tsWorkflowSection;
         this.tsRefs.tsDeleteSelected.hidden = tsWorkflowSection;
+        this.tsRenderFilterPanel();
         this.tsRefs.tsTypeCluster.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRootGroup.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRootSelect.style.display = tsWorkflowHiddenDisplay;
@@ -1316,6 +1390,105 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 this.tsDebouncedFilterRefresh();
             });
         });
+    }
+
+    tsBindFilterInputs() {
+        const tsDimensionInputs = [
+            [this.tsRefs.tsFilterMinWidth, "tsFilterMinWidth"],
+            [this.tsRefs.tsFilterMaxWidth, "tsFilterMaxWidth"],
+            [this.tsRefs.tsFilterMinHeight, "tsFilterMinHeight"],
+            [this.tsRefs.tsFilterMaxHeight, "tsFilterMaxHeight"],
+        ];
+        for (const [tsInput, tsField] of tsDimensionInputs) {
+            tsInput.addEventListener("input", () => {
+                const tsValue = Math.max(0, Math.floor(Number(tsInput.value) || 0));
+                this.tsState[tsField] = tsValue;
+                this.tsQueueSaveUISettings();
+                this.tsDebouncedFilterRefresh();
+            });
+        }
+        const tsDateInputs = [
+            [this.tsRefs.tsFilterDateFrom, "tsFilterDateFrom"],
+            [this.tsRefs.tsFilterDateTo, "tsFilterDateTo"],
+        ];
+        for (const [tsInput, tsField] of tsDateInputs) {
+            tsInput.addEventListener("change", () => {
+                this.tsState[tsField] = String(tsInput.value || "");
+                this.tsQueueSaveUISettings();
+                this.tsFetchAssets(true);
+            });
+        }
+    }
+
+    tsHasActiveFilters() {
+        return Boolean(
+            this.tsState.tsFilterDateFrom
+            || this.tsState.tsFilterDateTo
+            || this.tsState.tsFilterMinWidth
+            || this.tsState.tsFilterMaxWidth
+            || this.tsState.tsFilterMinHeight
+            || this.tsState.tsFilterMaxHeight,
+        );
+    }
+
+    tsBuildActiveFilters() {
+        // Filters apply to indexed assets only; the frontend-only Workflows tab
+        // ignores them.
+        if (this.tsIsWorkflowSection()) {
+            return null;
+        }
+        return {
+            dateFrom: this.tsState.tsFilterDateFrom,
+            dateTo: this.tsState.tsFilterDateTo,
+            minWidth: this.tsState.tsFilterMinWidth,
+            maxWidth: this.tsState.tsFilterMaxWidth,
+            minHeight: this.tsState.tsFilterMinHeight,
+            maxHeight: this.tsState.tsFilterMaxHeight,
+        };
+    }
+
+    tsSyncFilterInputs() {
+        this.tsRefs.tsFilterDateFrom.value = this.tsState.tsFilterDateFrom || "";
+        this.tsRefs.tsFilterDateTo.value = this.tsState.tsFilterDateTo || "";
+        this.tsRefs.tsFilterMinWidth.value = this.tsState.tsFilterMinWidth ? String(this.tsState.tsFilterMinWidth) : "";
+        this.tsRefs.tsFilterMaxWidth.value = this.tsState.tsFilterMaxWidth ? String(this.tsState.tsFilterMaxWidth) : "";
+        this.tsRefs.tsFilterMinHeight.value = this.tsState.tsFilterMinHeight ? String(this.tsState.tsFilterMinHeight) : "";
+        this.tsRefs.tsFilterMaxHeight.value = this.tsState.tsFilterMaxHeight ? String(this.tsState.tsFilterMaxHeight) : "";
+        this.tsRefs.tsFiltersToggle.dataset.active = String(this.tsState.tsFiltersOpen || this.tsHasActiveFilters());
+    }
+
+    tsToggleFilterPanel(tsForce = undefined) {
+        const tsNextOpen = typeof tsForce === "boolean" ? tsForce : !this.tsState.tsFiltersOpen;
+        this.tsState.tsFiltersOpen = tsNextOpen;
+        this.tsRenderFilterPanel();
+        // The filter row changes the toolbar's natural height, so re-measure.
+        this.tsLastObservedToolbarHeight = 0;
+        this.tsApplyToolbarScale();
+    }
+
+    tsRenderFilterPanel() {
+        const tsWorkflowSection = this.tsIsWorkflowSection();
+        const tsShouldShow = !tsWorkflowSection && this.tsState.tsFiltersOpen;
+        this.tsRefs.tsFilterPanel.hidden = !tsShouldShow;
+        this.tsRefs.tsFilterPanel.dataset.open = String(tsShouldShow);
+        this.tsRefs.tsFiltersToggle.hidden = tsWorkflowSection;
+        this.tsRefs.tsFiltersToggle.style.display = tsWorkflowSection ? "none" : "";
+        this.tsRefs.tsFiltersToggle.dataset.active = String(this.tsState.tsFiltersOpen || this.tsHasActiveFilters());
+        if (tsShouldShow) {
+            this.tsSyncFilterInputs();
+        }
+    }
+
+    tsClearFilters() {
+        this.tsState.tsFilterDateFrom = "";
+        this.tsState.tsFilterDateTo = "";
+        this.tsState.tsFilterMinWidth = 0;
+        this.tsState.tsFilterMaxWidth = 0;
+        this.tsState.tsFilterMinHeight = 0;
+        this.tsState.tsFilterMaxHeight = 0;
+        this.tsSyncFilterInputs();
+        this.tsQueueSaveUISettings();
+        this.tsFetchAssets(true);
     }
 
     tsSetMode(tsMode) {
@@ -1504,6 +1677,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             rootId: this.tsState.tsRootId,
             types: [...this.tsState.tsTypes],
             folder: this.tsState.tsFolder,
+            filters: this.tsBuildActiveFilters(),
             overrides: tsOverrides,
         });
     }

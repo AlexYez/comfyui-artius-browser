@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .ts_settings import TS_DEFAULT_PREVIEW_SIZE, TS_PREVIEW_SIZE_MAX, TS_PREVIEW_SIZE_MIN
@@ -11,9 +12,28 @@ TS_WORKFLOW_SORT_KEYS = {"created_at", "filename"}
 TS_SORT_DIRECTIONS = {"asc", "desc"}
 TS_ASSET_TYPES = {"image", "video", "audio", "3d"}
 
+# Assets larger than any real render but small enough to stay a plausible pixel
+# dimension — bounds the persisted resolution filter so a garbage value cannot
+# be stored.
+TS_FILTER_DIMENSION_MAX = 100_000
+_TS_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
 
 def TSNormalizeFolderPath(ts_value: Any) -> str:
     return str(ts_value or "").replace("\\", "/").strip("/")
+
+
+def TSNormalizeFilterDate(ts_value: Any) -> str:
+    # Empty string = no filter. Otherwise must be an ISO YYYY-MM-DD date; any
+    # other shape is discarded rather than stored.
+    ts_text = str(ts_value or "").strip()
+    return ts_text if _TS_DATE_PATTERN.match(ts_text) else ""
+
+
+def TSNormalizeFilterDimension(ts_value: Any) -> int:
+    # 0 = no filter. Negatives and junk collapse to 0; huge values are clamped.
+    ts_parsed = TSParseClampedInt(ts_value, 0, TS_FILTER_DIMENSION_MAX)
+    return ts_parsed if ts_parsed is not None else 0
 
 
 def TSParseClampedInt(ts_value: Any, ts_minimum: int, ts_maximum: int) -> int | None:
@@ -68,6 +88,12 @@ def TSNormalizeUISettings(ts_ui: dict[str, Any] | None) -> dict[str, Any]:
         "workflow_preview_size": TSClampInt(ts_ui.get("workflow_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX, TS_DEFAULT_PREVIEW_SIZE),
         "workflow_search": str(ts_ui.get("workflow_search") or ""),
         "asset_types": [ts_type for ts_type in TSNormalizeStringSequence(ts_ui.get("asset_types")) if ts_type in TS_ASSET_TYPES],
+        "asset_date_from": TSNormalizeFilterDate(ts_ui.get("asset_date_from")),
+        "asset_date_to": TSNormalizeFilterDate(ts_ui.get("asset_date_to")),
+        "asset_min_width": TSNormalizeFilterDimension(ts_ui.get("asset_min_width")),
+        "asset_max_width": TSNormalizeFilterDimension(ts_ui.get("asset_max_width")),
+        "asset_min_height": TSNormalizeFilterDimension(ts_ui.get("asset_min_height")),
+        "asset_max_height": TSNormalizeFilterDimension(ts_ui.get("asset_max_height")),
         "selected_root_id": str(ts_ui.get("selected_root_id") or "all"),
         "selected_folder_path": TSNormalizeFolderPath(ts_ui.get("selected_folder_path")),
         "workflow_selected_folder_path": TSNormalizeFolderPath(ts_ui.get("workflow_selected_folder_path")),
@@ -115,6 +141,12 @@ def TSApplyUISettingsUpdates(ts_ui: dict[str, Any], ts_ui_updates: dict[str, Any
         ts_asset_types = ts_updates.get("asset_types") or []
         if isinstance(ts_asset_types, (list, tuple, set)):
             ts_ui["asset_types"] = [str(ts_type) for ts_type in ts_asset_types if str(ts_type) in TS_ASSET_TYPES]
+    for ts_date_key in ("asset_date_from", "asset_date_to"):
+        if ts_date_key in ts_updates:
+            ts_ui[ts_date_key] = TSNormalizeFilterDate(ts_updates.get(ts_date_key))
+    for ts_dimension_key in ("asset_min_width", "asset_max_width", "asset_min_height", "asset_max_height"):
+        if ts_dimension_key in ts_updates:
+            ts_ui[ts_dimension_key] = TSNormalizeFilterDimension(ts_updates.get(ts_dimension_key))
     if "selected_root_id" in ts_updates:
         ts_ui["selected_root_id"] = str(ts_updates.get("selected_root_id") or "all")
     if "selected_folder_path" in ts_updates:
