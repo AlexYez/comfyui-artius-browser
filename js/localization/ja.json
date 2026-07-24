@@ -4,12 +4,10 @@
     "tooltip.donate": "プロジェクトを支援します。",
     "badge.newVersion": "新しいバージョンがあります",
     "tooltip.newVersion": "GitHub に新しい Artius Browser のリリースがあります。",
-
     "button.assets": "アセット",
     "tooltip.section.assets": "インデックス済みのアセットを閲覧します。",
     "button.workflows": "ワークフロー",
     "tooltip.section.workflows": "ComfyUI のワークフローを閲覧します。",
-
     "placeholder.search": "ファイル名を検索...",
     "tooltip.search": "ファイル名のみでアセットを検索します。",
     "placeholder.search.workflows": "ワークフローのファイル名を検索...",
@@ -17,7 +15,6 @@
     "label.allRoots": "すべてのフォルダ",
     "tooltip.root": "ルートフォルダを選択します。",
     "tooltip.previewSize": "プレビューサイズを調整します。",
-
     "sort.created_at": "日付",
     "sort.filename": "ファイル名",
     "sort.filename.workflow": "名前",
@@ -25,13 +22,11 @@
     "button.sortAsc": "昇順",
     "button.sortDesc": "降順",
     "tooltip.sortDirection": "昇順と降順を切り替えます。",
-
     "button.flat": "リスト",
     "tooltip.mode.flat": "フラット表示に切り替えます。",
     "button.tree": "ツリー",
     "tooltip.mode.tree": "フォルダツリーに切り替えます。",
     "tooltip.toolbarResize": "ドラッグしてツールバーのサイズを変更します。",
-
     "type.image": "画像",
     "tooltip.type.image": "画像アセットを切り替えます。",
     "type.video": "動画",
@@ -41,7 +36,6 @@
     "type.3d": "3D",
     "tooltip.type.3d": "3D アセットを切り替えます。",
     "type.workflow": "ワークフロー",
-
     "toggle.autoscan": "自動スキャン",
     "tooltip.autoscan": "ブラウザ起動時や ComfyUI の実行完了時にアセットを自動で再スキャンします。",
     "button.rescan": "スキャン",
@@ -50,7 +44,6 @@
     "tooltip.deleteSelected": "許可されたルートから選択中のアセットを削除します。",
     "button.rebuildCache": "キャッシュ再構築",
     "tooltip.rebuildCache": "現在のブラウザキャッシュを消去して一から再構築します。",
-
     "button.loadWorkflow": "ワークフローを読み込む",
     "button.copyPrompt": "プロンプトをコピー",
     "button.copyWorkflow": "ワークフローをコピー",
@@ -66,7 +59,6 @@
     "button.stop": "停止",
     "button.prevFrame": "前のフレーム",
     "button.nextFrame": "次のフレーム",
-
     "label.asset": "アセット",
     "label.audioWaveform": "音声波形",
     "label.asset3d": "3D アセット",
@@ -75,9 +67,7 @@
     "label.mono": "モノラル",
     "label.stereo": "ステレオ",
     "section.workflows": "ワークフロー",
-
     "confirm.rebuildCache": "ブラウザキャッシュを一から再構築しますか?現在のキャッシュを消去して完全な再スキャンを開始します。",
-
     "status.indexing": "インデックス中",
     "status.requestingScan": "スキャンを開始しています...",
     "status.requestingRebuild": "キャッシュを再構築しています...",
@@ -87,12 +77,10 @@
     "status.loading3dViewer": "3D ビューアを読み込んでいます...",
     "status.no3dViewer": "3D ビューアは利用できません。",
     "status.failed3dViewer": "3D ビューアを開けませんでした。",
-
     "health.missingTools": "不足しているツール",
     "empty.title": "現在のフィルタに一致するアセットはありません。",
     "empty.scan": "インデックス済みのアセットがまだありません。「スキャン」を押して ComfyUI の出力をスキャンしてください。",
     "empty.workflows": "現在のフィルタに一致するワークフローはありません。",
-
     "meta.size": "サイズ",
     "meta.resolution": "解像度",
     "meta.duration": "長さ",
@@ -110,9 +98,7 @@
     "meta.channels": "チャンネル",
     "meta.bitrate": "ビットレート",
     "meta.noTechnical": "ffprobe のメタデータが見つかりません。",
-
     "aria.gallery": "アセットグリッド",
-
     "toast.copied": "コピーしました",
     "toast.promptCopied": "プロンプトをコピーしました",
     "toast.workflowCopied": "ワークフローをコピーしました",
@@ -124,14 +110,12 @@
     "toast.workflowDeleteFailed": "ワークフローの削除に失敗しました",
     "toast.rescanFailed": "スキャンに失敗しました",
     "toast.rebuildFailed": "キャッシュの再構築に失敗しました",
-
     "menu.copyPrompt": "プロンプトをコピー",
     "menu.copyWorkflow": "ワークフローをコピー",
     "menu.download": "ダウンロード",
     "menu.openInNewTab": "新しいタブで開く",
     "menu.delete": "削除",
     "menu.loadWorkflow": "ワークフローを読み込む",
-
     "shortcuts.title": "キーボードショートカット",
     "shortcuts.grid": "アセットグリッド",
     "shortcuts.move": "選択を移動",
@@ -150,7 +134,6 @@
     "shortcuts.compareHeading": "比較",
     "shortcuts.selectN": "2 つまたは 4 つ選択",
     "shortcuts.compare": "ライトボックスで画像や動画を比較",
-
     "button.filters": "フィルタ",
     "tooltip.filters": "日付と解像度でアセットを絞り込みます。",
     "filter.date": "日付",
@@ -160,5 +143,7 @@
     "filter.dateFrom": "開始",
     "filter.dateTo": "終了",
     "filter.min": "最小",
-    "filter.max": "最大"
+    "filter.max": "最大",
+    "button.searchPrompts": "プロンプト",
+    "tooltip.searchPrompts": "ファイル名だけでなくプロンプト内も検索します。"
 }

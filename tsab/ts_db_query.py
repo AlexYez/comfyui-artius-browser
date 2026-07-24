@@ -40,15 +40,30 @@ def TSBuildAssetQueryParts(
     ts_from_sql = "assets_view"
 
     if ts_search_text.strip():
+        # Opt-in scope: "all" also searches the prompt_text FTS column; the
+        # default stays filename-only (the frozen product default). A missing /
+        # unknown scope falls back to filename.
+        ts_search_prompts = str(ts_filters.get("search_scope") or "filename").lower() == "all"
         ts_fts_query = TSBuildFTSQuery(ts_search_text)
         if ts_fts_query:
             ts_from_sql = "assets_view INNER JOIN assets_fts ON assets_fts.rowid = assets_view.id"
-            ts_where_clauses.append("assets_fts.filename MATCH ?")
+            if ts_search_prompts:
+                # Match the whole FTS row (filename + prompt_text columns).
+                ts_where_clauses.append("assets_fts MATCH ?")
+            else:
+                ts_where_clauses.append("assets_fts.filename MATCH ?")
             ts_parameters.append(ts_fts_query)
         else:
             ts_search_value = str(ts_search_text).strip().replace("%", r"\%").replace("_", r"\_")
-            ts_where_clauses.append("assets_view.filename LIKE ? ESCAPE '\\' COLLATE NOCASE")
-            ts_parameters.append(f"%{ts_search_value}%")
+            if ts_search_prompts:
+                ts_where_clauses.append(
+                    "(assets_view.filename LIKE ? ESCAPE '\\' COLLATE NOCASE "
+                    "OR assets_view.prompt_text LIKE ? ESCAPE '\\' COLLATE NOCASE)"
+                )
+                ts_parameters.extend([f"%{ts_search_value}%", f"%{ts_search_value}%"])
+            else:
+                ts_where_clauses.append("assets_view.filename LIKE ? ESCAPE '\\' COLLATE NOCASE")
+                ts_parameters.append(f"%{ts_search_value}%")
 
     if ts_filters.get("types"):
         ts_types = list(ts_filters["types"])

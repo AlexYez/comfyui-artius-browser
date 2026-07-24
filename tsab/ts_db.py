@@ -8,7 +8,14 @@ from typing import Any
 from .ts_companion import TSComputeCompanionStemFromFilename
 from .ts_db_payload import TSBuildUpdatedAssetPayload, TSComputeAssetStatus, TSPayloadFromAssetRow
 from .ts_db_query import TS_SORT_KEY_MAP, TSBuildAssetQueryParts, TSResolveSortKey
-from .ts_db_schema import TS_DB_DROP_SCHEMA_SQL, TS_DB_RESET_INDEX_SQL, TS_DB_SCHEMA_SQL, TS_DB_SCHEMA_VERSION
+from .ts_db_schema import (
+    TS_DB_DROP_SCHEMA_SQL,
+    TS_DB_FTS_PROMPT_SCHEMA_VERSION,
+    TS_DB_FTS_REBUILD_SQL,
+    TS_DB_RESET_INDEX_SQL,
+    TS_DB_SCHEMA_SQL,
+    TS_DB_SCHEMA_VERSION,
+)
 from .ts_logging import TSLogVerbose
 from .ts_types import TSAssetPayload
 
@@ -56,9 +63,32 @@ class TSDatabase:
                 error=str(ts_error),
             )
             self._TSRebuildSchema(ts_connection, ts_user_version, "additive_failed")
+        else:
+            self._TSMigrateFTSPromptColumn(ts_connection, ts_user_version)
         if ts_user_version != TS_DB_SCHEMA_VERSION:
             ts_connection.execute(f"PRAGMA user_version = {TS_DB_SCHEMA_VERSION}")
         TSLogVerbose("db.migrated", database=str(self.ts_database_path), schema_version=TS_DB_SCHEMA_VERSION)
+
+    def _TSMigrateFTSPromptColumn(self, ts_connection: sqlite3.Connection, ts_user_version: int) -> None:
+        # A pre-v11 database has a filename-only FTS table that IF NOT EXISTS
+        # left untouched. Rebuild it with the prompt_text column and repopulate
+        # from existing rows so opt-in prompt search works without a re-scan.
+        if ts_user_version >= TS_DB_FTS_PROMPT_SCHEMA_VERSION:
+            return
+        try:
+            ts_connection.executescript(TS_DB_FTS_REBUILD_SQL)
+            TSLogVerbose(
+                "db.migration.fts_prompt_rebuilt",
+                database=str(self.ts_database_path),
+                from_schema_version=ts_user_version,
+            )
+        except sqlite3.DatabaseError as ts_error:
+            TSLogVerbose(
+                "db.migration.fts_prompt_failed",
+                database=str(self.ts_database_path),
+                error=str(ts_error),
+            )
+            self._TSRebuildSchema(ts_connection, ts_user_version, "fts_prompt_migration_failed")
 
     def _TSRebuildSchema(
         self,
@@ -297,7 +327,7 @@ class TSDatabase:
             )
         else:
             ts_connection.execute("DELETE FROM asset_metadata WHERE asset_id = ?", (ts_asset_id,))
-        self._TSSyncFTSRow(ts_asset_id, ts_payload.ts_filename)
+        self._TSSyncFTSRow(ts_asset_id, ts_payload.ts_filename, ts_payload.ts_prompt_text)
         return ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id
 
     def TSUpsertAsset(self, ts_payload: TSAssetPayload) -> sqlite3.Row:
@@ -399,12 +429,12 @@ class TSDatabase:
     def TSBuildUpdatedPayload(self, ts_row: sqlite3.Row, **ts_overrides: Any) -> TSAssetPayload:
         return TSBuildUpdatedAssetPayload(ts_row, **ts_overrides)
 
-    def _TSSyncFTSRow(self, ts_asset_id: int, ts_filename: str) -> None:
+    def _TSSyncFTSRow(self, ts_asset_id: int, ts_filename: str, ts_prompt_text: str = "") -> None:
         ts_connection = self.TSGetConnection()
         ts_connection.execute("DELETE FROM assets_fts WHERE rowid = ?", (ts_asset_id,))
         ts_connection.execute(
-            "INSERT INTO assets_fts(rowid, filename) VALUES (?, ?)",
-            (ts_asset_id, ts_filename),
+            "INSERT INTO assets_fts(rowid, filename, prompt_text) VALUES (?, ?, ?)",
+            (ts_asset_id, ts_filename, ts_prompt_text or ""),
         )
 
     def TSGetAssetById(self, ts_asset_id: int) -> sqlite3.Row | None:

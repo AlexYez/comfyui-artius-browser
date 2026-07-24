@@ -161,6 +161,7 @@ async def TSHandleAssets(ts_runtime, ts_request):
         "max_height": TSParseMaybeInt(ts_request.query.get("max_height")),
         "sort_key": ts_request.query.get("sort") or "created_at",
         "sort_direction": ts_request.query.get("order") or "desc",
+        "search_scope": ts_request.query.get("search_scope") or "filename",
     }
     ts_limit = min(500, max(1, TSParseMaybeInt(ts_request.query.get("limit")) or TS_DEFAULT_PAGE_SIZE))
     ts_view = ts_request.query.get("view") or "flat"

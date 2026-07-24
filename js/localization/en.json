@@ -4,12 +4,10 @@
     "tooltip.donate": "Support the project.",
     "badge.newVersion": "New version available",
     "tooltip.newVersion": "A newer release of Artius Browser is available on GitHub.",
-
     "button.assets": "Assets",
     "tooltip.section.assets": "Browse indexed assets.",
     "button.workflows": "Workflows",
     "tooltip.section.workflows": "Browse ComfyUI workflows.",
-
     "placeholder.search": "Search filename...",
     "tooltip.search": "Search assets by filename only.",
     "placeholder.search.workflows": "Search workflow filename...",
@@ -17,7 +15,6 @@
     "label.allRoots": "All Folders",
     "tooltip.root": "Choose a root folder.",
     "tooltip.previewSize": "Adjust preview size.",
-
     "sort.created_at": "Date",
     "sort.filename": "Filename",
     "sort.filename.workflow": "Names",
@@ -25,13 +22,11 @@
     "button.sortAsc": "Asc",
     "button.sortDesc": "Desc",
     "tooltip.sortDirection": "Toggle ascending and descending sorting.",
-
     "button.flat": "Flat",
     "tooltip.mode.flat": "Switch to the flat feed.",
     "button.tree": "Tree",
     "tooltip.mode.tree": "Switch to the folder tree.",
     "tooltip.toolbarResize": "Drag to resize the toolbar.",
-
     "type.image": "Image",
     "tooltip.type.image": "Toggle image assets.",
     "type.video": "Video",
@@ -41,7 +36,6 @@
     "type.3d": "3D",
     "tooltip.type.3d": "Toggle 3D assets.",
     "type.workflow": "WORKFLOW",
-
     "toggle.autoscan": "Autoscan",
     "tooltip.autoscan": "Automatically rescan assets when the browser starts or when ComfyUI finishes execution.",
     "button.rescan": "Rescan",
@@ -50,7 +44,6 @@
     "tooltip.deleteSelected": "Delete selected assets from allowed roots.",
     "button.rebuildCache": "Rebuild Cache",
     "tooltip.rebuildCache": "Delete the current browser cache and rebuild it from scratch.",
-
     "button.loadWorkflow": "Load Workflow",
     "button.copyPrompt": "Copy Prompt",
     "button.copyWorkflow": "Copy Workflow",
@@ -66,7 +59,6 @@
     "button.stop": "Stop",
     "button.prevFrame": "Previous Frame",
     "button.nextFrame": "Next Frame",
-
     "label.asset": "Asset",
     "label.audioWaveform": "Audio waveform",
     "label.asset3d": "3D asset",
@@ -75,9 +67,7 @@
     "label.mono": "Mono",
     "label.stereo": "Stereo",
     "section.workflows": "Workflows",
-
     "confirm.rebuildCache": "Rebuild the browser cache from scratch? This will clear the current cache and start a full rescan.",
-
     "status.indexing": "Indexing",
     "status.requestingScan": "Starting scan...",
     "status.requestingRebuild": "Rebuilding cache...",
@@ -87,12 +77,10 @@
     "status.loading3dViewer": "Loading 3D viewer...",
     "status.no3dViewer": "3D viewer unavailable.",
     "status.failed3dViewer": "Failed to open 3D viewer.",
-
     "health.missingTools": "Missing tools",
     "empty.title": "No assets match the current filters.",
     "empty.scan": "No indexed assets yet. Click Rescan to scan ComfyUI output.",
     "empty.workflows": "No workflows match the current filters.",
-
     "meta.size": "Size",
     "meta.resolution": "Resolution",
     "meta.duration": "Duration",
@@ -110,9 +98,7 @@
     "meta.channels": "Channels",
     "meta.bitrate": "Bitrate",
     "meta.noTechnical": "No ffprobe metadata found.",
-
     "aria.gallery": "Asset grid",
-
     "toast.copied": "Copied",
     "toast.promptCopied": "Prompt copied",
     "toast.workflowCopied": "Workflow copied",
@@ -124,14 +110,12 @@
     "toast.workflowDeleteFailed": "Failed to delete workflow",
     "toast.rescanFailed": "Rescan failed",
     "toast.rebuildFailed": "Rebuild cache failed",
-
     "menu.copyPrompt": "Copy prompt",
     "menu.copyWorkflow": "Copy workflow",
     "menu.download": "Download",
     "menu.openInNewTab": "Open in new tab",
     "menu.delete": "Delete",
     "menu.loadWorkflow": "Load workflow",
-
     "shortcuts.title": "Keyboard shortcuts",
     "shortcuts.grid": "Asset grid",
     "shortcuts.move": "Move the selection",
@@ -150,7 +134,6 @@
     "shortcuts.compareHeading": "Compare",
     "shortcuts.selectN": "Select 2 or 4",
     "shortcuts.compare": "Compare images or videos in the lightbox",
-
     "button.filters": "Filters",
     "tooltip.filters": "Filter assets by date and resolution.",
     "filter.date": "Date",
@@ -160,5 +143,7 @@
     "filter.dateFrom": "From",
     "filter.dateTo": "To",
     "filter.min": "min",
-    "filter.max": "max"
+    "filter.max": "max",
+    "button.searchPrompts": "Prompt",
+    "tooltip.searchPrompts": "Also search inside prompts (not just filenames)."
 }

@@ -87,6 +87,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsSearch: "",
             tsAssetSearch: "",
             tsWorkflowSearch: "",
+            tsSearchScope: "filename",
             tsRootId: tsPanelSettings.defaultRootId,
             tsMode: tsPanelSettings.defaultMode,
             tsAssetMode: tsPanelSettings.defaultMode,
@@ -487,6 +488,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsState.tsWorkflowPreviewSize = tsResolvePreviewSize(tsUI.workflow_preview_size, tsPreviewSizeRange.default, tsPreviewSizeRange);
             this.tsState.tsAssetSearch = typeof tsUI.asset_search === "string" ? tsUI.asset_search : "";
             this.tsState.tsWorkflowSearch = typeof tsUI.workflow_search === "string" ? tsUI.workflow_search : "";
+            if (tsUI.asset_search_scope === "all" || tsUI.asset_search_scope === "filename") {
+                this.tsState.tsSearchScope = tsUI.asset_search_scope;
+            }
             const tsAssetTypes = tsNormalizeAssetTypeSet(tsUI.asset_types, tsTypeOrder);
             if (tsAssetTypes) {
                 this.tsState.tsTypes = tsAssetTypes;
@@ -582,6 +586,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 asset_sort_direction: this.tsState.tsAssetSortDirection,
                 asset_preview_size: this.tsState.tsAssetPreviewSize,
                 asset_search: this.tsState.tsAssetSearch,
+                asset_search_scope: this.tsState.tsSearchScope,
                 workflow_sort_key: this.tsState.tsWorkflowSortKey,
                 workflow_sort_direction: this.tsState.tsWorkflowSortDirection,
                 workflow_preview_size: this.tsState.tsWorkflowPreviewSize,
@@ -765,7 +770,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                             <button class="ts-section-button ts-section-assets" type="button"></button>
                             <button class="ts-section-button ts-section-workflows" type="button"></button>
                         </div>
-                        <input class="ts-search" type="search">
+                        <div class="ts-toolbar-cluster ts-search-cluster">
+                            <input class="ts-search" type="search">
+                            <button class="ts-toggle-button ts-search-scope" type="button" data-active="false"></button>
+                        </div>
                         <div class="ts-toolbar-cluster ts-root-group">
                             <select class="ts-root-select"></select>
                         </div>
@@ -856,6 +864,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsSectionAssets: this.shadowRoot.querySelector(".ts-section-assets"),
             tsSectionWorkflows: this.shadowRoot.querySelector(".ts-section-workflows"),
             tsSearch: this.shadowRoot.querySelector(".ts-search"),
+            tsSearchScope: this.shadowRoot.querySelector(".ts-search-scope"),
             tsTypeCluster: this.shadowRoot.querySelector(".ts-type-cluster"),
             tsTypeChips: this.shadowRoot.querySelector(".ts-type-chips"),
             tsRootGroup: this.shadowRoot.querySelector(".ts-root-group"),
@@ -1013,6 +1022,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsQueueSaveUISettings();
             if (this.tsState.tsAutoscan) {
                 await this.tsMaybeBootstrapScan();
+            }
+        });
+        this.tsRefs.tsSearchScope.addEventListener("click", () => {
+            this.tsState.tsSearchScope = this.tsState.tsSearchScope === "all" ? "filename" : "all";
+            this.tsRefs.tsSearchScope.dataset.active = String(this.tsState.tsSearchScope === "all");
+            this.tsQueueSaveUISettings();
+            if (String(this.tsState.tsSearch || "").trim()) {
+                this.tsFetchAssets(true);
             }
         });
         this.tsRefs.tsFiltersToggle.addEventListener("click", () => this.tsToggleFilterPanel());
@@ -1253,6 +1270,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsDeleteSelected.title = this.tsT("tooltip.deleteSelected", "Delete selected assets from allowed roots.");
         this.tsRefs.tsToolbarResizer.title = this.tsT("tooltip.toolbarResize", "Drag to resize the toolbar.");
         this.tsRefs.tsGalleryContent.setAttribute("aria-label", this.tsT("aria.gallery", "Asset grid"));
+        this.tsRefs.tsSearchScope.textContent = this.tsT("button.searchPrompts", "Prompt");
+        this.tsRefs.tsSearchScope.title = this.tsT("tooltip.searchPrompts", "Also search inside prompts (not just filenames).");
+        this.tsRefs.tsSearchScope.dataset.active = String(this.tsState.tsSearchScope === "all");
         this.tsRefs.tsFiltersToggle.textContent = this.tsT("button.filters", "Filters");
         this.tsRefs.tsFiltersToggle.title = this.tsT("tooltip.filters", "Filter assets by date and resolution.");
         this.tsRefs.tsFilterLabelDate.textContent = this.tsT("filter.date", "Date");
@@ -1301,6 +1321,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRescan.hidden = tsWorkflowSection;
         this.tsRefs.tsRebuildCache.hidden = tsWorkflowSection;
         this.tsRefs.tsDeleteSelected.hidden = tsWorkflowSection;
+        this.tsRefs.tsSearchScope.hidden = tsWorkflowSection;
+        this.tsRefs.tsSearchScope.style.display = tsWorkflowHiddenDisplay;
         this.tsRenderFilterPanel();
         this.tsRefs.tsTypeCluster.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRootGroup.style.display = tsWorkflowHiddenDisplay;
@@ -1678,6 +1700,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             types: [...this.tsState.tsTypes],
             folder: this.tsState.tsFolder,
             filters: this.tsBuildActiveFilters(),
+            searchScope: this.tsIsWorkflowSection() ? "filename" : this.tsState.tsSearchScope,
             overrides: tsOverrides,
         });
     }

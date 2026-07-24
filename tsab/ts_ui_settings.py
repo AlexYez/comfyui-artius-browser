@@ -11,6 +11,7 @@ TS_ASSET_SORT_KEYS = {"created_at", "filename", "size_bytes"}
 TS_WORKFLOW_SORT_KEYS = {"created_at", "filename"}
 TS_SORT_DIRECTIONS = {"asc", "desc"}
 TS_ASSET_TYPES = {"image", "video", "audio", "3d"}
+TS_SEARCH_SCOPES = {"filename", "all"}
 
 # Assets larger than any real render but small enough to stay a plausible pixel
 # dimension — bounds the persisted resolution filter so a garbage value cannot
@@ -83,6 +84,7 @@ def TSNormalizeUISettings(ts_ui: dict[str, Any] | None) -> dict[str, Any]:
         "asset_sort_direction": TSNormalizeChoice(ts_ui.get("asset_sort_direction"), TS_SORT_DIRECTIONS, "desc"),
         "asset_preview_size": TSClampInt(ts_ui.get("asset_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX, TS_DEFAULT_PREVIEW_SIZE),
         "asset_search": str(ts_ui.get("asset_search") or ""),
+        "asset_search_scope": TSNormalizeChoice(ts_ui.get("asset_search_scope"), TS_SEARCH_SCOPES, "filename"),
         "workflow_sort_key": TSNormalizeChoice(ts_ui.get("workflow_sort_key"), TS_WORKFLOW_SORT_KEYS, "created_at"),
         "workflow_sort_direction": TSNormalizeChoice(ts_ui.get("workflow_sort_direction"), TS_SORT_DIRECTIONS, "desc"),
         "workflow_preview_size": TSClampInt(ts_ui.get("workflow_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX, TS_DEFAULT_PREVIEW_SIZE),
@@ -131,6 +133,8 @@ def TSApplyUISettingsUpdates(ts_ui: dict[str, Any], ts_ui_updates: dict[str, Any
             ts_ui["asset_preview_size"] = ts_preview_size
     if "asset_search" in ts_updates:
         ts_ui["asset_search"] = str(ts_updates.get("asset_search") or "")
+    if "asset_search_scope" in ts_updates:
+        ts_ui["asset_search_scope"] = TSNormalizeChoice(ts_updates.get("asset_search_scope"), TS_SEARCH_SCOPES, "filename")
     if "workflow_preview_size" in ts_updates:
         ts_preview_size = TSParseClampedInt(ts_updates.get("workflow_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX)
         if ts_preview_size is not None:

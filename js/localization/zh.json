@@ -4,12 +4,10 @@
     "tooltip.donate": "支持本项目。",
     "badge.newVersion": "有新版本",
     "tooltip.newVersion": "GitHub 上有更新的 Artius Browser 版本。",
-
     "button.assets": "资产",
     "tooltip.section.assets": "浏览已索引的资产。",
     "button.workflows": "工作流",
     "tooltip.section.workflows": "浏览 ComfyUI 工作流。",
-
     "placeholder.search": "搜索文件名...",
     "tooltip.search": "仅按文件名搜索资产。",
     "placeholder.search.workflows": "搜索工作流文件名...",
@@ -17,7 +15,6 @@
     "label.allRoots": "全部文件夹",
     "tooltip.root": "选择根文件夹。",
     "tooltip.previewSize": "调整预览大小。",
-
     "sort.created_at": "日期",
     "sort.filename": "文件名",
     "sort.filename.workflow": "名称",
@@ -25,13 +22,11 @@
     "button.sortAsc": "升序",
     "button.sortDesc": "降序",
     "tooltip.sortDirection": "切换升序与降序排序。",
-
     "button.flat": "列表",
     "tooltip.mode.flat": "切换到平铺视图。",
     "button.tree": "目录树",
     "tooltip.mode.tree": "切换到文件夹目录树。",
     "tooltip.toolbarResize": "拖动以调整工具栏大小。",
-
     "type.image": "图片",
     "tooltip.type.image": "切换图片资产。",
     "type.video": "视频",
@@ -41,7 +36,6 @@
     "type.3d": "3D",
     "tooltip.type.3d": "切换 3D 资产。",
     "type.workflow": "工作流",
-
     "toggle.autoscan": "自动扫描",
     "tooltip.autoscan": "在浏览器启动或 ComfyUI 执行完成时自动重新扫描资产。",
     "button.rescan": "扫描",
@@ -50,7 +44,6 @@
     "tooltip.deleteSelected": "从允许删除的根目录中删除所选资产。",
     "button.rebuildCache": "重建缓存",
     "tooltip.rebuildCache": "清除当前浏览器缓存并从头重建。",
-
     "button.loadWorkflow": "加载工作流",
     "button.copyPrompt": "复制提示词",
     "button.copyWorkflow": "复制工作流",
@@ -66,7 +59,6 @@
     "button.stop": "停止",
     "button.prevFrame": "上一帧",
     "button.nextFrame": "下一帧",
-
     "label.asset": "资产",
     "label.audioWaveform": "音频波形",
     "label.asset3d": "3D 资产",
@@ -75,9 +67,7 @@
     "label.mono": "单声道",
     "label.stereo": "立体声",
     "section.workflows": "工作流",
-
     "confirm.rebuildCache": "从头重建浏览器缓存?这将清除当前缓存并开始一次完整重新扫描。",
-
     "status.indexing": "索引中",
     "status.requestingScan": "正在启动扫描...",
     "status.requestingRebuild": "正在重建缓存...",
@@ -87,12 +77,10 @@
     "status.loading3dViewer": "正在加载 3D 查看器...",
     "status.no3dViewer": "3D 查看器不可用。",
     "status.failed3dViewer": "无法打开 3D 查看器。",
-
     "health.missingTools": "缺少工具",
     "empty.title": "没有符合当前筛选条件的资产。",
     "empty.scan": "尚无已索引资产。点击“扫描”以扫描 ComfyUI 输出。",
     "empty.workflows": "没有符合当前筛选条件的工作流。",
-
     "meta.size": "大小",
     "meta.resolution": "分辨率",
     "meta.duration": "时长",
@@ -110,9 +98,7 @@
     "meta.channels": "声道",
     "meta.bitrate": "比特率",
     "meta.noTechnical": "未找到 ffprobe 元数据。",
-
     "aria.gallery": "资产网格",
-
     "toast.copied": "已复制",
     "toast.promptCopied": "已复制提示词",
     "toast.workflowCopied": "已复制工作流",
@@ -124,14 +110,12 @@
     "toast.workflowDeleteFailed": "删除工作流失败",
     "toast.rescanFailed": "扫描失败",
     "toast.rebuildFailed": "重建缓存失败",
-
     "menu.copyPrompt": "复制提示词",
     "menu.copyWorkflow": "复制工作流",
     "menu.download": "下载",
     "menu.openInNewTab": "在新标签页打开",
     "menu.delete": "删除",
     "menu.loadWorkflow": "加载工作流",
-
     "shortcuts.title": "键盘快捷键",
     "shortcuts.grid": "资产网格",
     "shortcuts.move": "移动选择",
@@ -150,7 +134,6 @@
     "shortcuts.compareHeading": "对比",
     "shortcuts.selectN": "选择 2 或 4 个",
     "shortcuts.compare": "在灯箱中对比图片或视频",
-
     "button.filters": "筛选",
     "tooltip.filters": "按日期和分辨率筛选资产。",
     "filter.date": "日期",
@@ -160,5 +143,7 @@
     "filter.dateFrom": "从",
     "filter.dateTo": "至",
     "filter.min": "最小",
-    "filter.max": "最大"
+    "filter.max": "最大",
+    "button.searchPrompts": "提示词",
+    "tooltip.searchPrompts": "同时在提示词中搜索(不仅是文件名)。"
 }

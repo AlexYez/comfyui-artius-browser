@@ -4,12 +4,10 @@
     "tooltip.donate": "Поддержать проект.",
     "badge.newVersion": "Доступна новая версия",
     "tooltip.newVersion": "На GitHub доступен более новый релиз Artius Browser.",
-
     "button.assets": "Ассеты",
     "tooltip.section.assets": "Просмотр проиндексированных ассетов.",
     "button.workflows": "Воркфлоу",
     "tooltip.section.workflows": "Просмотр воркфлоу ComfyUI.",
-
     "placeholder.search": "Поиск по имени файла...",
     "tooltip.search": "Поиск ассетов только по имени файла.",
     "placeholder.search.workflows": "Поиск по имени воркфлоу...",
@@ -17,7 +15,6 @@
     "label.allRoots": "Все папки",
     "tooltip.root": "Выберите корневую папку.",
     "tooltip.previewSize": "Размер превью.",
-
     "sort.created_at": "Дата",
     "sort.filename": "Имя файла",
     "sort.filename.workflow": "Имена",
@@ -25,13 +22,11 @@
     "button.sortAsc": "По возр.",
     "button.sortDesc": "По убыв.",
     "tooltip.sortDirection": "Переключить сортировку по возрастанию и убыванию.",
-
     "button.flat": "Список",
     "tooltip.mode.flat": "Переключиться на плоский список.",
     "button.tree": "Дерево",
     "tooltip.mode.tree": "Переключиться на дерево папок.",
     "tooltip.toolbarResize": "Потяните, чтобы изменить размер панели.",
-
     "type.image": "Изображение",
     "tooltip.type.image": "Показать изображения.",
     "type.video": "Видео",
@@ -41,7 +36,6 @@
     "type.3d": "3D",
     "tooltip.type.3d": "Показать 3D-ассеты.",
     "type.workflow": "ВОРКФЛОУ",
-
     "toggle.autoscan": "Автоскан",
     "tooltip.autoscan": "Автоматически пересканировать ассеты при запуске браузера или после завершения работы ComfyUI.",
     "button.rescan": "Сканировать",
@@ -50,7 +44,6 @@
     "tooltip.deleteSelected": "Удалить выбранные ассеты из папок, где это разрешено.",
     "button.rebuildCache": "Пересобрать кэш",
     "tooltip.rebuildCache": "Очистить текущий кэш браузера и пересобрать его с нуля.",
-
     "button.loadWorkflow": "Загрузить воркфлоу",
     "button.copyPrompt": "Копировать промпт",
     "button.copyWorkflow": "Копировать воркфлоу",
@@ -66,7 +59,6 @@
     "button.stop": "Стоп",
     "button.prevFrame": "Предыдущий кадр",
     "button.nextFrame": "Следующий кадр",
-
     "label.asset": "Ассет",
     "label.audioWaveform": "Форма звуковой волны",
     "label.asset3d": "3D-ассет",
@@ -75,9 +67,7 @@
     "label.mono": "Моно",
     "label.stereo": "Стерео",
     "section.workflows": "Воркфлоу",
-
     "confirm.rebuildCache": "Пересобрать кэш браузера с нуля? Текущий кэш будет очищен и запустится полное пересканирование.",
-
     "status.indexing": "Индексация",
     "status.requestingScan": "Запуск сканирования...",
     "status.requestingRebuild": "Пересборка кэша...",
@@ -87,12 +77,10 @@
     "status.loading3dViewer": "Загрузка 3D-просмотрщика...",
     "status.no3dViewer": "3D-просмотрщик недоступен.",
     "status.failed3dViewer": "Не удалось открыть 3D-просмотрщик.",
-
     "health.missingTools": "Отсутствуют инструменты",
     "empty.title": "Нет ассетов, соответствующих текущим фильтрам.",
     "empty.scan": "Пока нет проиндексированных ассетов. Нажмите «Сканировать», чтобы просканировать вывод ComfyUI.",
     "empty.workflows": "Нет воркфлоу, соответствующих текущим фильтрам.",
-
     "meta.size": "Размер",
     "meta.resolution": "Разрешение",
     "meta.duration": "Длительность",
@@ -110,9 +98,7 @@
     "meta.channels": "Каналы",
     "meta.bitrate": "Битрейт",
     "meta.noTechnical": "Метаданные ffprobe не найдены.",
-
     "aria.gallery": "Сетка ассетов",
-
     "toast.copied": "Скопировано",
     "toast.promptCopied": "Промпт скопирован",
     "toast.workflowCopied": "Воркфлоу скопировано",
@@ -124,14 +110,12 @@
     "toast.workflowDeleteFailed": "Не удалось удалить воркфлоу",
     "toast.rescanFailed": "Не удалось выполнить сканирование",
     "toast.rebuildFailed": "Не удалось пересобрать кэш",
-
     "menu.copyPrompt": "Копировать промпт",
     "menu.copyWorkflow": "Копировать воркфлоу",
     "menu.download": "Скачать",
     "menu.openInNewTab": "Открыть в новой вкладке",
     "menu.delete": "Удалить",
     "menu.loadWorkflow": "Загрузить воркфлоу",
-
     "shortcuts.title": "Горячие клавиши",
     "shortcuts.grid": "Сетка ассетов",
     "shortcuts.move": "Переместить выделение",
@@ -150,7 +134,6 @@
     "shortcuts.compareHeading": "Сравнение",
     "shortcuts.selectN": "Выберите 2 или 4",
     "shortcuts.compare": "Сравнение изображений или видео в лайтбоксе",
-
     "button.filters": "Фильтры",
     "tooltip.filters": "Фильтр ассетов по дате и разрешению.",
     "filter.date": "Дата",
@@ -160,5 +143,7 @@
     "filter.dateFrom": "С",
     "filter.dateTo": "По",
     "filter.min": "мин",
-    "filter.max": "макс"
+    "filter.max": "макс",
+    "button.searchPrompts": "Промпт",
+    "tooltip.searchPrompts": "Искать также внутри промптов (не только по имени файла)."
 }

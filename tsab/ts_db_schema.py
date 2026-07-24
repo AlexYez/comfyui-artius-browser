@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-TS_DB_SCHEMA_VERSION = 10
+TS_DB_SCHEMA_VERSION = 11
+
+# The schema version that introduced the prompt_text FTS column. Databases at an
+# earlier version keep a filename-only FTS table (IF NOT EXISTS won't recreate
+# it), so they need a one-time FTS rebuild — repopulated from existing rows, no
+# re-scan required. Gated on a fixed constant so future schema bumps don't
+# needlessly re-run it.
+TS_DB_FTS_PROMPT_SCHEMA_VERSION = 11
 
 TS_DB_DROP_SCHEMA_SQL = """
 DROP VIEW IF EXISTS assets_view;
@@ -95,6 +102,7 @@ CREATE INDEX IF NOT EXISTS idx_asset_folders_root_lookup_id ON asset_folders(roo
 CREATE VIRTUAL TABLE IF NOT EXISTS assets_fts
 USING fts5(
     filename,
+    prompt_text,
     tokenize = 'unicode61'
 );
 
@@ -133,6 +141,19 @@ INNER JOIN asset_types ON asset_types.id = assets.type_lookup_id
 INNER JOIN asset_extensions ON asset_extensions.id = assets.extension_lookup_id
 INNER JOIN asset_roots ON asset_roots.id = assets.root_lookup_id
 INNER JOIN asset_folders ON asset_folders.id = assets.folder_lookup_id
+LEFT JOIN asset_metadata ON asset_metadata.asset_id = assets.id;
+"""
+
+TS_DB_FTS_REBUILD_SQL = """
+DROP TABLE IF EXISTS assets_fts;
+CREATE VIRTUAL TABLE assets_fts USING fts5(
+    filename,
+    prompt_text,
+    tokenize = 'unicode61'
+);
+INSERT INTO assets_fts(rowid, filename, prompt_text)
+SELECT assets.id, assets.filename, COALESCE(asset_metadata.prompt_text, '')
+FROM assets
 LEFT JOIN asset_metadata ON asset_metadata.asset_id = assets.id;
 """
 

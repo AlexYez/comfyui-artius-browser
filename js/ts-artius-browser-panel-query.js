@@ -26,6 +26,14 @@ export function tsBuildAssetSearchParams(tsOptions = {}) {
     tsParams.set("order", tsSortDirection || "desc");
     if (tsSearch) {
         tsParams.set("q", String(tsSearch));
+        const tsSearchScope = Object.prototype.hasOwnProperty.call(tsOverrides, "searchScope")
+            ? tsOverrides.searchScope
+            : tsOptions.searchScope;
+        // Only send the non-default "all" scope (search prompts too); filename
+        // is the default and stays implicit.
+        if (String(tsSearchScope || "filename") === "all") {
+            tsParams.set("search_scope", "all");
+        }
     }
     if (tsRootId && tsRootId !== "all") {
         tsParams.set("root_id", String(tsRootId));

@@ -161,6 +161,7 @@ TS_DEFAULT_CONFIG = {
         "asset_sort_direction": "desc",
         "asset_preview_size": TS_DEFAULT_PREVIEW_SIZE,
         "asset_search": "",
+        "asset_search_scope": "filename",
         "workflow_sort_key": "created_at",
         "workflow_sort_direction": "desc",
         "workflow_preview_size": TS_DEFAULT_PREVIEW_SIZE,
