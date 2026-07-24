@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Date + resolution filter panel (assets): a collapsible Filters row exposes a
+  date range and min/max width/height, persisted per new config keys. The
+  listing route already accepted these params.
+- Opt-in prompt search: a "Prompt" toggle next to the search box also searches
+  inside prompts (FTS `prompt_text` column, schema v11, migrated from existing
+  rows without a re-scan). Search stays filename-only by default.
+- Right-click context menu on cards (copy prompt / copy workflow / download /
+  open in new tab / delete) as larger, discoverable targets.
+- "?" opens a keyboard-shortcut help overlay.
+- Chinese (zh) and Japanese (ja) localizations, following ComfyUI's locale.
+- First-load skeleton grid with a one-shot fade when real cards arrive.
+- `POST /asset_browser/client_log`: recent frontend warnings are mirrored to a
+  bounded backend ring and surfaced in `/version` diagnostics for
+  self-contained bug reports.
+
+### Fixed
+- The card context menu was dismissed by a click inside it (shadow-DOM
+  retargeting), so menu actions never fired; now uses `composedPath()`.
+- First-load skeletons no longer stick when a search or filter legitimately
+  returns zero results.
+
+### Changed
+- Shared `tsEscapeHTML`/`tsEscapeAttribute` (deduplicated into `api-utils`).
+- Lightweight typing: mypy --strict over a curated set of pure modules, ruff,
+  and a locale-orphan-key check, all wired into the release gate.
+- A Playwright GUI e2e suite (opt-in) covering the filter panel, context menu,
+  shortcut overlay, search scope, plus a screenshot-capture spec.
+
 ## [1.7.0] - 2026-07-23
 
 ### Added
