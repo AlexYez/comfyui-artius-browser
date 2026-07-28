@@ -157,10 +157,12 @@ class TSIndexer:
 
                 ts_candidate_stats: list[tuple[TSAssetStat, Any | None]] = []
                 ts_seen_paths: set[str] = set()
+                ts_incomplete_root_ids: set[str] = set()
                 self._TSEmitScanProgress(force_event=True, force_log=True)
 
                 for ts_root in ts_roots:
-                    for ts_asset_stat_batch in self._TSIterAssetStatBatches(ts_root, 500):
+                    ts_failed_directories: list[str] = []
+                    for ts_asset_stat_batch in self._TSIterAssetStatBatches(ts_root, 500, ts_failed_directories):
                         ts_path_batch = [TSNormalizePathString(ts_asset_stat.ts_path) for ts_asset_stat in ts_asset_stat_batch]
                         ts_existing_rows = self.ts_database.TSGetSnapshotBatch(ts_path_batch)
                         ts_discovered_payloads: list[TSAssetPayload] = []
@@ -210,8 +212,26 @@ class TSIndexer:
                             if ts_needs_index:
                                 ts_candidate_stats.append((ts_asset_stat, ts_effective_row))
 
+                    if ts_failed_directories:
+                        # Same rule as the unavailable-root guard above: an
+                        # unreadable subdirectory (network share blip, sharing
+                        # violation, permission error) must not be treated as
+                        # "all assets under it were deleted".
+                        ts_incomplete_root_ids.add(ts_root.ts_root_id)
+                        TSLogger.warning(
+                            "TS asset scan skipping stale-row prune for root %s: %d directories unreadable (first: %s)",
+                            ts_root.ts_root_id,
+                            len(ts_failed_directories),
+                            ts_failed_directories[0],
+                        )
+
                 self.ts_status.ts_total_files = self.ts_status.ts_scanned
-                ts_root_asset_refs = self.ts_database.TSGetRootAssetRefs([ts_root.ts_root_id for ts_root in ts_roots])
+                ts_prunable_root_ids = [
+                    ts_root.ts_root_id for ts_root in ts_roots if ts_root.ts_root_id not in ts_incomplete_root_ids
+                ]
+                ts_root_asset_refs = (
+                    self.ts_database.TSGetRootAssetRefs(ts_prunable_root_ids) if ts_prunable_root_ids else []
+                )
                 ts_deleted_rows = [ts_row for ts_row in ts_root_asset_refs if str(ts_row["path"]) not in ts_seen_paths]
                 self.ts_status.ts_deleted = len(ts_deleted_rows)
                 if ts_deleted_rows:
@@ -330,9 +350,14 @@ class TSIndexer:
                 self.ts_status.ts_progress_message = str(ts_exception)
                 self.ts_emit_callback(TS_EVENT_INDEX_COMPLETE, {"status": self.TSGetStatus()})
 
-    def _TSIterAssetStatBatches(self, ts_root: TSRootDefinition, ts_batch_size: int) -> Iterable[list[TSAssetStat]]:
+    def _TSIterAssetStatBatches(
+        self,
+        ts_root: TSRootDefinition,
+        ts_batch_size: int,
+        ts_failed_directories: list[str] | None = None,
+    ) -> Iterable[list[TSAssetStat]]:
         ts_batch: list[TSAssetStat] = []
-        for ts_asset_stat in self._TSIterAssetStats(ts_root):
+        for ts_asset_stat in self._TSIterAssetStats(ts_root, ts_failed_directories):
             ts_batch.append(ts_asset_stat)
             if len(ts_batch) >= max(1, int(ts_batch_size)):
                 yield ts_batch
@@ -362,9 +387,13 @@ class TSIndexer:
                 self.ts_status.ts_progress_message,
             )
 
-    def _TSIterAssetStats(self, ts_root: TSRootDefinition) -> Iterable[TSAssetStat]:
+    def _TSIterAssetStats(
+        self,
+        ts_root: TSRootDefinition,
+        ts_failed_directories: list[str] | None = None,
+    ) -> Iterable[TSAssetStat]:
         ts_ignored_paths = {ts_path.resolve() for ts_path in self.ts_storage_paths.TSIgnorePathsForRoot(ts_root)}
-        return TSIterAssetStats(ts_root, ts_ignored_paths)
+        return TSIterAssetStats(ts_root, ts_ignored_paths, ts_failed_directories)
 
     def _TSProcessCandidateTuple(
         self,

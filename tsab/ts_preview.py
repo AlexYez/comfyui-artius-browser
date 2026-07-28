@@ -175,6 +175,16 @@ class TSPreviewCache:
                 return self.TSGetTypePlaceholderPreview("image")
             return self.TSRelativePreviewPath(ts_output_path)
 
+    def _TSDiscardTempSource(self, ts_temp_path: Path) -> None:
+        # The ".source.png" temp file is excluded from TSPurgeOrphanedPreviews on
+        # the assumption that a live generator owns it. That assumption only
+        # holds if every generator cleans up its own failure path: a killed or
+        # non-zero-exit ffmpeg can leave a partially written file behind.
+        try:
+            ts_temp_path.unlink()
+        except OSError:
+            pass
+
     def TSGenerateVideoPoster(self, ts_source_path: Path, ts_preview_key: str, ts_tools) -> str:
         with self._TSGetPreviewKeyLock("video_frames", ts_preview_key):
             ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "video_frames")
@@ -182,8 +192,12 @@ class TSPreviewCache:
                 return self.TSRelativePreviewPath(ts_output_path)
             ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "video_frames", ".source.png")
             ts_frame_time = float(self._TSPreviewConfig().get("video_frame_time", 0.5))
-            ts_success = ts_tools.TSExtractVideoFrame(ts_source_path, ts_temp_path, ts_frame_time)
+            ts_max_output_dim = max(self._TSThumbnailSize() * 2, 256)
+            ts_success = ts_tools.TSExtractVideoFrame(
+                ts_source_path, ts_temp_path, ts_frame_time, ts_max_output_dim=ts_max_output_dim
+            )
             if not ts_success:
+                self._TSDiscardTempSource(ts_temp_path)
                 return self.TSGetTypePlaceholderPreview("video")
             try:
                 self._TSNormalizePreviewFile(ts_temp_path, ts_output_path)
@@ -210,6 +224,7 @@ class TSPreviewCache:
                 ts_source_path, ts_temp_path, ts_frame_time, ts_max_output_dim=ts_max_output_dim
             )
             if not ts_frame_success:
+                self._TSDiscardTempSource(ts_temp_path)
                 return ts_probe, self.TSGetTypePlaceholderPreview("video")
             try:
                 self._TSNormalizePreviewFile(ts_temp_path, ts_output_path)
@@ -240,6 +255,7 @@ class TSPreviewCache:
                 ts_source_path, ts_temp_path, ts_waveform_width, ts_waveform_height
             )
             if not ts_waveform_success:
+                self._TSDiscardTempSource(ts_temp_path)
                 return ts_probe, self.TSGetTypePlaceholderPreview("audio")
             try:
                 self._TSStylizeWaveform(ts_temp_path, ts_output_path)
@@ -262,6 +278,7 @@ class TSPreviewCache:
             ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "waveforms", ".source.png")
             ts_success = ts_tools.TSExtractWaveform(ts_source_path, ts_temp_path, ts_waveform_width, ts_waveform_height)
             if not ts_success:
+                self._TSDiscardTempSource(ts_temp_path)
                 return self.TSGetTypePlaceholderPreview("audio")
             try:
                 self._TSStylizeWaveform(ts_temp_path, ts_output_path)

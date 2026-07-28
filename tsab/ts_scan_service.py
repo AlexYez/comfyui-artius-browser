@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Callable
@@ -68,8 +69,12 @@ class TSScanService:
         if bool(self.TSGetScanStatus().get("running")):
             TSLogVerbose("runtime.rebuild.skipped", reason="scan_running")
             return {"started": False, "status": self.TSGetScanStatus()}
-        self.ts_database.TSResetIndex()
-        self.ts_preview_cache.TSClearGeneratedCache()
+        # Both calls are heavy and blocking (VACUUM over the whole DB, rmtree
+        # over the whole preview cache). Running them inline would freeze the
+        # ComfyUI event loop - every route, websocket heartbeat and prompt
+        # progress update - for as long as the rebuild takes.
+        await asyncio.to_thread(self.ts_database.TSResetIndex)
+        await asyncio.to_thread(self.ts_preview_cache.TSClearGeneratedCache)
         ts_started = await self.ts_indexer.TSStartBackgroundScan()
         return {"started": ts_started, "status": self.TSGetScanStatus()}
 

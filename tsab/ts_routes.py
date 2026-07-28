@@ -7,7 +7,6 @@ from .ts_route_errors import TSWrapRouteHandler
 from .ts_settings import TS_DEFAULT_PAGE_SIZE, TS_MAX_3D_CAPTURE_DATA_URL_LENGTH
 from .ts_logging import TSLogVerbose
 from .ts_utils import TSParseAssetCursor, TSParseDateToEpoch, TSParseMaybeInt, TSParseQueryList
-from .ts_version import TSCollectVersionInfo
 
 TSRoutesRegistered = False
 
@@ -47,7 +46,10 @@ def TSBuildRouteVariants(ts_path: str) -> tuple[str, str]:
 
 def TSParsePositiveInt(ts_value) -> int | None:
     ts_text = str(ts_value or "").strip()
-    if not ts_text.isdigit():
+    # isdecimal(), not isdigit(): isdigit() is True for non-decimal Unicode
+    # digits such as "2" (superscript) or "(1)" (circled), which int() then
+    # rejects - the ValueError would surface as a 500 instead of a 400.
+    if not ts_text.isdecimal():
         return None
     ts_parsed = int(ts_text)
     return ts_parsed if ts_parsed > 0 else None
@@ -287,8 +289,7 @@ async def TSHandleClientLog(ts_runtime, ts_request):
 
 async def TSHandleVersion(ts_runtime, ts_request):
     TSLogVerbose("route.version.get", path=ts_request.path)
-    ts_cache_dir = ts_runtime.ts_storage_paths.ts_asset_browser_directory
-    ts_payload = await asyncio.to_thread(TSCollectVersionInfo, ts_cache_dir)
+    ts_payload = await asyncio.to_thread(ts_runtime.TSCollectVersionInfo)
     # Additive diagnostics for bug reports; the version contract keys
     # (local/remote/update_available/repository_url/release_url) are untouched.
     ts_payload["diagnostics"] = await asyncio.to_thread(ts_runtime.TSCollectDiagnostics)

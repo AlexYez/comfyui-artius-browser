@@ -343,8 +343,7 @@ export const tsPanelStyles = `<style>
                     display: none;
                 }
 
-                .ts-toolbar-main,
-                .ts-toolbar-secondary {
+                .ts-toolbar-main {
                     display: flex;
                     align-items: center;
                     gap: 8px;
@@ -791,7 +790,10 @@ export const tsPanelStyles = `<style>
                     background: var(--ts-bg-1);
                     box-shadow: none;
                     overflow: hidden;
-                    transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
+                    /* No transform transition: cards are recreated wholesale by
+                       the virtualized renderer rather than moved, so it never
+                       animated anything. */
+                    transition: border-color 0.14s ease, box-shadow 0.14s ease;
                     user-select: none;
                     /* Skip painting cards scrolled out of view (perf on big libraries). */
                     content-visibility: auto;
@@ -820,8 +822,13 @@ export const tsPanelStyles = `<style>
                     .ts-card-skeleton .ts-card-media { animation: none; }
                 }
 
+                /* No transform here: virtualized cards carry an inline
+                   transform:translate(...) for positioning, and an inline
+                   declaration always beats a selector-based one. A hover
+                   transform silently never applied - and forcing it with
+                   !important would throw the card out of its grid slot.
+                   Border and shadow carry the hover affordance instead. */
                 .ts-card:hover {
-                    transform: translateY(-1px);
                     border-color: color-mix(in srgb, var(--ts-accent) 70%, var(--ts-border));
                     box-shadow: 0 8px 24px color-mix(in srgb, var(--ts-shadow-color) 34%, transparent);
                 }

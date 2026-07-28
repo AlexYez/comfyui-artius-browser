@@ -9,6 +9,26 @@ from ..ts_settings import TS_IMAGE_EXTENSIONS
 from ..ts_types import TSAssetPayload, TSAssetStat
 from ..ts_utils import TSJsonDumps
 
+# The only PNG text keys this handler reads (see TSExtractMetadata). Used to
+# decide whether the expensive post-IDAT text-chunk read is worth doing.
+TS_PNG_METADATA_KEYS = ("Prompt", "prompt", "Workflow", "workflow")
+
+
+def _TSCollectMetadataEntries(ts_metadata: dict[str, str], ts_source: dict) -> None:
+    for ts_key, ts_value in ts_source.items():
+        if ts_value is None:
+            continue
+        if isinstance(ts_value, bytes):
+            try:
+                ts_text = ts_value.decode("utf-8", errors="replace")
+            except Exception:
+                continue
+        else:
+            ts_text = str(ts_value)
+        if not ts_text:
+            continue
+        ts_metadata[str(ts_key)] = ts_text
+
 
 class TSImageHandler:
     ts_kind = "image"
@@ -59,25 +79,19 @@ class TSImageHandler:
         ts_metadata: dict[str, str] = {}
         try:
             with Image.open(ts_image_path) as ts_image:
-                ts_metadata_sources = []
                 if isinstance(getattr(ts_image, "info", None), dict):
-                    ts_metadata_sources.append(ts_image.info)
-                if isinstance(getattr(ts_image, "text", None), dict):
-                    ts_metadata_sources.append(ts_image.text)
-                for ts_source in ts_metadata_sources:
-                    for ts_key, ts_value in ts_source.items():
-                        if ts_value is None:
-                            continue
-                        if isinstance(ts_value, bytes):
-                            try:
-                                ts_text = ts_value.decode("utf-8", errors="replace")
-                            except Exception:
-                                continue
-                        else:
-                            ts_text = str(ts_value)
-                        if not ts_text:
-                            continue
-                        ts_metadata[str(ts_key)] = ts_text
+                    _TSCollectMetadataEntries(ts_metadata, ts_image.info)
+                # PngImageFile.text is a property that calls load(), decoding the
+                # entire IDAT stream and discarding the pixels, just to reach
+                # text chunks stored AFTER the image data. ComfyUI writes
+                # Prompt/Workflow BEFORE IDAT, so info already carries them and
+                # that decode is pure waste - it doubles the per-image decoding a
+                # scan does. Only pay for it when the fields we actually read are
+                # missing, which is the third-party-writer case it exists for.
+                if not any(ts_key in ts_metadata for ts_key in TS_PNG_METADATA_KEYS):
+                    ts_text_chunks = getattr(ts_image, "text", None)
+                    if isinstance(ts_text_chunks, dict):
+                        _TSCollectMetadataEntries(ts_metadata, ts_text_chunks)
         except Exception:
             # Corrupt or vanished files yield "no metadata" instead of
             # raising through the on-demand ensure chain (mirrors the

@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (whole-project review, 2026-07-28)
+- 3D thumbnails never generated on current ComfyUI builds. `loadModelInternal`
+  now resolves to a wrapper (`{object, capabilities, adapter}`) rather than the
+  Object3D itself; passing that to `setupModel()` threw and corrupted the
+  viewer's model state, so every capture failed and every 3D asset kept a
+  placeholder. The load result is now unwrapped defensively.
+- Typing in the search box or a resolution filter triggered grid shortcuts:
+  `?` opened the help overlay instead of inserting the character, the arrow
+  keys moved the grid selection instead of the caret, and Enter opened the
+  lightbox.
+- Every keypress was handled twice while the lightbox was open, so the grid
+  selection silently drifted away from the asset being viewed.
+- `Rebuild Cache` ran a full `VACUUM` and a recursive cache delete on the
+  asyncio event loop, freezing all of ComfyUI for the duration.
+- A symlinked asset whose target resolved outside its root aborted the entire
+  scan (`ValueError` escaping an `except OSError`).
+- An unreadable subdirectory (network share blip, permission error) was treated
+  as "everything under it was deleted": the stale-row prune removed those rows
+  and purged their previews. The prune is now skipped for any root whose walk
+  was incomplete.
+- Sidebar tree folder counts included companion images the grid never shows.
+- A folder whose name contains `_` or `%` also matched sibling folders
+  (unescaped `LIKE` wildcards).
+- `TSUpsertAsset` and `TSDeleteAssetIds` wrote across several tables without a
+  transaction, so a mid-write failure could leave an asset with no FTS row.
+- `fps` stayed unknown for VFR/WebM sources (ffprobe's `"0/0"` short-circuited
+  the `r_frame_rate` fallback), which also re-ran ffprobe on every detail view.
+- A failed or timed-out ffmpeg left its `.source.png` temp file behind forever.
+- The on-demand video poster path skipped the ffmpeg pre-scale, decoding a
+  full-resolution frame in PIL.
+- Junk input returned `500` instead of `400`: non-decimal Unicode digits in an
+  asset id, and huge numeric query params (`OverflowError`).
+- One infinite value in a settings POST discarded every other key in the same
+  request.
+- The date filter interpreted the user's local calendar day as UTC, shifting
+  every boundary by the machine's timezone offset.
+- Workflow sidecar previews were paired case-sensitively in the UI but trashed
+  case-insensitively by the backend, so `X` could delete a preview the card
+  never showed as attached.
+- Tree → Flat → Tree lost the selected folder; loading straight into the
+  Workflows section discarded the restored folder selection.
+- The toolbar resizer stopped working after the first sidebar hide/show.
+- Stale previews could survive a rebuild: the SWR revalidation diff keyed on a
+  field the asset payload never carried.
+- A queue-only status event (clear/cancel/reconnect) fired an immediate
+  unconditional rescan, bypassing the debounce.
+- A missing 3D file reported `500 internal_error` instead of `404`.
+
+### Changed (internal)
+- The panel's visible-card 3D queue and the background sweeper now share one
+  skip predicate and a cross-pipeline in-flight registry, so a model can no
+  longer be captured twice at once (two WebGL contexts, two racing writes).
+- Batched row fetch in `TSUpsertAssets` instead of one query per id.
+- PNG text chunks are only read when the prompt/workflow keys are absent from
+  the header, avoiding a second full decode of every indexed PNG.
+- Removed dead code (an unused runtime facade method, a dead CSS rule, an
+  unused import) and de-duplicated path normalization.
+
 ### Added
 - Date + resolution filter panel (assets): a collapsible Filters row exposes a
   date range and min/max width/height, persisted per new config keys. The

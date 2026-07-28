@@ -353,24 +353,40 @@ class TSToolLocator:
             return {}
         return ts_payload if isinstance(ts_payload, dict) else {}
 
-    def TSExtractVideoFrame(self, ts_source_path: Path, ts_output_path: Path, ts_seconds: float) -> bool:
+    def TSExtractVideoFrame(
+        self,
+        ts_source_path: Path,
+        ts_output_path: Path,
+        ts_seconds: float,
+        ts_max_output_dim: int | None = None,
+    ) -> bool:
         ts_executable = self.TSResolveTool("ffmpeg")
         if not ts_executable:
             return False
         ts_output_path.parent.mkdir(parents=True, exist_ok=True)
+        ts_arguments = [
+            ts_executable,
+            "-y",
+            "-ss",
+            str(ts_seconds),
+            "-i",
+            str(ts_source_path),
+            "-frames:v",
+            "1",
+        ]
+        if ts_max_output_dim and ts_max_output_dim > 0:
+            # Pre-scale in ffmpeg so PIL only finalizes a small image. Without
+            # it this fallback path decodes the video's full native-resolution
+            # frame (Image.draft() is a no-op for PNG), which is exactly what
+            # the parallel path already avoids.
+            ts_arguments.extend([
+                "-vf",
+                f"scale='min({ts_max_output_dim},iw)':'min({ts_max_output_dim},ih)':force_original_aspect_ratio=decrease",
+            ])
+        ts_arguments.append(str(ts_output_path))
         ts_result = self._TSRunBoundedCommand(
             self.ts_ffmpeg_semaphore,
-            [
-                ts_executable,
-                "-y",
-                "-ss",
-                str(ts_seconds),
-                "-i",
-                str(ts_source_path),
-                "-frames:v",
-                "1",
-                str(ts_output_path),
-            ],
+            ts_arguments,
             ts_timeout=180,
         )
         ts_success = bool(ts_result and ts_result.returncode == 0 and ts_output_path.exists())

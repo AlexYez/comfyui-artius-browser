@@ -240,13 +240,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsResizeObserver?.disconnect?.();
         this.tsToolbarResizeObserver?.disconnect?.();
         this.tsBrowserWidthObserver?.disconnect?.();
-        if (this.tsToolbarResizerPointerDownHandler && this.tsRefs?.tsToolbarResizer) {
-            this.tsRefs.tsToolbarResizer.removeEventListener(
-                "pointerdown",
-                this.tsToolbarResizerPointerDownHandler,
-            );
-            this.tsToolbarResizerPointerDownHandler = null;
-        }
+        // The toolbar resizer's pointerdown listener is deliberately NOT torn
+        // down here. CLAUDE.md §8 scopes that rule to transient
+        // window/document/API/stage listeners; this one sits on a shadow-DOM
+        // element built once in tsBuildShell and owned by this panel, so it
+        // cannot outlive it. Removing it broke toolbar dragging permanently,
+        // because ComfyUI disconnects/reconnects this singleton on every
+        // sidebar hide/show while tsBindEvents only ever runs on first connect.
+        // The twin tsBindTreeResizer follows the same bind-once rule.
         this.tsUnbindApiEvents();
     }
 
@@ -545,6 +546,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 this.tsState.tsWorkflowTreeWidth = Math.max(120, Math.min(700, Math.round(tsWorkflowTreeWidth)));
             }
             this.tsApplySectionSettings();
+            if (this.tsIsWorkflowSection()) {
+                // selected_root_id always persists an ASSET root, so align it
+                // with the section before anything reads it. tsRenderRootOptions
+                // enforces the same invariant at render time.
+                this.tsState.tsRootId = "workflows";
+            }
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser settings fetch failed", tsError);
         } finally {
@@ -623,7 +630,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return;
         }
         this.tsLastAssetRootId = this.tsState.tsRootId || tsPanelSettings.defaultRootId || "all";
-        this.tsLastAssetFolder = String(this.tsState.tsFolder || "");
+        if (this.tsState.tsMode === "tree") {
+            // Only tree mode has a folder selection - flat mode forces
+            // tsFolder to "". Remembering that "" would destroy the folder the
+            // tree branch restores from, so switching Tree -> Flat -> Tree
+            // could never return to the folder the user had selected.
+            this.tsLastAssetFolder = String(this.tsState.tsFolder || "");
+        }
     }
 
     tsSyncSectionSettingsFromActive() {
@@ -714,10 +727,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsResizer.addEventListener("pointerup", tsOnPointerUp);
             tsResizer.addEventListener("pointercancel", tsOnPointerUp);
         };
-        // Stash the handler so disconnectedCallback can remove it; required
-        // by CLAUDE.md §8 ("every transient ... listener must have
-        // teardown") for new listeners added in this code path.
-        this.tsToolbarResizerPointerDownHandler = tsOnPointerDown;
+        // Bound once, for the lifetime of the panel - see disconnectedCallback
+        // for why this listener is intentionally not torn down.
         tsResizer.addEventListener("pointerdown", tsOnPointerDown);
     }
 
@@ -1877,7 +1888,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (this.tsState.tsItems.length > tsIncomingItems.length) {
             return;
         }
-        const tsBuildItemKey = (tsItem) => `${tsItem?.id ?? ""}:${tsItem?.mtime_ns ?? ""}:${tsItem?.has_preview ?? ""}`;
+        // Key on preview_url, not mtime_ns: the asset-card payload has never
+        // carried mtime_ns, so that segment was always "" and the diff
+        // degenerated to id:has_preview - blind to a regenerated preview on an
+        // already-previewed asset. preview_url embeds the backend's own
+        // cache-busting token (?v=<preview file mtime_ns>) and also flips when a
+        // preview becomes a placeholder or a 3D capture, so it is the freshness
+        // signal this comparison was reaching for.
+        const tsBuildItemKey = (tsItem) => `${tsItem?.id ?? ""}:${tsItem?.preview_url ?? ""}`;
         const tsCurrentKey = this.tsState.tsItems.map(tsBuildItemKey).join("|");
         const tsIncomingKey = tsIncomingItems.map(tsBuildItemKey).join("|");
         if (tsCurrentKey === tsIncomingKey) {
@@ -1947,8 +1965,17 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             ...(this.tsIsWorkflowSection() ? [] : ["all"]),
             ...this.tsState.tsRoots.map((tsRoot) => tsRoot.root_id),
         ]);
-        if (!tsKnownRootIds.has(this.tsState.tsRootId)) {
-            this.tsState.tsRootId = this.tsIsWorkflowSection() ? "workflows" : "all";
+        if (this.tsIsWorkflowSection()) {
+            // The Workflows section always has exactly one pseudo-root, so
+            // there is nothing to validate and nothing that can invalidate the
+            // folder. Guarding this matters: tsRenderRootOptions also runs from
+            // renders whose payload has not caught up with the section switch
+            // (or before the first fetch, when tsRoots is still empty), and the
+            // restored workflow root then looked "unknown" and wiped the folder
+            // selection tsApplySectionSettings had just restored.
+            this.tsState.tsRootId = "workflows";
+        } else if (this.tsState.tsRoots.length > 0 && !tsKnownRootIds.has(this.tsState.tsRootId)) {
+            this.tsState.tsRootId = "all";
             this.tsState.tsFolder = "";
             this.tsQueueSaveUISettings();
         }
@@ -2755,7 +2782,36 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
 
+    tsIsEditableKeyTarget(tsEvent) {
+        // composedPath()[0] is the real inner element even across a shadow
+        // boundary; tsEvent.target alone would be retargeted to the host.
+        const tsPath = typeof tsEvent.composedPath === "function" ? tsEvent.composedPath() : [];
+        const tsTarget = tsPath[0] || tsEvent.target;
+        if (!tsTarget || typeof tsTarget !== "object") {
+            return false;
+        }
+        if (tsTarget.isContentEditable) {
+            return true;
+        }
+        const tsTagName = String(tsTarget.tagName || "").toUpperCase();
+        return tsTagName === "INPUT" || tsTagName === "TEXTAREA" || tsTagName === "SELECT";
+    }
+
     tsHandleKeydown(tsEvent) {
+        // The search box and the filter inputs live inside .ts-shell, so their
+        // keydown bubbles into this handler. Without this guard "?" cannot be
+        // typed, the arrow keys move the grid selection instead of the caret,
+        // and Enter opens the lightbox.
+        if (this.tsIsEditableKeyTarget(tsEvent)) {
+            return;
+        }
+        // The lightbox owns the keyboard while it is open. Its own handler is
+        // on window, i.e. AFTER this one in the bubble path, so it cannot stop
+        // us - the panel has to stand down here instead. Otherwise every key is
+        // handled twice and the grid selection drifts away from the viewed asset.
+        if (this.tsViewer?.tsIsViewerOpen?.()) {
+            return;
+        }
         // "?" toggles the shortcut help; Escape closes it. Handled before the
         // empty-list guard so help works even with no assets loaded.
         if (tsEvent.key === "?") {
@@ -2975,8 +3031,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (!Array.isArray(this.tsState.tsFolders) || this.tsState.tsFolders.length === 0) {
             return;
         }
-        const tsNormalizeFolderPath = (tsValue) =>
-            String(tsValue || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+        // Uses the imported tsNormalizeFolderPath. This function used to shadow
+        // it with a byte-identical local copy, so hardening one would silently
+        // desynchronize the folder-count bucket keys from the tree state.
         const tsBuckets = new Map();
         for (const tsItem of tsRemovedItems) {
             const tsRootId = String(tsItem?.root_id || "");

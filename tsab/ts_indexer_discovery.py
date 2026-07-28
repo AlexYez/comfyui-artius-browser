@@ -51,7 +51,11 @@ def TSFilterCompanionEntries(ts_file_entries: Iterable[os.DirEntry[str]]) -> lis
     return ts_result
 
 
-def TSScanDirectory(ts_directory: Path, ts_ignored_paths: set[Path]) -> tuple[list[Path], list[os.DirEntry[str]]]:
+def TSScanDirectory(
+    ts_directory: Path,
+    ts_ignored_paths: set[Path],
+    ts_failed_directories: list[str] | None = None,
+) -> tuple[list[Path], list[os.DirEntry[str]]]:
     ts_subdirectories: list[Path] = []
     ts_file_entries: list[os.DirEntry[str]] = []
     try:
@@ -74,22 +78,35 @@ def TSScanDirectory(ts_directory: Path, ts_ignored_paths: set[Path]) -> tuple[li
                 if ts_entry_path.suffix.lower() in TS_SUPPORTED_EXTENSIONS:
                     ts_file_entries.append(ts_entry)
     except OSError as ts_error:
+        # The whole subtree drops out of the walk here. Record it so the caller
+        # can tell a partial walk from a complete one - the stale-row prune must
+        # not read "directory unreadable" as "every asset under it was deleted".
         TSLogVerbose("indexer.directory.scan_failed", directory=str(ts_directory), error=str(ts_error))
+        if ts_failed_directories is not None:
+            ts_failed_directories.append(str(ts_directory))
         return [], []
     return ts_subdirectories, TSFilterCompanionEntries(ts_file_entries)
 
 
-def TSIterAssetStats(ts_root: TSRootDefinition, ts_ignored_paths: set[Path]) -> Iterable[TSAssetStat]:
+def TSIterAssetStats(
+    ts_root: TSRootDefinition,
+    ts_ignored_paths: set[Path],
+    ts_failed_directories: list[str] | None = None,
+) -> Iterable[TSAssetStat]:
     ts_directory_stack = [ts_root.ts_path]
+    ts_resolved_root = ts_root.ts_path.resolve()
     while ts_directory_stack:
         ts_directory = ts_directory_stack.pop()
-        ts_subdirectories, ts_file_entries = TSScanDirectory(ts_directory, ts_ignored_paths)
+        ts_subdirectories, ts_file_entries = TSScanDirectory(ts_directory, ts_ignored_paths, ts_failed_directories)
         ts_directory_stack.extend(ts_subdirectories)
         for ts_entry in ts_file_entries:
             try:
                 ts_entry_path = Path(ts_entry.path).resolve()
-                ts_stat = ts_entry.stat(follow_symlinks=False)
-                ts_relative_path = TSRelativePosixPath(ts_entry_path, ts_root.ts_path.resolve())
+                # stat() follows symlinks on purpose: the row is keyed by the
+                # RESOLVED path, so size/mtime must describe that same file or
+                # the mtime+size cheap-compare re-indexes it on every scan.
+                ts_stat = ts_entry.stat()
+                ts_relative_path = TSRelativePosixPath(ts_entry_path, ts_resolved_root)
                 yield TSAssetStat(
                     ts_path=ts_entry_path,
                     ts_root=ts_root,
@@ -101,5 +118,8 @@ def TSIterAssetStats(ts_root: TSRootDefinition, ts_ignored_paths: set[Path]) -> 
                     ts_mtime_ns=int(getattr(ts_stat, "st_mtime_ns", int(ts_stat.st_mtime * 1000000000))),
                     ts_ctime_ns=int(getattr(ts_stat, "st_ctime_ns", int(ts_stat.st_ctime * 1000000000))),
                 )
-            except OSError as ts_error:
+            except (OSError, ValueError) as ts_error:
+                # ValueError: TSRelativePosixPath raises it for a symlinked
+                # entry whose target resolves outside the root. Skip that single
+                # file - letting it escape would abort the entire scan.
                 TSLogVerbose("indexer.file.stat_failed", path=str(getattr(ts_entry, 'path', '')), error=str(ts_error))

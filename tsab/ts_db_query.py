@@ -80,8 +80,15 @@ def TSBuildAssetQueryParts(
     if ts_filters.get("folder") is not None:
         ts_folder = str(ts_filters["folder"]).strip()
         if ts_folder:
-            ts_where_clauses.append("(assets_view.folder_path = ? OR assets_view.folder_path LIKE ?)")
-            ts_parameters.extend([ts_folder, f"{ts_folder}/%"])
+            # The subtree pattern must escape LIKE wildcards the same way the
+            # search clause above does: an unescaped "_" in a folder name is a
+            # single-character wildcard, so selecting "img_2024" would also
+            # return everything under a sibling "img-2024".
+            ts_folder_pattern = ts_folder.replace("\\", r"\\").replace("%", r"\%").replace("_", r"\_")
+            ts_where_clauses.append(
+                "(assets_view.folder_path = ? OR assets_view.folder_path LIKE ? ESCAPE '\\')"
+            )
+            ts_parameters.extend([ts_folder, f"{ts_folder_pattern}/%"])
     if ts_filters.get("date_from") is not None:
         ts_where_clauses.append("assets_view.created_at >= ?")
         ts_parameters.append(int(ts_filters["date_from"]))

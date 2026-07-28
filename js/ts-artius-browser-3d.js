@@ -17,6 +17,19 @@ export function tsResolve3DViewerFileExtension(tsViewerURL) {
     }
 }
 
+function tsResolveLoadedObject3D(tsLoaded) {
+    // What loadModelInternal resolves to is ComfyUI-version dependent:
+    //   - older frontends return the Object3D directly,
+    //   - current ones return a wrapper { object, capabilities, adapter },
+    //   - some loaders return the raw GLTF result, whose scene is the Object3D.
+    // setupModel() requires a real Object3D; handing it the wrapper throws
+    // ("e.traverse is not a function") AND leaves currentModel pointing at the
+    // wrapper, so the later captureThumbnail fails too and no 3D thumbnail is
+    // ever produced. Unwrap defensively instead of assuming one shape.
+    const tsPick = (tsValue) => (tsValue && typeof tsValue.traverse === "function" ? tsValue : null);
+    return tsPick(tsLoaded) || tsPick(tsLoaded?.object) || tsPick(tsLoaded?.scene) || null;
+}
+
 async function tsWaitAnimationFrames(tsCount = 2) {
     for (let tsIndex = 0; tsIndex < tsCount; tsIndex += 1) {
         await new Promise((tsResolve) => window.requestAnimationFrame(() => tsResolve()));
@@ -70,7 +83,8 @@ export async function tsCapture3DThumbnail(tsViewerURL, tsOptions = {}) {
         tsViewerController.controlsManager?.reset?.();
         tsViewerController.modelManager?.clearModel?.();
         tsViewerController.animationManager?.dispose?.();
-        let tsModel = await tsViewerController.loaderManager?.loadModelInternal?.(tsViewerURL, tsExtension);
+        const tsLoaded = await tsViewerController.loaderManager?.loadModelInternal?.(tsViewerURL, tsExtension);
+        let tsModel = tsResolveLoadedObject3D(tsLoaded);
         if (!tsModel) {
             // Newer ComfyUI frontends resolve loadModelInternal without
             // returning the model object; the loaded model lands on the

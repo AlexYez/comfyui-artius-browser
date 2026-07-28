@@ -51,6 +51,14 @@ export function tsGetPathStem(tsPath) {
     return tsDotIndex >= 0 ? tsFilename.slice(0, tsDotIndex) : tsFilename;
 }
 
+function tsBuildWorkflowPreviewKey(tsPath) {
+    // Case-folded on purpose: the backend pairs sidecars with Path.stem.lower()
+    // and TRASHES every match. Pairing case-sensitively here would render
+    // "render.json" as having no preview while X still sends "Render.png" to
+    // the trash - the two sides must agree on the same stem rule.
+    return `${tsGetParentFolderPath(tsPath)}::${tsGetPathStem(tsPath).toLowerCase()}`;
+}
+
 export function tsGetParentFolderPath(tsPath) {
     const tsNormalizedPath = tsNormalizeRelativePath(tsPath);
     const tsSegments = tsNormalizedPath.split("/").filter(Boolean);
@@ -117,8 +125,6 @@ export function tsBuildWorkflowBrowserLibraryItems(tsEntries, tsBuildUserdataURL
     const tsWorkflowEntries = [];
     for (const tsEntry of tsFileEntries) {
         const tsExtension = tsGetPathExtension(tsEntry.path);
-        const tsFolderKey = tsGetParentFolderPath(tsEntry.path);
-        const tsStem = tsGetPathStem(tsEntry.path);
         if (tsExtension === ".json") {
             tsWorkflowEntries.push(tsEntry);
             continue;
@@ -129,7 +135,7 @@ export function tsBuildWorkflowBrowserLibraryItems(tsEntries, tsBuildUserdataURL
         if (!tsPreviewKind) {
             continue;
         }
-        const tsPreviewKey = `${tsFolderKey}::${tsStem}`;
+        const tsPreviewKey = tsBuildWorkflowPreviewKey(tsEntry.path);
         const tsExistingCandidates = tsPreviewsByKey.get(tsPreviewKey) || [];
         tsExistingCandidates.push({
             preview_kind: tsPreviewKind,
@@ -143,7 +149,7 @@ export function tsBuildWorkflowBrowserLibraryItems(tsEntries, tsBuildUserdataURL
         return tsLeft.path.localeCompare(tsRight.path);
     });
     return tsSortedWorkflows.map((tsEntry, tsIndex) => {
-        const tsPreviewKey = `${tsGetParentFolderPath(tsEntry.path)}::${tsGetPathStem(tsEntry.path)}`;
+        const tsPreviewKey = tsBuildWorkflowPreviewKey(tsEntry.path);
         const tsPreview = tsPickWorkflowPreview(tsPreviewsByKey.get(tsPreviewKey));
         const tsModifiedAt = tsParseModifiedEpoch(tsEntry.modified);
         return {

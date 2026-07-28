@@ -15,6 +15,12 @@
 //   applyPersistedAsset(assetPatch) -> merge the saved card into panel state
 //   warn(...args) -> log a non-fatal warning
 
+import {
+    tsAcquire3DCapture,
+    tsNeeds3DCapture,
+    tsRelease3DCapture,
+} from "./ts-artius-browser-3d-capture-registry.js";
+
 export class TS3DThumbnailQueue {
     constructor(tsSettings, tsDeps) {
         this.tsSettings = tsSettings || {};
@@ -40,6 +46,11 @@ export class TS3DThumbnailQueue {
         this.tsDisposed = true;
         this.tsQueue = [];
         this.tsPending.clear();
+        // Hand back the shared capture claims. An in-flight capture that never
+        // settles (hung WebGL context, model that never finishes loading) would
+        // otherwise keep its viewer URL locked process-wide and permanently
+        // block the background sweeper from ever retrying that model.
+        this.tsReleaseSharedClaims();
     }
 
     tsResume() {
@@ -49,11 +60,21 @@ export class TS3DThumbnailQueue {
     // Rebuild Cache: forget every captured/failed/in-progress record so the
     // fresh library is re-captured from scratch.
     tsClear() {
+        this.tsReleaseSharedClaims();
         this.tsPending.clear();
         this.tsInFlight.clear();
         this.tsFailed.clear();
         this.tsCache.clear();
         this.tsPersisting.clear();
+    }
+
+    // Release every cross-pipeline capture claim this queue still holds.
+    // tsRunJob's own finally covers the normal path; this covers teardown while
+    // captures are still outstanding.
+    tsReleaseSharedClaims() {
+        for (const tsViewerURL of this.tsInFlight) {
+            tsRelease3DCapture(tsViewerURL);
+        }
     }
 
     tsScheduleVisible(tsItems) {
@@ -75,7 +96,9 @@ export class TS3DThumbnailQueue {
                 this.tsDeps.patchThumbnail(tsItem.id, tsCachedPreviewURL, tsItem.filename || "");
                 continue;
             }
-            if (tsItem.preview_is_3d_capture && !tsItem.preview_is_placeholder) {
+            // Shared with the background sweeper so the two pipelines cannot
+            // drift apart on what "already captured" means.
+            if (!tsNeeds3DCapture(tsItem)) {
                 continue;
             }
             if (
@@ -140,6 +163,15 @@ export class TS3DThumbnailQueue {
     }
 
     async tsRunJob(tsJob) {
+        // The background sweeper may already hold this model. Re-queue nothing
+        // and drop the job: capturing it twice would create a second WebGL
+        // context for the same file and race the backend write.
+        if (!tsAcquire3DCapture(tsJob.tsViewerURL)) {
+            this.tsInFlight.delete(tsJob.tsViewerURL);
+            this.tsWorkers = Math.max(0, this.tsWorkers - 1);
+            this.tsPump();
+            return;
+        }
         try {
             const tsPreviewURL = await this.tsDeps.capture(tsJob.tsViewerURL, {
                 width: this.tsSettings.captureSize,
@@ -167,6 +199,7 @@ export class TS3DThumbnailQueue {
         } catch {
             this.tsFailed.add(tsJob.tsViewerURL);
         } finally {
+            tsRelease3DCapture(tsJob.tsViewerURL);
             this.tsInFlight.delete(tsJob.tsViewerURL);
             this.tsWorkers = Math.max(0, this.tsWorkers - 1);
             this.tsPump();

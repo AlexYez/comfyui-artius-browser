@@ -40,7 +40,10 @@ def TSNormalizeFilterDimension(ts_value: Any) -> int:
 def TSParseClampedInt(ts_value: Any, ts_minimum: int, ts_maximum: int) -> int | None:
     try:
         return max(ts_minimum, min(ts_maximum, int(ts_value)))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError: json.loads("1e400") yields inf, and int(inf) raises.
+        # Without it one junk value aborts the whole settings POST and silently
+        # discards every other valid key sent with it.
         return None
 
 

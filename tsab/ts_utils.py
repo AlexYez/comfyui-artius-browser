@@ -6,7 +6,7 @@ import os
 import re
 import threading
 from contextlib import AbstractContextManager, contextmanager
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -85,7 +85,10 @@ def TSParseMaybeFloat(ts_value: Any) -> float | None:
 
 def TSParseMaybeInt(ts_value: Any) -> int | None:
     ts_float = TSParseMaybeFloat(ts_value)
-    if ts_float is None or math.isnan(ts_float):
+    # isfinite() rather than a bare isnan(): float("9" * 400) is inf, not an
+    # error, and int(inf) raises OverflowError - which would escape a query
+    # param parser and turn junk input into a 500 instead of a clamp.
+    if ts_float is None or not math.isfinite(ts_float):
         return None
     return int(ts_float)
 
@@ -116,7 +119,12 @@ def TSParseDateToEpoch(ts_value: str | None, ts_end_of_day: bool = False) -> int
         return None
     if ts_end_of_day:
         ts_date = ts_date.replace(hour=23, minute=59, second=59)
-    ts_date = ts_date.replace(tzinfo=timezone.utc)
+    # Interpret the bound in LOCAL time. The value comes from an
+    # <input type="date">, i.e. the calendar day as the user sees it, and it is
+    # compared against created_at, which is derived from local filesystem
+    # timestamps. Pinning it to UTC shifted every boundary by the machine's
+    # offset, so "created today" dropped the first hours of the user's day.
+    # A naive datetime's .timestamp() already resolves against the local zone.
     return int(ts_date.timestamp())
 
 

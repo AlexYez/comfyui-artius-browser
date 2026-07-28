@@ -8,6 +8,11 @@ import {
 } from "./ts-artius-browser-api.js";
 import { tsCapture3DThumbnail } from "./ts-artius-browser-3d.js";
 import {
+    tsAcquire3DCapture,
+    tsNeeds3DCapture,
+    tsRelease3DCapture,
+} from "./ts-artius-browser-3d-capture-registry.js";
+import {
     tsBrowserRuntimeSettings,
     tsPanelSettings,
 } from "./ts-artius-browser-settings.js";
@@ -139,16 +144,19 @@ class TSGlobal3DThumbnailWorker {
     }
 
     async tsProcessAsset(tsAsset) {
-        if (!tsAsset || tsAsset.type !== "3d" || !tsAsset.viewer_3d_url) {
-            return false;
-        }
-        if (tsAsset.preview_is_3d_capture && !tsAsset.preview_is_placeholder) {
+        if (!tsNeeds3DCapture(tsAsset)) {
             return false;
         }
         // Skip before creating any WebGL viewer: a model that already used
         // up its capture attempts is not retried until the next page load.
         const tsFailedAttempts = this.tsFailedViewerAttempts.get(tsAsset.viewer_3d_url) || 0;
         if (tsFailedAttempts >= TS_MAX_3D_CAPTURE_ATTEMPTS) {
+            return false;
+        }
+        // The panel's visible-card queue may already be capturing this exact
+        // model. Two captures of one model means two WebGL contexts, two full
+        // model loads and two competing writes to the same asset row.
+        if (!tsAcquire3DCapture(tsAsset.viewer_3d_url)) {
             return false;
         }
         let tsPreviewURL = "";
@@ -161,6 +169,8 @@ class TSGlobal3DThumbnailWorker {
         } catch (tsError) {
             this.tsFailedViewerAttempts.set(tsAsset.viewer_3d_url, tsFailedAttempts + 1);
             throw tsError;
+        } finally {
+            tsRelease3DCapture(tsAsset.viewer_3d_url);
         }
         if (!tsPreviewURL) {
             this.tsFailedViewerAttempts.set(tsAsset.viewer_3d_url, tsFailedAttempts + 1);

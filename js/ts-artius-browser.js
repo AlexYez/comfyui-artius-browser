@@ -28,10 +28,29 @@ let tsAutoscanEnabled = true;
 // hanging forever.
 let tsComfyQueueRemaining = 0;
 
+// tsExecutionRescanTimer doubles as the "a rescan is pending" flag in
+// tsHandleStatusEvent, and clearTimeout() does not reset the caller's variable.
+// These two helpers keep the handle and the flag in sync; without them the id
+// stayed truthy for the rest of the page session after the first prompt, so
+// every later queue-only status event (clear/cancel/socket reconnect) fired an
+// immediate unconditional /rescan, bypassing the debounce entirely.
+function tsClearExecutionRescanTimer() {
+    window.clearTimeout(tsExecutionRescanTimer);
+    tsExecutionRescanTimer = 0;
+}
+
+function tsArmExecutionRescanTimer(tsDelayMs) {
+    tsClearExecutionRescanTimer();
+    tsExecutionRescanTimer = window.setTimeout(() => {
+        tsExecutionRescanTimer = 0;
+        tsAttemptRescanNow();
+    }, tsDelayMs);
+}
+
 function tsSetAutoscanEnabled(tsEnabled) {
     tsAutoscanEnabled = Boolean(tsEnabled);
     if (!tsAutoscanEnabled) {
-        window.clearTimeout(tsExecutionRescanTimer);
+        tsClearExecutionRescanTimer();
         tsExecutionRescanFirstEventAt = 0;
     }
 }
@@ -47,8 +66,7 @@ function tsAttemptRescanNow() {
         // ComfyUI is currently sampling. The next status event with
         // queue_remaining=0 unblocks this branch.
         const tsRetryMs = Number(tsBrowserRuntimeSettings.executionRescanIdleRetryMs) || 250;
-        window.clearTimeout(tsExecutionRescanTimer);
-        tsExecutionRescanTimer = window.setTimeout(tsAttemptRescanNow, tsRetryMs);
+        tsArmExecutionRescanTimer(tsRetryMs);
         return;
     }
     tsExecutionRescanFirstEventAt = 0;
@@ -69,8 +87,7 @@ function tsDebouncedExecutionRescan() {
     const tsBaseDelay = Number(tsBrowserRuntimeSettings.executionRescanDelayMs) || 0;
     const tsMaxDeferral = Number(tsBrowserRuntimeSettings.executionRescanMaxDeferralMs) || tsBaseDelay;
     const tsDelay = Math.max(0, Math.min(tsBaseDelay, tsMaxDeferral - tsElapsed));
-    window.clearTimeout(tsExecutionRescanTimer);
-    tsExecutionRescanTimer = window.setTimeout(tsAttemptRescanNow, tsDelay);
+    tsArmExecutionRescanTimer(tsDelay);
 }
 
 function tsHandleStatusEvent(tsEvent) {
@@ -87,8 +104,7 @@ function tsHandleStatusEvent(tsEvent) {
         // tick immediately so users see new assets right after the queue
         // settles instead of waiting another debounce cycle.
         if (tsComfyQueueRemaining === 0 && tsExecutionRescanTimer) {
-            window.clearTimeout(tsExecutionRescanTimer);
-            tsExecutionRescanTimer = window.setTimeout(tsAttemptRescanNow, 0);
+            tsArmExecutionRescanTimer(0);
         }
     }
 }

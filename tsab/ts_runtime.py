@@ -387,9 +387,6 @@ class TSAssetBrowserRuntime:
     def TSDeleteAssets(self, ts_asset_ids: list[int]) -> dict[str, Any]:
         return self.ts_delete_service.TSDeleteAssets(ts_asset_ids)
 
-    def TSDeleteWorkflowFile(self, ts_workflow_path: Path) -> dict[str, Any]:
-        return self.ts_workflow_service.TSDeleteWorkflowFile(ts_workflow_path)
-
     def TSDeleteRequestWorkflowFile(self, ts_request, ts_relative_path: str) -> dict[str, Any]:
         return self.ts_workflow_service.TSDeleteRequestWorkflowFile(ts_request, ts_relative_path)
 
@@ -410,6 +407,15 @@ class TSAssetBrowserRuntime:
             ts_input_directory=self.ts_storage_paths.ts_input_directory,
             ts_asset_id=ts_asset_id,
         )
+
+    def TSCollectVersionInfo(self) -> dict[str, Any]:
+        # Keeps the version-check cache location an internal detail. The route
+        # layer used to import the service and reach into
+        # ts_storage_paths.ts_asset_browser_directory itself - the only handler
+        # that bypassed this facade.
+        from .ts_version import TSCollectVersionInfo as TSCollectVersionInfoImpl
+
+        return TSCollectVersionInfoImpl(self.ts_storage_paths.ts_asset_browser_directory)
 
 
 def TSGetRuntime() -> TSAssetBrowserRuntime:

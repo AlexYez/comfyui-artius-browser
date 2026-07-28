@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -330,9 +332,26 @@ class TSDatabase:
         self._TSSyncFTSRow(ts_asset_id, ts_payload.ts_filename, ts_payload.ts_prompt_text)
         return ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id
 
+    @contextmanager
+    def _TSWriteTransaction(self) -> Iterator[sqlite3.Connection]:
+        # The connection runs with isolation_level=None, so every statement
+        # auto-commits unless a transaction is opened explicitly. Multi-step
+        # writes (assets + asset_metadata + assets_fts + companion flags) must
+        # be atomic or a failure part-way leaves an asset row with no FTS row -
+        # silently unsearchable - or stale is_companion_image values.
+        ts_connection = self.TSGetConnection()
+        ts_connection.execute("BEGIN IMMEDIATE")
+        try:
+            yield ts_connection
+        except Exception:
+            ts_connection.execute("ROLLBACK")
+            raise
+        ts_connection.execute("COMMIT")
+
     def TSUpsertAsset(self, ts_payload: TSAssetPayload) -> sqlite3.Row:
-        ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id = self._TSDoUpsertAsset(ts_payload)
-        self._TSRecomputeCompanionFlags({(ts_root_lookup_id, ts_folder_lookup_id)})
+        with self._TSWriteTransaction():
+            ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id = self._TSDoUpsertAsset(ts_payload)
+            self._TSRecomputeCompanionFlags({(ts_root_lookup_id, ts_folder_lookup_id)})
         ts_row = self.TSGetAssetById(ts_asset_id)
         if ts_row is None:
             raise RuntimeError(f"Unable to fetch asset after upsert {ts_payload.ts_path}")
@@ -349,12 +368,10 @@ class TSDatabase:
     def TSUpsertAssets(self, ts_payloads: list[TSAssetPayload], ts_return_rows: bool = True) -> list[sqlite3.Row]:
         if not ts_payloads:
             return []
-        ts_connection = self.TSGetConnection()
         ts_asset_ids: list[int] = []
         ts_touched_folders: set[tuple[int, int]] = set()
         ts_lookup_cache: dict = {}
-        ts_connection.execute("BEGIN IMMEDIATE")
-        try:
+        with self._TSWriteTransaction():
             for ts_payload in ts_payloads:
                 ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id = self._TSDoUpsertAsset(ts_payload, ts_lookup_cache)
                 ts_asset_ids.append(ts_asset_id)
@@ -364,20 +381,25 @@ class TSDatabase:
             # and the recompute would otherwise leave stale is_companion_image
             # values until the next time each folder is touched.
             self._TSRecomputeCompanionFlags(ts_touched_folders)
-        except Exception:
-            ts_connection.execute("ROLLBACK")
-            raise
-        ts_connection.execute("COMMIT")
         if not ts_return_rows:
             # Hot-path variant for callers that ignore the rows (scan hash
             # phase): skips one assets_view SELECT per upserted asset.
             TSLogVerbose("db.assets.upserted.batch", count=len(ts_asset_ids), affected_folders=len(ts_touched_folders))
             return []
-        ts_rows: list[sqlite3.Row] = []
-        for ts_asset_id in ts_asset_ids:
-            ts_row = self.TSGetAssetById(ts_asset_id)
-            if ts_row is not None:
-                ts_rows.append(ts_row)
+        # Fetch the rows in chunks rather than one SELECT per id: the scan's
+        # discovery phase calls this with batches of up to 500 changed files.
+        ts_connection = self.TSGetConnection()
+        ts_rows_by_id: dict[int, sqlite3.Row] = {}
+        for ts_id_batch in self._TSChunkedValues(ts_asset_ids, 500):
+            ts_placeholders = ",".join("?" for _ in ts_id_batch)
+            for ts_row in ts_connection.execute(
+                f"SELECT * FROM assets_view WHERE id IN ({ts_placeholders})",
+                ts_id_batch,
+            ).fetchall():
+                ts_rows_by_id[int(ts_row["id"])] = ts_row
+        # Preserve the caller's payload order - the indexer maps these rows back
+        # onto its pending-candidate list by path.
+        ts_rows = [ts_rows_by_id[ts_asset_id] for ts_asset_id in ts_asset_ids if ts_asset_id in ts_rows_by_id]
         TSLogVerbose("db.assets.upserted.batch", count=len(ts_rows), affected_folders=len(ts_touched_folders))
         return ts_rows
 
@@ -477,20 +499,20 @@ class TSDatabase:
     def TSDeleteAssetIds(self, ts_asset_ids: list[int]) -> None:
         if not ts_asset_ids:
             return
-        ts_connection = self.TSGetConnection()
         ts_touched_folders: set[tuple[int, int]] = set()
-        for ts_id_batch in self._TSChunkedValues(list(ts_asset_ids), 500):
-            ts_placeholders = ",".join("?" for _ in ts_id_batch)
-            ts_touched_folders.update(
-                (int(ts_row["root_lookup_id"]), int(ts_row["folder_lookup_id"]))
-                for ts_row in ts_connection.execute(
-                    f"SELECT root_lookup_id, folder_lookup_id FROM assets WHERE id IN ({ts_placeholders})",
-                    ts_id_batch,
-                ).fetchall()
-            )
-            ts_connection.execute(f"DELETE FROM assets_fts WHERE rowid IN ({ts_placeholders})", ts_id_batch)
-            ts_connection.execute(f"DELETE FROM assets WHERE id IN ({ts_placeholders})", ts_id_batch)
-        self._TSRecomputeCompanionFlags(ts_touched_folders)
+        with self._TSWriteTransaction() as ts_connection:
+            for ts_id_batch in self._TSChunkedValues(list(ts_asset_ids), 500):
+                ts_placeholders = ",".join("?" for _ in ts_id_batch)
+                ts_touched_folders.update(
+                    (int(ts_row["root_lookup_id"]), int(ts_row["folder_lookup_id"]))
+                    for ts_row in ts_connection.execute(
+                        f"SELECT root_lookup_id, folder_lookup_id FROM assets WHERE id IN ({ts_placeholders})",
+                        ts_id_batch,
+                    ).fetchall()
+                )
+                ts_connection.execute(f"DELETE FROM assets_fts WHERE rowid IN ({ts_placeholders})", ts_id_batch)
+                ts_connection.execute(f"DELETE FROM assets WHERE id IN ({ts_placeholders})", ts_id_batch)
+            self._TSRecomputeCompanionFlags(ts_touched_folders)
         TSLogVerbose("db.asset_ids.deleted", count=len(ts_asset_ids), asset_ids=ts_asset_ids)
 
     def TSCountVisibleByType(self, ts_root_ids: list[str] | None = None) -> dict[str, int]:
@@ -575,7 +597,10 @@ class TSDatabase:
         ts_scope: str | None = None,
         ts_root_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        ts_where_clauses: list[str] = []
+        # Companion images are suppressed from every asset listing, so counting
+        # them here would make the sidebar tree disagree with the grid it labels
+        # (a folder of 10 videos + 10 same-stem posters would read "20").
+        ts_where_clauses: list[str] = ["assets_view.is_companion_image = 0"]
         ts_parameters: list[Any] = []
         if ts_scope:
             ts_where_clauses.append("assets_view.scope = ?")
@@ -583,7 +608,7 @@ class TSDatabase:
         if ts_root_id:
             ts_where_clauses.append("assets_view.root_id = ?")
             ts_parameters.append(ts_root_id)
-        ts_where_sql = f" WHERE {' AND '.join(ts_where_clauses)}" if ts_where_clauses else ""
+        ts_where_sql = f" WHERE {' AND '.join(ts_where_clauses)}"
         ts_rows = self.TSGetConnection().execute(
             f"""
             SELECT assets_view.root_id, assets_view.scope, assets_view.folder_path, COUNT(*) AS asset_count

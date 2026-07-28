@@ -150,7 +150,15 @@ def TSPrepare3DAssetForLoad3D(ts_database, ts_get_asset_lock, ts_input_directory
     if ts_row is None or str(ts_row["type"] or "") != "3d":
         raise TSWeb.HTTPNotFound()
     with ts_get_asset_lock(ts_asset_id):
-        ts_model_file = _TSStage3DAsset(ts_input_directory, ts_row)
+        try:
+            ts_model_file = _TSStage3DAsset(ts_input_directory, ts_row)
+        except FileNotFoundError:
+            # The row is stale: the user moved or deleted the model since the
+            # last scan. That is a 404, not a server fault - letting the
+            # FileNotFoundError escape made the route wrapper log a stack trace
+            # and report internal_error on every drag of a stale 3D card.
+            TSLogVerbose("load3d_stage.source.missing", asset_id=ts_asset_id, path=str(ts_row["path"]))
+            raise TSWeb.HTTPNotFound()
     return {
         "asset_id": ts_asset_id,
         "model_file": ts_model_file,

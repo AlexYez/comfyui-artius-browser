@@ -14,10 +14,7 @@ import {
     tsLoad3DViewerClass,
     tsResolve3DViewerFileExtension,
 } from "./ts-artius-browser-3d.js";
-import {
-    tsFormatBitrate,
-    tsFormatTime,
-} from "./ts-artius-browser-viewer-format.js";
+import { tsFormatTime } from "./ts-artius-browser-viewer-format.js";
 import {
     tsBuild3DMetaMarkup,
     tsBuildImageMetaMarkup,
@@ -786,6 +783,12 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         } catch {
             return tsAsset;
         }
+    }
+
+    tsIsViewerOpen() {
+        // The panel asks this before handling a key: both handlers sit in the
+        // same bubble path, so the panel must stand down while the lightbox is up.
+        return this.tsIndex >= 0 && this.tsItems.length > 0;
     }
 
     tsOpen(tsItems, tsIndex, tsOnChange = null, tsOptions = null) {

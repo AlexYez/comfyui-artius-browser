@@ -1,11 +1,17 @@
+import { tsNormalizeRelativePath } from "./ts-artius-browser-api-paths.js";
+
 export const tsBrowserSections = Object.freeze(["assets", "workflows"]);
 
 export function tsIsBrowserSection(tsValue) {
     return tsBrowserSections.includes(tsValue);
 }
 
+// Folder paths and asset-relative paths are normalized by the same rule, and
+// both are applied to the same folder_path values. Delegating keeps a single
+// implementation: these used to be byte-identical copies, so hardening one
+// (collapsing "//", rejecting "..") would silently leave the other behind.
 export function tsNormalizeFolderPath(tsValue) {
-    return String(tsValue || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+    return tsNormalizeRelativePath(tsValue);
 }
 
 export function tsResolveLocaleCode(tsUILanguage, tsComfyLocale) {
