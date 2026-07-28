@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed (whole-project review, 2026-07-28)
+## [1.9.0] - 2026-07-28
+
+### Fixed (whole-project review)
 - 3D thumbnails never generated on current ComfyUI builds. `loadModelInternal`
   now resolves to a wrapper (`{object, capabilities, adapter}`) rather than the
   Object3D itself; passing that to `setupModel()` threw and corrupted the
@@ -64,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the header, avoiding a second full decode of every indexed PNG.
 - Removed dead code (an unused runtime facade method, a dead CSS rule, an
   unused import) and de-duplicated path normalization.
+
+## [1.8.0] - 2026-07-28
 
 ### Added
 - Date + resolution filter panel (assets): a collapsible Filters row exposes a
