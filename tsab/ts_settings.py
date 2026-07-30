@@ -101,6 +101,13 @@ TS_DEFAULT_PREVIEW_FORMAT = TS_BACKEND_SETTINGS["preview"]["image_format"]
 TS_DEFAULT_PREVIEW_QUALITY = TS_BACKEND_SETTINGS["preview"]["image_quality"]
 TS_DEFAULT_PLACEHOLDER_WIDTH = TS_BACKEND_SETTINGS["preview"]["placeholder_width"]
 TS_DEFAULT_PLACEHOLDER_HEIGHT = TS_BACKEND_SETTINGS["preview"]["placeholder_height"]
+# Decompression-bomb guard for the image thumbnail path: images above this
+# pixel count get a placeholder instead of a full decode. PIL's own default
+# only errors at ~178 Mpx, and one full decode of such an image costs
+# hundreds of MB across up to 8 concurrent hash workers. 120 Mpx clears every
+# consumer/prosumer camera (GFX100 is ~102 Mpx) with headroom.
+TS_MAX_IMAGE_PREVIEW_PIXELS = 120_000_000
+
 # Clamp bounds for preview-size persistence (UI) and preview-render dimensions.
 TS_PREVIEW_SIZE_MIN = 48
 TS_PREVIEW_SIZE_MAX = 512

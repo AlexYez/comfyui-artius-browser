@@ -291,7 +291,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 return;
             }
             const tsHref = tsInfo.release_url || tsInfo.repository_url;
-            if (typeof tsHref === "string" && tsHref) {
+            // The URL is relayed from remote GitHub data; accept https only so
+            // a poisoned upstream value cannot become a javascript: link.
+            if (typeof tsHref === "string" && tsHref.startsWith("https://")) {
                 tsBadge.href = tsHref;
             }
             tsBadge.hidden = false;

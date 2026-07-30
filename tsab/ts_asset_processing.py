@@ -110,6 +110,21 @@ class TSAssetProcessingService:
             ts_preview_path = str(ts_fresh_row["preview_path"] or "")
             if bool(ts_fresh_row["has_preview"]) and ts_preview_path and self._TSPreviewFileReady(ts_preview_path):
                 return ts_fresh_row
+            if (
+                ts_preview_path
+                and self.ts_preview_cache.TSIsPlaceholderPreview(ts_preview_path)
+                and self._TSPreviewFileReady(ts_preview_path)
+            ):
+                # A stored placeholder means generation already failed for this
+                # exact file revision. Re-running ffmpeg/PIL on every detail
+                # view of a corrupt file is a retry storm; retry only once the
+                # source file changes (or after Rebuild Cache).
+                try:
+                    ts_current_mtime_ns = Path(str(ts_fresh_row["path"])).stat().st_mtime_ns
+                except OSError:
+                    return ts_fresh_row
+                if ts_current_mtime_ns == int(ts_fresh_row["mtime_ns"] or 0):
+                    return ts_fresh_row
             ts_handler = self.ts_handler_registry.TSResolveHandler(str(ts_fresh_row["extension"] or ""), str(ts_fresh_row["type"] or ""))
             if ts_handler is None:
                 return ts_fresh_row

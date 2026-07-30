@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Callable
@@ -64,17 +63,19 @@ class TSScanService:
         TSLogVerbose("runtime.scan.requested", scope=ts_scope, root_id=ts_root_id)
         return await self.ts_indexer.TSStartBackgroundScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
 
+    def _TSResetForRebuild(self) -> None:
+        self.ts_database.TSResetIndex()
+        self.ts_preview_cache.TSClearGeneratedCache()
+
     async def TSRequestCacheRebuild(self) -> dict[str, Any]:
         TSLogVerbose("runtime.rebuild.requested")
-        if bool(self.TSGetScanStatus().get("running")):
+        # Both reset calls are heavy and blocking (VACUUM over the whole DB,
+        # rmtree over the whole preview cache), so they run in a thread; the
+        # indexer serializes them against scan-task creation so a scan that was
+        # just scheduled (but not yet marked running) cannot interleave.
+        if not await self.ts_indexer.TSRunExclusiveMaintenance(self._TSResetForRebuild):
             TSLogVerbose("runtime.rebuild.skipped", reason="scan_running")
             return {"started": False, "status": self.TSGetScanStatus()}
-        # Both calls are heavy and blocking (VACUUM over the whole DB, rmtree
-        # over the whole preview cache). Running them inline would freeze the
-        # ComfyUI event loop - every route, websocket heartbeat and prompt
-        # progress update - for as long as the rebuild takes.
-        await asyncio.to_thread(self.ts_database.TSResetIndex)
-        await asyncio.to_thread(self.ts_preview_cache.TSClearGeneratedCache)
         ts_started = await self.ts_indexer.TSStartBackgroundScan()
         return {"started": ts_started, "status": self.TSGetScanStatus()}
 

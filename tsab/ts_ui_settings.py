@@ -19,6 +19,16 @@ TS_SEARCH_SCOPES = {"filename", "all"}
 TS_FILTER_DIMENSION_MAX = 100_000
 _TS_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
+# Free-text settings values are persisted verbatim to config.json and echoed
+# back on every settings GET; without bounds a client could grow the file up
+# to the request-size cap. Generous for real values, hard stop for abuse.
+TS_SETTINGS_STRING_MAX_LENGTH = 512
+TS_SETTINGS_LIST_MAX_ENTRIES = 1000
+
+
+def TSBoundedString(ts_value: Any, ts_default: str = "") -> str:
+    return str(ts_value or ts_default)[:TS_SETTINGS_STRING_MAX_LENGTH]
+
 
 def TSNormalizeFolderPath(ts_value: Any) -> str:
     return str(ts_value or "").replace("\\", "/").strip("/")
@@ -72,13 +82,14 @@ def TSNormalizeChoice(ts_value: Any, ts_allowed_values: set[str], ts_default: st
 def TSNormalizeStringSequence(ts_value: Any) -> list[str]:
     if not isinstance(ts_value, (list, tuple, set)):
         return []
-    return [str(ts_item) for ts_item in ts_value if str(ts_item)]
+    ts_items = [str(ts_item)[:TS_SETTINGS_STRING_MAX_LENGTH] for ts_item in ts_value if str(ts_item)]
+    return ts_items[:TS_SETTINGS_LIST_MAX_ENTRIES]
 
 
 def TSNormalizeUISettings(ts_ui: dict[str, Any] | None) -> dict[str, Any]:
     ts_ui = ts_ui if isinstance(ts_ui, dict) else {}
     return {
-        "language": str(ts_ui.get("language") or "en"),
+        "language": TSBoundedString(ts_ui.get("language"), "en"),
         "autoscan": bool(ts_ui.get("autoscan", True)),
         "browser_section": TSNormalizeChoice(ts_ui.get("browser_section"), TS_BROWSER_SECTIONS, "assets"),
         "asset_view_mode": TSNormalizeChoice(ts_ui.get("asset_view_mode"), TS_VIEW_MODES, "flat"),
@@ -86,12 +97,12 @@ def TSNormalizeUISettings(ts_ui: dict[str, Any] | None) -> dict[str, Any]:
         "asset_sort_key": TSNormalizeChoice(ts_ui.get("asset_sort_key"), TS_ASSET_SORT_KEYS, "created_at"),
         "asset_sort_direction": TSNormalizeChoice(ts_ui.get("asset_sort_direction"), TS_SORT_DIRECTIONS, "desc"),
         "asset_preview_size": TSClampInt(ts_ui.get("asset_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX, TS_DEFAULT_PREVIEW_SIZE),
-        "asset_search": str(ts_ui.get("asset_search") or ""),
+        "asset_search": TSBoundedString(ts_ui.get("asset_search")),
         "asset_search_scope": TSNormalizeChoice(ts_ui.get("asset_search_scope"), TS_SEARCH_SCOPES, "filename"),
         "workflow_sort_key": TSNormalizeChoice(ts_ui.get("workflow_sort_key"), TS_WORKFLOW_SORT_KEYS, "created_at"),
         "workflow_sort_direction": TSNormalizeChoice(ts_ui.get("workflow_sort_direction"), TS_SORT_DIRECTIONS, "desc"),
         "workflow_preview_size": TSClampInt(ts_ui.get("workflow_preview_size"), TS_PREVIEW_SIZE_MIN, TS_PREVIEW_SIZE_MAX, TS_DEFAULT_PREVIEW_SIZE),
-        "workflow_search": str(ts_ui.get("workflow_search") or ""),
+        "workflow_search": TSBoundedString(ts_ui.get("workflow_search")),
         "asset_types": [ts_type for ts_type in TSNormalizeStringSequence(ts_ui.get("asset_types")) if ts_type in TS_ASSET_TYPES],
         "asset_date_from": TSNormalizeFilterDate(ts_ui.get("asset_date_from")),
         "asset_date_to": TSNormalizeFilterDate(ts_ui.get("asset_date_to")),
@@ -99,9 +110,9 @@ def TSNormalizeUISettings(ts_ui: dict[str, Any] | None) -> dict[str, Any]:
         "asset_max_width": TSNormalizeFilterDimension(ts_ui.get("asset_max_width")),
         "asset_min_height": TSNormalizeFilterDimension(ts_ui.get("asset_min_height")),
         "asset_max_height": TSNormalizeFilterDimension(ts_ui.get("asset_max_height")),
-        "selected_root_id": str(ts_ui.get("selected_root_id") or "all"),
-        "selected_folder_path": TSNormalizeFolderPath(ts_ui.get("selected_folder_path")),
-        "workflow_selected_folder_path": TSNormalizeFolderPath(ts_ui.get("workflow_selected_folder_path")),
+        "selected_root_id": TSBoundedString(ts_ui.get("selected_root_id"), "all"),
+        "selected_folder_path": TSBoundedString(TSNormalizeFolderPath(ts_ui.get("selected_folder_path"))),
+        "workflow_selected_folder_path": TSBoundedString(TSNormalizeFolderPath(ts_ui.get("workflow_selected_folder_path"))),
         "expanded_folders": TSNormalizeStringSequence(ts_ui.get("expanded_folders")),
         "browser_width": TSClampInt(ts_ui.get("browser_width"), 0, 1600, 0),
         "asset_tree_panel_width": TSClampInt(ts_ui.get("asset_tree_panel_width"), 120, 700, 220),
@@ -113,7 +124,7 @@ def TSNormalizeUISettings(ts_ui: dict[str, Any] | None) -> dict[str, Any]:
 def TSApplyUISettingsUpdates(ts_ui: dict[str, Any], ts_ui_updates: dict[str, Any] | None) -> None:
     ts_updates = ts_ui_updates if isinstance(ts_ui_updates, dict) else {}
     if "language" in ts_updates:
-        ts_ui["language"] = str(ts_updates.get("language") or "en")
+        ts_ui["language"] = TSBoundedString(ts_updates.get("language"), "en")
     if "autoscan" in ts_updates:
         ts_ui["autoscan"] = bool(ts_updates.get("autoscan", True))
     if "browser_section" in ts_updates:
@@ -135,7 +146,7 @@ def TSApplyUISettingsUpdates(ts_ui: dict[str, Any], ts_ui_updates: dict[str, Any
         if ts_preview_size is not None:
             ts_ui["asset_preview_size"] = ts_preview_size
     if "asset_search" in ts_updates:
-        ts_ui["asset_search"] = str(ts_updates.get("asset_search") or "")
+        ts_ui["asset_search"] = TSBoundedString(ts_updates.get("asset_search"))
     if "asset_search_scope" in ts_updates:
         ts_ui["asset_search_scope"] = TSNormalizeChoice(ts_updates.get("asset_search_scope"), TS_SEARCH_SCOPES, "filename")
     if "workflow_preview_size" in ts_updates:
@@ -143,7 +154,7 @@ def TSApplyUISettingsUpdates(ts_ui: dict[str, Any], ts_ui_updates: dict[str, Any
         if ts_preview_size is not None:
             ts_ui["workflow_preview_size"] = ts_preview_size
     if "workflow_search" in ts_updates:
-        ts_ui["workflow_search"] = str(ts_updates.get("workflow_search") or "")
+        ts_ui["workflow_search"] = TSBoundedString(ts_updates.get("workflow_search"))
     if "asset_types" in ts_updates:
         ts_asset_types = ts_updates.get("asset_types") or []
         if isinstance(ts_asset_types, (list, tuple, set)):
@@ -155,15 +166,13 @@ def TSApplyUISettingsUpdates(ts_ui: dict[str, Any], ts_ui_updates: dict[str, Any
         if ts_dimension_key in ts_updates:
             ts_ui[ts_dimension_key] = TSNormalizeFilterDimension(ts_updates.get(ts_dimension_key))
     if "selected_root_id" in ts_updates:
-        ts_ui["selected_root_id"] = str(ts_updates.get("selected_root_id") or "all")
+        ts_ui["selected_root_id"] = TSBoundedString(ts_updates.get("selected_root_id"), "all")
     if "selected_folder_path" in ts_updates:
-        ts_ui["selected_folder_path"] = TSNormalizeFolderPath(ts_updates.get("selected_folder_path"))
+        ts_ui["selected_folder_path"] = TSBoundedString(TSNormalizeFolderPath(ts_updates.get("selected_folder_path")))
     if "workflow_selected_folder_path" in ts_updates:
-        ts_ui["workflow_selected_folder_path"] = TSNormalizeFolderPath(ts_updates.get("workflow_selected_folder_path"))
+        ts_ui["workflow_selected_folder_path"] = TSBoundedString(TSNormalizeFolderPath(ts_updates.get("workflow_selected_folder_path")))
     if "expanded_folders" in ts_updates:
-        ts_expanded_folders = ts_updates.get("expanded_folders") or []
-        if isinstance(ts_expanded_folders, (list, tuple, set)):
-            ts_ui["expanded_folders"] = [str(ts_key) for ts_key in ts_expanded_folders if str(ts_key)]
+        ts_ui["expanded_folders"] = TSNormalizeStringSequence(ts_updates.get("expanded_folders"))
     if "browser_width" in ts_updates:
         ts_browser_width = TSParseClampedInt(ts_updates.get("browser_width"), 0, 1600)
         if ts_browser_width is not None:

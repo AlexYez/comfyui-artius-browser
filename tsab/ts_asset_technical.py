@@ -14,6 +14,10 @@ def TSEnrichVideoTechnicalInfo(ts_row, ts_database, ts_tools, ts_technical: dict
     ts_technical_info = dict(ts_technical or TSResolveTechnicalInfo(ts_row))
     if ts_technical_info.get("codec_name") and ts_technical_info.get("fps"):
         return ts_row, ts_technical_info
+    if ts_technical_info.get("probe_attempted"):
+        # A previous on-demand probe already yielded nothing for this file
+        # revision; re-running ffprobe on every detail view is a retry storm.
+        return ts_row, ts_technical_info
     ts_source_path = Path(str(ts_row["path"] or ""))
     if not ts_source_path.exists():
         return ts_row, ts_technical_info
@@ -24,7 +28,15 @@ def TSEnrichVideoTechnicalInfo(ts_row, ts_database, ts_tools, ts_technical: dict
         str(ts_row["extension"] or ""),
     )
     if not ts_changed:
-        return ts_row, ts_technical_info
+        # Persist the failed attempt so the next detail view exits early
+        # instead of probing again. A rescan of a changed file rebuilds
+        # technical_json and clears the marker.
+        ts_technical_info["probe_attempted"] = True
+        ts_updated_row = ts_database.TSUpsertAsset(ts_database.TSBuildUpdatedPayload(
+            ts_row,
+            ts_technical_json=TSJsonDumps(ts_technical_info),
+        ))
+        return ts_updated_row, ts_technical_info
     ts_updated_row = ts_database.TSUpsertAsset(ts_database.TSBuildUpdatedPayload(
         ts_row,
         ts_technical_json=TSJsonDumps(ts_technical_info),
@@ -39,6 +51,8 @@ def TSEnrichAudioTechnicalInfo(ts_row, ts_database, ts_tools, ts_technical: dict
     ts_technical_info = dict(ts_technical or TSResolveTechnicalInfo(ts_row))
     if ts_technical_info.get("codec_name") and ts_technical_info.get("channels"):
         return ts_row, ts_technical_info
+    if ts_technical_info.get("probe_attempted"):
+        return ts_row, ts_technical_info
     ts_source_path = Path(str(ts_row["path"] or ""))
     if not ts_source_path.exists():
         return ts_row, ts_technical_info
@@ -49,7 +63,12 @@ def TSEnrichAudioTechnicalInfo(ts_row, ts_database, ts_tools, ts_technical: dict
         str(ts_row["extension"] or ""),
     )
     if not ts_changed:
-        return ts_row, ts_technical_info
+        ts_technical_info["probe_attempted"] = True
+        ts_updated_row = ts_database.TSUpsertAsset(ts_database.TSBuildUpdatedPayload(
+            ts_row,
+            ts_technical_json=TSJsonDumps(ts_technical_info),
+        ))
+        return ts_updated_row, ts_technical_info
     ts_updated_row = ts_database.TSUpsertAsset(ts_database.TSBuildUpdatedPayload(
         ts_row,
         ts_technical_json=TSJsonDumps(ts_technical_info),

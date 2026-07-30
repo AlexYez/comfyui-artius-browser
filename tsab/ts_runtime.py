@@ -380,6 +380,16 @@ class TSAssetBrowserRuntime:
         if ts_row is None:
             raise TSWeb.HTTPNotFound()
         ts_file_path = Path(str(ts_row["path"]))
+        # Re-check containment against the currently configured roots: a DB row
+        # can outlive its root (custom root removed/disabled) until the next
+        # scan prunes it, and stale rows must not keep files readable.
+        ts_root = self._TSBuildRootMap().get(str(ts_row["root_id"]))
+        if ts_root is None:
+            raise TSWeb.HTTPNotFound()
+        try:
+            ts_file_path.resolve().relative_to(Path(ts_root.ts_path).resolve())
+        except (OSError, ValueError):
+            raise TSWeb.HTTPNotFound() from None
         if not ts_file_path.exists():
             raise TSWeb.HTTPNotFound()
         return self._TSApplyNoStoreHeaders(TSWeb.FileResponse(ts_file_path))

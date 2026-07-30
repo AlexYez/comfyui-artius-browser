@@ -22,7 +22,9 @@ export function tsEscapeHTML(tsText) {
 }
 
 export function tsEscapeAttribute(tsText) {
-    return tsEscapeHTML(tsText).replaceAll('"', "&quot;");
+    // "&#39;" (not "&apos;") for maximum parser compatibility: single quotes
+    // matter for the one single-quoted CSS url('...') sink in the viewer stage.
+    return tsEscapeHTML(tsText).replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 
 export function tsFormatBytes(tsBytes) {

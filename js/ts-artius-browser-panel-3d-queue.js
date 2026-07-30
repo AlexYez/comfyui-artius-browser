@@ -29,6 +29,9 @@ export class TS3DThumbnailQueue {
         this.tsQueue = [];
         this.tsPending = new Set();
         this.tsInFlight = new Set();
+        // viewer URL -> owner token from tsAcquire3DCapture, held only while a
+        // capture this queue started is outstanding.
+        this.tsClaimTokens = new Map();
         this.tsFailed = new Set();
         this.tsCache = new Map();
         this.tsWorkers = 0;
@@ -70,11 +73,14 @@ export class TS3DThumbnailQueue {
 
     // Release every cross-pipeline capture claim this queue still holds.
     // tsRunJob's own finally covers the normal path; this covers teardown while
-    // captures are still outstanding.
+    // captures are still outstanding. Owner tokens make the later finally of an
+    // in-flight job a no-op instead of freeing a claim the background sweeper
+    // may have re-acquired in the meantime.
     tsReleaseSharedClaims() {
-        for (const tsViewerURL of this.tsInFlight) {
-            tsRelease3DCapture(tsViewerURL);
+        for (const [tsViewerURL, tsToken] of this.tsClaimTokens) {
+            tsRelease3DCapture(tsViewerURL, tsToken);
         }
+        this.tsClaimTokens.clear();
     }
 
     tsScheduleVisible(tsItems) {
@@ -166,12 +172,14 @@ export class TS3DThumbnailQueue {
         // The background sweeper may already hold this model. Re-queue nothing
         // and drop the job: capturing it twice would create a second WebGL
         // context for the same file and race the backend write.
-        if (!tsAcquire3DCapture(tsJob.tsViewerURL)) {
+        const tsClaimToken = tsAcquire3DCapture(tsJob.tsViewerURL);
+        if (!tsClaimToken) {
             this.tsInFlight.delete(tsJob.tsViewerURL);
             this.tsWorkers = Math.max(0, this.tsWorkers - 1);
             this.tsPump();
             return;
         }
+        this.tsClaimTokens.set(tsJob.tsViewerURL, tsClaimToken);
         try {
             const tsPreviewURL = await this.tsDeps.capture(tsJob.tsViewerURL, {
                 width: this.tsSettings.captureSize,
@@ -199,7 +207,8 @@ export class TS3DThumbnailQueue {
         } catch {
             this.tsFailed.add(tsJob.tsViewerURL);
         } finally {
-            tsRelease3DCapture(tsJob.tsViewerURL);
+            tsRelease3DCapture(tsJob.tsViewerURL, this.tsClaimTokens.get(tsJob.tsViewerURL));
+            this.tsClaimTokens.delete(tsJob.tsViewerURL);
             this.tsInFlight.delete(tsJob.tsViewerURL);
             this.tsWorkers = Math.max(0, this.tsWorkers - 1);
             this.tsPump();

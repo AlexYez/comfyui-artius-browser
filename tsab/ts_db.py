@@ -51,6 +51,15 @@ class TSDatabase:
         ts_size = max(1, int(ts_chunk_size))
         return [ts_values[ts_index : ts_index + ts_size] for ts_index in range(0, len(ts_values), ts_size)]
 
+    @staticmethod
+    def _TSIsTransientLockError(ts_error: sqlite3.DatabaseError) -> bool:
+        # "database is locked" / "database is busy" mean another connection
+        # holds the file (second ComfyUI on the same output/, external tool),
+        # not corruption. Rebuilding the schema in that state would destroy a
+        # healthy index cache, so lock errors must propagate instead.
+        ts_message = str(ts_error).lower()
+        return "locked" in ts_message or "busy" in ts_message
+
     def TSMigrate(self) -> None:
         ts_connection = self.TSGetConnection()
         ts_user_version = int(ts_connection.execute("PRAGMA user_version").fetchone()[0])
@@ -64,6 +73,8 @@ class TSDatabase:
                 to_schema_version=TS_DB_SCHEMA_VERSION,
                 error=str(ts_error),
             )
+            if self._TSIsTransientLockError(ts_error):
+                raise
             self._TSRebuildSchema(ts_connection, ts_user_version, "additive_failed")
         else:
             self._TSMigrateFTSPromptColumn(ts_connection, ts_user_version)
@@ -90,6 +101,8 @@ class TSDatabase:
                 database=str(self.ts_database_path),
                 error=str(ts_error),
             )
+            if self._TSIsTransientLockError(ts_error):
+                raise
             self._TSRebuildSchema(ts_connection, ts_user_version, "fts_prompt_migration_failed")
 
     def _TSRebuildSchema(
@@ -109,8 +122,13 @@ class TSDatabase:
         )
 
     def TSResetIndex(self) -> None:
-        ts_connection = self.TSGetConnection()
-        ts_connection.executescript(TS_DB_RESET_INDEX_SQL)
+        # Run the reset statements in one transaction: executescript would
+        # autocommit each DELETE, and a crash between "DELETE FROM assets_fts"
+        # and "DELETE FROM assets" would leave rows silently unsearchable.
+        with self._TSWriteTransaction() as ts_connection:
+            for ts_statement in TS_DB_RESET_INDEX_SQL.split(";"):
+                if ts_statement.strip():
+                    ts_connection.execute(ts_statement)
         try:
             ts_connection.execute("VACUUM")
         except sqlite3.DatabaseError as ts_error:
@@ -344,9 +362,25 @@ class TSDatabase:
         try:
             yield ts_connection
         except Exception:
-            ts_connection.execute("ROLLBACK")
+            self._TSForceRollback(ts_connection)
             raise
-        ts_connection.execute("COMMIT")
+        try:
+            ts_connection.execute("COMMIT")
+        except sqlite3.Error:
+            # A failed COMMIT (disk full, I/O error) can leave the transaction
+            # open; per-thread connections are never recreated, so every later
+            # write on this thread would fail with "cannot start a transaction
+            # within a transaction". Roll back before propagating.
+            self._TSForceRollback(ts_connection)
+            raise
+
+    @staticmethod
+    def _TSForceRollback(ts_connection: sqlite3.Connection) -> None:
+        try:
+            if ts_connection.in_transaction:
+                ts_connection.execute("ROLLBACK")
+        except sqlite3.Error as ts_error:
+            TSLogVerbose("db.transaction.rollback_failed", error=str(ts_error))
 
     def TSUpsertAsset(self, ts_payload: TSAssetPayload) -> sqlite3.Row:
         with self._TSWriteTransaction():

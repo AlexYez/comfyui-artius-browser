@@ -14,7 +14,25 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Check whether project.version changed
+        id: version
+        # The push trigger fires on ANY pyproject.toml edit (lint config,
+        # metadata); publish only when the version string actually changed.
+        # workflow_dispatch always publishes.
+        run: |
+          NEW=$(grep -Po '^version\s*=\s*"\K[^"]+' pyproject.toml || echo "")
+          OLD=$(git show HEAD~1:pyproject.toml 2>/dev/null | grep -Po '^version\s*=\s*"\K[^"]+' || echo "")
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ -n "$NEW" -a "$NEW" != "$OLD" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Publish Custom Node
-        uses: Comfy-Org/publish-node-action@main
+        if: steps.version.outputs.changed == 'true'
+        # Pinned to a commit SHA (main as of 2026-07-30): a mutable @main ref
+        # would run whatever code lands there with access to the registry token.
+        uses: Comfy-Org/publish-node-action@d2366e7abb6ab16f3bb03e3520ae25c8cf749bc9
         with:
           personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }} ## Add your own personal access token to your Github Repository secrets and reference it here.

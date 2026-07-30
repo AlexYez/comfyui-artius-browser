@@ -54,7 +54,10 @@ def TSBuildAssetQueryParts(
                 ts_where_clauses.append("assets_fts.filename MATCH ?")
             ts_parameters.append(ts_fts_query)
         else:
-            ts_search_value = str(ts_search_text).strip().replace("%", r"\%").replace("_", r"\_")
+            # Escape the escape character itself first, mirroring the folder
+            # clause below: a trailing "\" in the search text would otherwise
+            # consume the "%" wildcard appended around the pattern.
+            ts_search_value = str(ts_search_text).strip().replace("\\", r"\\").replace("%", r"\%").replace("_", r"\_")
             if ts_search_prompts:
                 ts_where_clauses.append(
                     "(assets_view.filename LIKE ? ESCAPE '\\' COLLATE NOCASE "

@@ -134,12 +134,15 @@ class TSToolLocator:
     ) -> list[subprocess.CompletedProcess[str] | None]:
         if not ts_specs:
             return []
+        # Acquire inside the try: an interrupt between two acquires would
+        # otherwise leak the first permit (BoundedSemaphore is never released)
+        # and permanently shrink tool concurrency.
         ts_acquired_semaphores: list[threading.BoundedSemaphore] = []
-        for ts_semaphore, _, _ in ts_specs:
-            if ts_semaphore is not None:
-                ts_semaphore.acquire()
-                ts_acquired_semaphores.append(ts_semaphore)
         try:
+            for ts_semaphore, _, _ in ts_specs:
+                if ts_semaphore is not None:
+                    ts_semaphore.acquire()
+                    ts_acquired_semaphores.append(ts_semaphore)
             ts_processes: list[tuple[subprocess.Popen[str] | None, list[str], int]] = []
             for _, ts_arguments, ts_timeout in ts_specs:
                 if not ts_arguments or not ts_arguments[0]:
@@ -179,7 +182,14 @@ class TSToolLocator:
                     try:
                         ts_process.communicate(timeout=5)
                     except (subprocess.SubprocessError, OSError):
-                        pass
+                        # The reap itself failed; close the pipes explicitly so
+                        # the fds are not leaked until GC.
+                        for ts_stream in (ts_process.stdout, ts_process.stderr):
+                            if ts_stream is not None:
+                                try:
+                                    ts_stream.close()
+                                except OSError:
+                                    pass
                     TSLogVerbose("tools.popen.timeout", arguments=ts_arguments, timeout=ts_timeout)
                     ts_results.append(None)
                 except (subprocess.SubprocessError, OSError) as ts_error:

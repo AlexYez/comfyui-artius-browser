@@ -14,8 +14,11 @@
 // competing writes to the same asset row. Both pipelines therefore share the
 // predicate and the in-flight set below.
 
-// viewer_3d_url values currently being captured by ANY pipeline.
-const tsActiveCaptureURLs = new Set();
+// viewer_3d_url -> owner token for captures currently held by ANY pipeline.
+// Claims are owner-tagged: releasing with a stale token is a no-op, so a
+// pipeline that released its claims wholesale (dispose/clear) cannot later
+// free a claim that another pipeline has since acquired.
+const tsActiveCaptureClaims = new Map();
 
 /**
  * The single skip predicate. An asset needs a capture only when it is a 3D
@@ -32,24 +35,30 @@ export function tsNeeds3DCapture(tsAsset) {
 }
 
 /**
- * Claim a model for capture. Returns false when another pipeline already holds
- * it, in which case the caller must skip - not wait.
+ * Claim a model for capture. Returns a truthy owner token, or null when
+ * another pipeline already holds it, in which case the caller must skip -
+ * not wait.
  * @param {string} tsViewerURL
- * @returns {boolean}
+ * @returns {symbol | null}
  */
 export function tsAcquire3DCapture(tsViewerURL) {
-    if (!tsViewerURL || tsActiveCaptureURLs.has(tsViewerURL)) {
-        return false;
+    if (!tsViewerURL || tsActiveCaptureClaims.has(tsViewerURL)) {
+        return null;
     }
-    tsActiveCaptureURLs.add(tsViewerURL);
-    return true;
+    const tsToken = Symbol("ts3DCaptureClaim");
+    tsActiveCaptureClaims.set(tsViewerURL, tsToken);
+    return tsToken;
 }
 
 /**
- * Release a claim taken by tsAcquire3DCapture. Always call from a finally block.
+ * Release a claim taken by tsAcquire3DCapture. Always call from a finally
+ * block, passing the token acquire returned. A stale/foreign token no-ops.
  * @param {string} tsViewerURL
+ * @param {symbol | null | undefined} tsToken
  * @returns {void}
  */
-export function tsRelease3DCapture(tsViewerURL) {
-    tsActiveCaptureURLs.delete(tsViewerURL);
+export function tsRelease3DCapture(tsViewerURL, tsToken) {
+    if (tsToken && tsActiveCaptureClaims.get(tsViewerURL) === tsToken) {
+        tsActiveCaptureClaims.delete(tsViewerURL);
+    }
 }

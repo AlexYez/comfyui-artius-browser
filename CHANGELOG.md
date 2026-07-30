@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-07-30
+
+Stability and hardening release: every confirmed finding of a full-project
+audit, fixed in one pass.
+
+### Fixed
+- A transient SQLite lock at startup (second ComfyUI instance on the same
+  `output/`, external tool holding `db.sqlite`) was treated as corruption and
+  rebuilt the schema, wiping the whole index cache. Lock errors now propagate
+  instead of triggering a rebuild.
+- A failed `COMMIT` (full disk, I/O error) left the connection with an open
+  transaction, permanently failing every later write on that thread.
+- `Rebuild Cache` could interleave with a scan that was scheduled but not yet
+  marked running; the reset now runs under the same lock that creates scan
+  tasks.
+- `Reset` of the index ran each `DELETE` in autocommit; a crash mid-reset could
+  leave assets silently unsearchable. The statements now run in one
+  transaction.
+- The 3D lightbox passed the raw `loadModelInternal` result to `setupModel()`,
+  which fails on current ComfyUI builds (wrapper object); it now unwraps the
+  result the same way the 3D thumbnail pipeline does.
+- Corrupt media retriggered ffmpeg/ffprobe on every detail view (retry storm);
+  failed previews and probes are now remembered until the source file changes
+  or `Rebuild Cache`.
+- Rescanning root A then root B while a scan was running silently dropped A's
+  request (single pending slot); queued scan requests are now kept as a list.
+- The discovery-time and DB-side companion-image rules disagreed, so an image
+  like `final.png` next to `final_preview.mp4` was indexed but never shown.
+  Both sides now use the same normalized-stem rule.
+- A literal backslash in the search text broke the `LIKE` fallback pattern.
+- Two 3D-capture pipelines could briefly capture the same model twice after
+  `Rebuild Cache` (double-released claim); capture claims are now owner-tagged.
+- `.source.png` temp files abandoned by a killed process are now reclaimed by
+  the orphan purge after 24 hours.
+- Timed-out external tools could leak pipe handles when the post-kill reap
+  itself timed out; a semaphore permit could leak on interpreter shutdown.
+
+### Security / hardening
+- Oversized images (>120 Mpx) get a placeholder instead of a full decode
+  (decompression-bomb guard for the thumbnail path).
+- Workflow deletion re-validates the resolved path against the workflows
+  folder (a planted symlink/junction could otherwise redirect the delete) and
+  rejects Windows-reserved characters including NTFS alternate data streams.
+- `/file` re-checks that the asset still lies inside a currently configured
+  root, so rows outliving a removed custom root no longer serve files.
+- Body-size caps can no longer be bypassed with chunked transfer encoding.
+- Free-text settings values are length-capped before being persisted to
+  `config.json`.
+- Attribute escaping also covers single quotes; the update badge accepts only
+  `https://` URLs.
+- The registry publish action is pinned to a commit SHA and publishes only
+  when `project.version` actually changed.
+
 ## [1.9.0] - 2026-07-28
 
 ### Fixed (whole-project review)

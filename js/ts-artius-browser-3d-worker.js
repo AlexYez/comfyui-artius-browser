@@ -156,7 +156,8 @@ class TSGlobal3DThumbnailWorker {
         // The panel's visible-card queue may already be capturing this exact
         // model. Two captures of one model means two WebGL contexts, two full
         // model loads and two competing writes to the same asset row.
-        if (!tsAcquire3DCapture(tsAsset.viewer_3d_url)) {
+        const tsClaimToken = tsAcquire3DCapture(tsAsset.viewer_3d_url);
+        if (!tsClaimToken) {
             return false;
         }
         let tsPreviewURL = "";
@@ -170,7 +171,7 @@ class TSGlobal3DThumbnailWorker {
             this.tsFailedViewerAttempts.set(tsAsset.viewer_3d_url, tsFailedAttempts + 1);
             throw tsError;
         } finally {
-            tsRelease3DCapture(tsAsset.viewer_3d_url);
+            tsRelease3DCapture(tsAsset.viewer_3d_url, tsClaimToken);
         }
         if (!tsPreviewURL) {
             this.tsFailedViewerAttempts.set(tsAsset.viewer_3d_url, tsFailedAttempts + 1);

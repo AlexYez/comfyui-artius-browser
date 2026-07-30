@@ -13,6 +13,7 @@ import {
 import {
     tsLoad3DViewerClass,
     tsResolve3DViewerFileExtension,
+    tsResolveLoadedObject3D,
 } from "./ts-artius-browser-3d.js";
 import { tsFormatTime } from "./ts-artius-browser-viewer-format.js";
 import {
@@ -1655,11 +1656,22 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 tsViewerController.controlsManager?.reset?.();
                 tsViewerController.modelManager?.clearModel?.();
                 tsViewerController.animationManager?.dispose?.();
-                const tsModel = await tsViewerController.loaderManager?.loadModelInternal?.(tsViewerURL, tsExtension);
+                const tsLoaded = await tsViewerController.loaderManager?.loadModelInternal?.(tsViewerURL, tsExtension);
+                // Same unwrap contract as tsCapture3DThumbnail: current ComfyUI
+                // resolves loadModelInternal to a wrapper (or nothing, with the
+                // model landing on the model manager); passing the wrapper to
+                // setupModel throws "e.traverse is not a function".
+                let tsModel = tsResolveLoadedObject3D(tsLoaded);
+                if (!tsModel) {
+                    await tsViewerController.loaderManager?.whenLoadIdle?.();
+                    tsModel = tsViewerController.modelManager?.currentModel || null;
+                }
                 if (!tsModel) {
                     throw new Error("3D model load returned no model");
                 }
-                await tsViewerController.modelManager?.setupModel?.(tsModel);
+                if (tsViewerController.modelManager?.currentModel !== tsModel) {
+                    await tsViewerController.modelManager?.setupModel?.(tsModel);
+                }
                 if (tsViewerController.modelManager?.currentModel) {
                     tsViewerController.animationManager?.setupModelAnimations?.(
                         tsViewerController.modelManager.currentModel,

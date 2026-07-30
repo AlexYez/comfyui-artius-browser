@@ -50,7 +50,7 @@ class TSIndexer:
         self.ts_async_lock = asyncio.Lock()
         self.ts_thread_lock = threading.Lock()
         self.ts_scan_task: asyncio.Task | None = None
-        self.ts_pending_request: dict[str, str | None] | None = None
+        self.ts_pending_requests: list[dict[str, str | None]] = []
         self.ts_last_progress_bucket = -1
         self.ts_status = TSScanStatus(
             ts_running=False,
@@ -71,10 +71,28 @@ class TSIndexer:
     def TSGetStatus(self) -> dict[str, Any]:
         return self.ts_status.TSAsDict()
 
+    async def TSRunExclusiveMaintenance(self, ts_maintenance_callable) -> bool:
+        # Runs a blocking maintenance action (cache rebuild reset) while
+        # holding the same lock that guards scan-task creation. Checking the
+        # status dict alone is racy: "running" flips true only once the worker
+        # thread starts, so a just-created scan task could interleave with
+        # TSResetIndex + VACUUM. Holding ts_async_lock here means no scan task
+        # can be created mid-maintenance, and an existing task blocks it.
+        async with self.ts_async_lock:
+            if self.ts_scan_task is not None and not self.ts_scan_task.done():
+                return False
+            await asyncio.to_thread(ts_maintenance_callable)
+            return True
+
     async def TSStartBackgroundScan(self, ts_scope: str | None = None, ts_root_id: str | None = None) -> bool:
         async with self.ts_async_lock:
             if self.ts_scan_task is not None and not self.ts_scan_task.done():
-                self.ts_pending_request = {"scope": ts_scope, "root_id": ts_root_id}
+                # Keep every distinct queued request: a single pending slot
+                # silently dropped an earlier "rescan root A" when "rescan
+                # root B" arrived while a scan was running.
+                ts_pending_request = {"scope": ts_scope, "root_id": ts_root_id}
+                if ts_pending_request not in self.ts_pending_requests:
+                    self.ts_pending_requests.append(ts_pending_request)
                 TSLogVerbose("indexer.scan.queued", scope=ts_scope, root_id=ts_root_id)
                 return False
             self.ts_scan_task = asyncio.create_task(self._TSRunScanAsync(ts_scope, ts_root_id))
@@ -84,9 +102,8 @@ class TSIndexer:
     async def _TSRunScanAsync(self, ts_scope: str | None, ts_root_id: str | None) -> None:
         await asyncio.to_thread(self.TSRunScanSync, ts_scope, ts_root_id)
         async with self.ts_async_lock:
-            if self.ts_pending_request is not None:
-                ts_pending = self.ts_pending_request
-                self.ts_pending_request = None
+            if self.ts_pending_requests:
+                ts_pending = self.ts_pending_requests.pop(0)
                 TSLogVerbose("indexer.scan.dequeued", scope=ts_pending.get("scope"), root_id=ts_pending.get("root_id"))
                 self.ts_scan_task = asyncio.create_task(self._TSRunScanAsync(ts_pending.get("scope"), ts_pending.get("root_id")))
             else:

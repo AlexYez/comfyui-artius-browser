@@ -17,7 +17,7 @@ export function tsResolve3DViewerFileExtension(tsViewerURL) {
     }
 }
 
-function tsResolveLoadedObject3D(tsLoaded) {
+export function tsResolveLoadedObject3D(tsLoaded) {
     // What loadModelInternal resolves to is ComfyUI-version dependent:
     //   - older frontends return the Object3D directly,
     //   - current ones return a wrapper { object, capabilities, adapter },

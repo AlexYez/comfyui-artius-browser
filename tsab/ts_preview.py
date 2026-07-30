@@ -38,6 +38,7 @@ from .ts_settings import (
     TS_MAX_3D_CAPTURE_DATA_URL_LENGTH,
     TS_MAX_3D_CAPTURE_DECODED_BYTES,
     TS_MAX_3D_CAPTURE_PIXELS,
+    TS_MAX_IMAGE_PREVIEW_PIXELS,
     TS_DEFAULT_WAVEFORM_HEIGHT,
     TS_DEFAULT_WAVEFORM_WIDTH,
     TS_PLACEHOLDER_HEIGHT_MAX,
@@ -59,6 +60,11 @@ from .ts_utils import TSKeyedLockRegistry, TSNormalizePathString, TSRelativePosi
 # end-of-scan directory walk would otherwise be deleted as a false orphan and
 # have to be regenerated (a visible preview flicker).
 TS_ORPHAN_MIN_AGE_SECONDS = 600
+
+# ".source.png" extraction temp files belong to an in-flight generator, but a
+# hard-killed process (ComfyUI terminated mid-ffmpeg) never cleans them up.
+# The orphan purge reclaims any that are older than this.
+TS_SOURCE_TEMP_MAX_AGE_SECONDS = 24 * 60 * 60
 
 # SoundCloud-style waveform rendering: discrete vertical bars filled with a
 # greenish steel gradient. Geometry is in source pixels (waveform_width/height);
@@ -166,6 +172,17 @@ class TSPreviewCache:
                 return self.TSRelativePreviewPath(ts_output_path)
             try:
                 with Image.open(ts_source_path) as ts_image:
+                    # Header-only check (no decode yet): oversized images get a
+                    # placeholder instead of a multi-hundred-MB full decode.
+                    if ts_image.width * ts_image.height > TS_MAX_IMAGE_PREVIEW_PIXELS:
+                        TSLogVerbose(
+                            "preview.thumbnail.skipped",
+                            source_path=str(ts_source_path),
+                            reason="image_too_large",
+                            width=ts_image.width,
+                            height=ts_image.height,
+                        )
+                        return self.TSGetTypePlaceholderPreview("image")
                     self._TSPrepareSourceImageForThumbnail(ts_image, self._TSThumbnailSize())
                     ts_image = ImageOps.exif_transpose(ts_image)
                     self._TSApplyThumbnailResize(ts_image)
@@ -426,8 +443,9 @@ class TSPreviewCache:
         # common cases (asset deleted / re-hashed); this is the safety net for
         # files left behind by a crash or an interrupted scan, so the cache
         # cannot grow without bound. Placeholders are shared/regenerated and are
-        # deliberately excluded; transient ".source.png" extraction files belong
-        # to an in-flight generator and are left to its own cleanup.
+        # deliberately excluded; transient ".source.png" extraction files are
+        # left to their generator's cleanup unless they are old enough to have
+        # been abandoned by a killed process.
         ts_referenced = {
             str(ts_path).replace("\\", "/")
             for ts_path in ts_referenced_preview_paths
@@ -446,7 +464,16 @@ class TSPreviewCache:
                 continue
             for ts_file_path in ts_entries:
                 try:
-                    if not ts_file_path.is_file() or ts_file_path.name.endswith(".source.png"):
+                    if not ts_file_path.is_file():
+                        continue
+                    if ts_file_path.name.endswith(".source.png"):
+                        # Owned by an in-flight generator - but a hard-killed
+                        # process leaves them behind forever. Anything this old
+                        # has no live owner and is safe to reclaim.
+                        if (ts_now - ts_file_path.stat().st_mtime) > TS_SOURCE_TEMP_MAX_AGE_SECONDS:
+                            ts_file_path.unlink()
+                            ts_removed += 1
+                            TSLogVerbose("preview.orphan.purged", path=str(ts_file_path))
                         continue
                     ts_relative_path = self.TSRelativePreviewPath(ts_file_path)
                     if ts_relative_path in ts_referenced:

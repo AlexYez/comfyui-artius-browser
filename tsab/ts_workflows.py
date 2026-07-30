@@ -26,6 +26,11 @@ def TSGetPromptServerInstance():
     return getattr(PromptServer, "instance", None)
 
 
+# Windows-reserved characters. ":" additionally blocks NTFS alternate data
+# stream names ("foo.json:alt.json" would otherwise pass the ".json" check).
+TS_WORKFLOW_PATH_FORBIDDEN_CHARACTERS = set(':<>|"?*')
+
+
 def TSNormalizeWorkflowRelativePath(ts_relative_path: str) -> str:
     ts_normalized_path = str(ts_relative_path or "").replace("\\", "/").strip("/")
     ts_parts = ts_normalized_path.split("/")
@@ -34,6 +39,7 @@ def TSNormalizeWorkflowRelativePath(ts_relative_path: str) -> str:
         or not ts_normalized_path.lower().endswith(".json")
         or len(ts_parts) < 2
         or any(ts_part in {"", ".", ".."} for ts_part in ts_parts)
+        or any(ts_character in TS_WORKFLOW_PATH_FORBIDDEN_CHARACTERS for ts_character in ts_normalized_path)
     ):
         raise TSWeb.HTTPBadRequest(reason="Invalid workflow path")
     return ts_normalized_path
@@ -61,7 +67,21 @@ class TSWorkflowService:
         )
         if not ts_absolute_path:
             raise TSWeb.HTTPBadRequest(reason="Invalid workflow path")
-        return Path(str(ts_absolute_path)).resolve()
+        ts_resolved_path = Path(str(ts_absolute_path)).resolve()
+        # resolve() follows symlinks/junctions: a link planted inside the
+        # workflows folder could otherwise redirect the delete (including its
+        # same-stem sidecar sweep) into an unrelated directory.
+        ts_workflows_root = ts_user_manager.get_request_user_filepath(
+            ts_request,
+            "workflows",
+            create_dir=False,
+        )
+        if ts_workflows_root:
+            try:
+                ts_resolved_path.relative_to(Path(str(ts_workflows_root)).resolve())
+            except ValueError:
+                raise TSWeb.HTTPBadRequest(reason="Invalid workflow path") from None
+        return ts_resolved_path
 
     def TSFindPreviewSidecars(self, ts_workflow_path: Path) -> list[Path]:
         ts_sidecars: list[Path] = []

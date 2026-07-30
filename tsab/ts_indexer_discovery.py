@@ -30,11 +30,17 @@ TS_IGNORED_DIRECTORY_NAMES = {TS_STORAGE_DIRECTORY_NAME.lower(), *(ts_name.lower
 
 
 def TSFilterCompanionEntries(ts_file_entries: Iterable[os.DirEntry[str]]) -> list[os.DirEntry[str]]:
+    # Match the DB's companion definition exactly (_TSRecomputeCompanionFlags
+    # compares NORMALIZED stems on both sides): comparing raw media stems here
+    # while the DB compares normalized ones let an image be indexed yet flagged
+    # invisible (e.g. "final.png" next to "final_preview.mp4"). Normalizing
+    # both sides is strictly broader than the old raw-or-normalized check.
     ts_entries_with_paths = [(ts_entry, Path(ts_entry.path)) for ts_entry in ts_file_entries]
     ts_media_stems = {
-        ts_entry_path.stem.lower()
+        ts_normalized_stem
         for _ts_entry, ts_entry_path in ts_entries_with_paths
         if ts_entry_path.suffix.lower() in TS_COMPANION_MEDIA_EXTENSIONS
+        and (ts_normalized_stem := TSNormalizeCompanionStem(ts_entry_path.stem.lower()))
     }
     ts_result: list[os.DirEntry[str]] = []
     for ts_entry, ts_entry_path in ts_entries_with_paths:
@@ -42,10 +48,9 @@ def TSFilterCompanionEntries(ts_file_entries: Iterable[os.DirEntry[str]]) -> lis
         if ts_extension not in TS_SUPPORTED_EXTENSIONS:
             continue
         if ts_extension in TS_IMAGE_EXTENSIONS:
-            ts_stem = ts_entry_path.stem.lower()
-            ts_base_stem = TSNormalizeCompanionStem(ts_stem)
-            if ts_stem in ts_media_stems or (ts_base_stem and ts_base_stem in ts_media_stems):
-                TSLogVerbose("indexer.companion.skipped", path=str(ts_entry_path), related_stem=ts_base_stem or ts_stem)
+            ts_base_stem = TSNormalizeCompanionStem(ts_entry_path.stem.lower())
+            if ts_base_stem and ts_base_stem in ts_media_stems:
+                TSLogVerbose("indexer.companion.skipped", path=str(ts_entry_path), related_stem=ts_base_stem)
                 continue
         ts_result.append(ts_entry)
     return ts_result

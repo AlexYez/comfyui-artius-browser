@@ -37,6 +37,7 @@ dist/
 *.bak
 CLAUDE.md
 doc/
+code-review-report.md
 
 # Tests are PRIVATE to the master working copy. They are never tracked in the
 # public repo nor synced into the ComfyUI deploy. The whole tree is ignored.

@@ -108,6 +108,12 @@ def TSEnforceRequestContentLength(ts_request, ts_max_bytes: int) -> None:
     ts_content_length = TSParsePositiveInt(ts_headers.get("Content-Length") or ts_headers.get("content-length"))
     if ts_content_length is not None and ts_content_length > ts_max_bytes:
         raise TSWeb.HTTPRequestEntityTooLarge(max_size=ts_max_bytes, actual_size=ts_content_length)
+    if ts_content_length is None:
+        # A chunked body carries no Content-Length, which would bypass the cap
+        # entirely (the whole body still gets buffered by request.json()).
+        ts_transfer_encoding = str(ts_headers.get("Transfer-Encoding") or ts_headers.get("transfer-encoding") or "")
+        if "chunked" in ts_transfer_encoding.lower():
+            raise TSWeb.HTTPLengthRequired(reason="Content-Length required")
 
 
 def _TSBindRouteHandler(ts_handler, ts_runtime):
