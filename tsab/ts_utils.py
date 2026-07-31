@@ -97,6 +97,22 @@ def TSParseMaybeFloat(ts_value: Any) -> float | None:
         return None
 
 
+# SQLite stores INTEGER as a signed 64-bit value; binding anything outside
+# that range as a query parameter raises OverflowError, which would surface as
+# a 500 for what is really malformed client input. Python ints are unbounded,
+# so every externally supplied integer that can reach SQL passes through here.
+TS_SQLITE_INT_MIN = -(2 ** 63)
+TS_SQLITE_INT_MAX = 2 ** 63 - 1
+
+
+def TSClampToSqliteInt(ts_value: int) -> int:
+    return max(TS_SQLITE_INT_MIN, min(TS_SQLITE_INT_MAX, int(ts_value)))
+
+
+def TSIsSqliteInt(ts_value: int) -> bool:
+    return TS_SQLITE_INT_MIN <= ts_value <= TS_SQLITE_INT_MAX
+
+
 def TSParseMaybeInt(ts_value: Any) -> int | None:
     ts_float = TSParseMaybeFloat(ts_value)
     # isfinite() rather than a bare isnan(): float("9" * 400) is inf, not an
@@ -104,7 +120,9 @@ def TSParseMaybeInt(ts_value: Any) -> int | None:
     # param parser and turn junk input into a 500 instead of a clamp.
     if ts_float is None or not math.isfinite(ts_float):
         return None
-    return int(ts_float)
+    # Clamping (not rejecting) keeps the filter semantics: an absurd
+    # min_width simply matches nothing, exactly as the user asked for.
+    return TSClampToSqliteInt(int(ts_float))
 
 
 def TSBuildFTSQuery(ts_text: str) -> str:
@@ -199,6 +217,8 @@ def TSParseAssetCursor(ts_query: Any) -> dict[str, Any] | None:
         ts_id_value = int(ts_after_id)
     except (TypeError, ValueError):
         return None
-    if ts_id_value <= 0:
+    # Out of SQLite's integer range means no such row can exist; treat it like
+    # any other junk cursor and serve the first page instead of failing.
+    if ts_id_value <= 0 or not TSIsSqliteInt(ts_id_value):
         return None
     return {"sort_value": ts_after_sort_text, "id": ts_id_value}

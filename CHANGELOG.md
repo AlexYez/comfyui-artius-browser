@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-07-31
+
+### Fixed
+- An out-of-range integer in a request returned `500` instead of `400`.
+  Python's integers are unbounded while SQLite's are 64-bit, so a 30-digit
+  asset id, pagination cursor or resolution filter reached the database as an
+  unbindable parameter. Ids outside the storable range are now rejected as bad
+  input and filter values are clamped. Found by a live API sweep; covered by
+  new regression tests.
+
 ## [1.10.0] - 2026-07-31
 
 ### Added

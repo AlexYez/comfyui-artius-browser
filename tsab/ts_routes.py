@@ -6,7 +6,7 @@ from aiohttp import web as TSWeb
 from .ts_route_errors import TSWrapRouteHandler
 from .ts_settings import TS_DEFAULT_PAGE_SIZE, TS_MAX_3D_CAPTURE_DATA_URL_LENGTH
 from .ts_logging import TSLogVerbose
-from .ts_utils import TSParseAssetCursor, TSParseDateToEpoch, TSParseMaybeInt, TSParseQueryList
+from .ts_utils import TSIsSqliteInt, TSParseAssetCursor, TSParseDateToEpoch, TSParseMaybeInt, TSParseQueryList
 
 TSRoutesRegistered = False
 
@@ -53,6 +53,11 @@ def TSParsePositiveInt(ts_value) -> int | None:
     if not ts_text.isdecimal():
         return None
     ts_parsed = int(ts_text)
+    # Python ints are unbounded but SQLite's are 64-bit: an id above that range
+    # cannot identify a row, and binding it would raise OverflowError (a 500)
+    # instead of the 400 that malformed input deserves.
+    if not TSIsSqliteInt(ts_parsed):
+        return None
     return ts_parsed if ts_parsed > 0 else None
 
 
@@ -60,6 +65,11 @@ def TSParsePositiveAssetId(ts_value) -> int | None:
     if isinstance(ts_value, bool):
         return None
     if isinstance(ts_value, int):
+        # A JSON body delivers a real int, so it skips the string parser above -
+        # the SQLite range check has to be repeated here or a huge id from
+        # POST /delete reaches the query as an unbindable parameter.
+        if not TSIsSqliteInt(ts_value):
+            return None
         return ts_value if ts_value > 0 else None
     return TSParsePositiveInt(ts_value)
 
