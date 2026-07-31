@@ -49,6 +49,7 @@ class TSAssetPayload:
     ts_root_id: str = "output"
     ts_prompt_text: str = ""
     ts_workflow_text: str = ""
+    ts_model_text: str = ""
     ts_created_at: int = 0
     ts_is_indexed: bool = False
     ts_has_preview: bool = False

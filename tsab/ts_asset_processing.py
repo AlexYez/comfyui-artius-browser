@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from .ts_hashing import TSComputeFileHash, TSDetectSupportedType
+from .ts_settings import TS_PROMPT_PARTS_VERSION
 from .ts_types import TSAssetStat
 from .ts_utils import TSJsonLoads
 
@@ -151,15 +152,16 @@ class TSAssetProcessingService:
             if ts_fresh_row is None:
                 return None
             ts_metadata = TSJsonLoads(ts_fresh_row["metadata"], {})
-            # Re-extract only images whose STORED prompt metadata predates
-            # prompt_parts_version 5 (a one-time upgrade that adds seed/negative)
-            # or is malformed. An empty metadata blob means the image was
-            # already processed and simply has no prompt data — treating that as
-            # stale re-opened the file, re-upserted the row and re-emitted an
-            # asset-upsert event on every single detail view, forever.
+            # Re-extract only images whose STORED prompt metadata predates the
+            # current prompt_parts_version (5 added seed/negative, 6 added the
+            # model list) or is malformed. An empty metadata blob means the
+            # image was already processed and simply has no prompt data —
+            # treating that as stale re-opened the file, re-upserted the row and
+            # re-emitted an asset-upsert event on every single detail view,
+            # forever.
             ts_needs_image_prompt_refresh = str(ts_fresh_row["type"] or "") == "image" and (
                 not isinstance(ts_metadata, dict)
-                or (bool(ts_metadata) and int(ts_metadata.get("prompt_parts_version") or 0) < 5)
+                or (bool(ts_metadata) and int(ts_metadata.get("prompt_parts_version") or 0) < TS_PROMPT_PARTS_VERSION)
             )
             if bool(ts_fresh_row["has_metadata"]) and not ts_needs_image_prompt_refresh:
                 return ts_fresh_row
@@ -170,6 +172,7 @@ class TSAssetProcessingService:
             ts_metadata_json = str(ts_metadata_payload.get("metadata") or "{}")
             ts_prompt_text = str(ts_metadata_payload.get("prompt_text") or "")
             ts_workflow_text = str(ts_metadata_payload.get("workflow_text") or "")
+            ts_model_text = str(ts_metadata_payload.get("model_text") or "")
             ts_has_metadata = bool(
                 ts_metadata_payload.get("has_metadata")
                 or (ts_metadata_json and ts_metadata_json != "{}")
@@ -181,6 +184,7 @@ class TSAssetProcessingService:
                 ts_metadata=ts_metadata_json,
                 ts_prompt_text=ts_prompt_text,
                 ts_workflow_text=ts_workflow_text,
+                ts_model_text=ts_model_text,
                 ts_has_metadata=ts_has_metadata,
             )
             ts_updated_row = self.ts_database.TSUpsertAsset(ts_payload)

@@ -46,7 +46,10 @@
 | 🎲 **3D** | Native ComfyUI 3D viewer in the lightbox, captured 3D thumbnails |
 | 📜 **Workflows** | Reads ComfyUI's native workflow folder, sidecar previews, drag-to-load |
 | 🪟 **Two tabs** | `Assets` and `Workflows` with **independent** state (search, sort, view, preview size, tree-panel width) |
-| 🔍 **Filename-only search** | Fast, predictable, no surprise full-text scans |
+| 🔍 **Filename-first search** | Fast and predictable by default; one toggle inside the search field extends it to prompts and model names |
+| ⭐ **Favorites** | Star the keepers, filter the grid down to them — survives a full `Rebuild Cache` |
+| 🧬 **Model info** | Checkpoints, LoRAs and VAEs read from the PNG prompt, shown in the lightbox and searchable |
+| 🔎 **Click to 100%** | One click in the lightbox jumps to true pixel scale, with a navigator minimap for panning |
 | 🚀 **Drag-and-drop** | Direct into native `LoadImage` / `LoadVideo` / `LoadAudio` / `Load3D` nodes |
 | 🗑️ **Safe delete** | Sends to system trash via `send2trash` — never hard-delete |
 | 🔄 **Autoscan / Rebuild Cache** | Refresh on demand, or rebuild from scratch |
@@ -283,7 +286,10 @@ See [CHANGELOG.md](CHANGELOG.md). Format: [Keep a Changelog](https://keepachange
 | 🎲 **3D** | Нативный 3D viewer в лайтбоксе, фронтенд-сгенерированные 3D-thumbnail'ы |
 | 📜 **Workflows** | Читает нативную папку workflow, sidecar-превью, drag-to-load |
 | 🪟 **Две вкладки** | `Assets` и `Workflows` с **независимыми** настройками |
-| 🔍 **Поиск по имени** | Быстро и предсказуемо, без сюрпризов |
+| 🔍 **Поиск по имени** | Быстро и предсказуемо по умолчанию; переключатель прямо в поле поиска расширяет его на промпты и названия моделей |
+| ⭐ **Избранное** | Отмечайте удачное звёздочкой и фильтруйте грид по нему — переживает полную пересборку кэша |
+| 🧬 **Модели** | Чекпоинты, LoRA и VAE читаются из PNG-промпта, показываются в лайтбоксе и участвуют в поиске |
+| 🔎 **Клик = 100%** | Клик по картинке в лайтбоксе показывает реальные пиксели, миникарта помогает не потеряться |
 | 🚀 **Drag-and-drop** | Прямо в нативные `LoadImage` / `LoadVideo` / `LoadAudio` / `Load3D` |
 | 🗑️ **Безопасное удаление** | В системную корзину через `send2trash`, не навсегда |
 | 🔄 **Autoscan / Rebuild Cache** | Обновление по запросу или полная пересборка |

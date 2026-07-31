@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -11,6 +12,7 @@ from .ts_companion import TSComputeCompanionStemFromFilename
 from .ts_db_payload import TSBuildUpdatedAssetPayload, TSComputeAssetStatus, TSPayloadFromAssetRow
 from .ts_db_query import TS_SORT_KEY_MAP, TSBuildAssetQueryParts, TSResolveSortKey
 from .ts_db_schema import (
+    TS_DB_ADDITIVE_COLUMNS,
     TS_DB_DROP_SCHEMA_SQL,
     TS_DB_FTS_PROMPT_SCHEMA_VERSION,
     TS_DB_FTS_REBUILD_SQL,
@@ -60,9 +62,28 @@ class TSDatabase:
         ts_message = str(ts_error).lower()
         return "locked" in ts_message or "busy" in ts_message
 
+    def _TSMigrateAdditiveColumns(self, ts_connection: sqlite3.Connection) -> None:
+        # Must run BEFORE the schema script: CREATE TABLE IF NOT EXISTS never
+        # alters an existing table, and assets_view selects the new columns —
+        # so on an older database the view would fail to create, be mistaken
+        # for corruption, and trigger a full schema rebuild.
+        for ts_table, ts_column, ts_definition in TS_DB_ADDITIVE_COLUMNS:
+            try:
+                # Identifiers come from a module constant, never from user input.
+                ts_connection.execute(f"ALTER TABLE {ts_table} ADD COLUMN {ts_column} {ts_definition}")
+            except sqlite3.OperationalError as ts_error:
+                ts_message = str(ts_error).lower()
+                # "duplicate column name" = already migrated; "no such table" =
+                # fresh database, the schema script creates it with the column.
+                if "duplicate column" not in ts_message and "no such table" not in ts_message:
+                    raise
+                continue
+            TSLogVerbose("db.migration.column_added", table=ts_table, column=ts_column)
+
     def TSMigrate(self) -> None:
         ts_connection = self.TSGetConnection()
         ts_user_version = int(ts_connection.execute("PRAGMA user_version").fetchone()[0])
+        self._TSMigrateAdditiveColumns(ts_connection)
         try:
             ts_connection.executescript(TS_DB_SCHEMA_SQL)
         except sqlite3.DatabaseError as ts_error:
@@ -327,27 +348,35 @@ class TSDatabase:
             (ts_payload.ts_metadata or "{}") != "{}"
             or ts_payload.ts_prompt_text
             or ts_payload.ts_workflow_text
+            or ts_payload.ts_model_text
         )
         if ts_has_stored_metadata:
             ts_connection.execute(
                 """
-                INSERT INTO asset_metadata(asset_id, metadata_json, prompt_text, workflow_text)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO asset_metadata(asset_id, metadata_json, prompt_text, workflow_text, model_text)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(asset_id) DO UPDATE SET
                     metadata_json = excluded.metadata_json,
                     prompt_text = excluded.prompt_text,
-                    workflow_text = excluded.workflow_text
+                    workflow_text = excluded.workflow_text,
+                    model_text = excluded.model_text
                 """,
                 (
                     ts_asset_id,
                     ts_payload.ts_metadata or "{}",
                     ts_payload.ts_prompt_text or "",
                     ts_payload.ts_workflow_text or "",
+                    ts_payload.ts_model_text or "",
                 ),
             )
         else:
             ts_connection.execute("DELETE FROM asset_metadata WHERE asset_id = ?", (ts_asset_id,))
-        self._TSSyncFTSRow(ts_asset_id, ts_payload.ts_filename, ts_payload.ts_prompt_text)
+        self._TSSyncFTSRow(
+            ts_asset_id,
+            ts_payload.ts_filename,
+            ts_payload.ts_prompt_text,
+            ts_payload.ts_model_text,
+        )
         return ts_asset_id, ts_root_lookup_id, ts_folder_lookup_id
 
     @contextmanager
@@ -485,13 +514,37 @@ class TSDatabase:
     def TSBuildUpdatedPayload(self, ts_row: sqlite3.Row, **ts_overrides: Any) -> TSAssetPayload:
         return TSBuildUpdatedAssetPayload(ts_row, **ts_overrides)
 
-    def _TSSyncFTSRow(self, ts_asset_id: int, ts_filename: str, ts_prompt_text: str = "") -> None:
+    def _TSSyncFTSRow(
+        self,
+        ts_asset_id: int,
+        ts_filename: str,
+        ts_prompt_text: str = "",
+        ts_model_text: str = "",
+    ) -> None:
         ts_connection = self.TSGetConnection()
         ts_connection.execute("DELETE FROM assets_fts WHERE rowid = ?", (ts_asset_id,))
         ts_connection.execute(
-            "INSERT INTO assets_fts(rowid, filename, prompt_text) VALUES (?, ?, ?)",
-            (ts_asset_id, ts_filename, ts_prompt_text or ""),
+            "INSERT INTO assets_fts(rowid, filename, prompt_text, model_text) VALUES (?, ?, ?, ?)",
+            (ts_asset_id, ts_filename, ts_prompt_text or "", ts_model_text or ""),
         )
+
+    def TSSetAssetFavorite(self, ts_asset_id: int, ts_is_favorite: bool) -> sqlite3.Row | None:
+        # Keyed by path so the star survives Rebuild Cache (which drops and
+        # repopulates every index row, handing the same file a new id).
+        ts_row = self.TSGetAssetById(ts_asset_id)
+        if ts_row is None:
+            return None
+        ts_path = str(ts_row["path"])
+        ts_connection = self.TSGetConnection()
+        if ts_is_favorite:
+            ts_connection.execute(
+                "INSERT OR IGNORE INTO asset_favorites(path, created_at) VALUES (?, ?)",
+                (ts_path, int(time.time())),
+            )
+        else:
+            ts_connection.execute("DELETE FROM asset_favorites WHERE path = ?", (ts_path,))
+        TSLogVerbose("db.favorite.set", asset_id=ts_asset_id, favorite=bool(ts_is_favorite))
+        return self.TSGetAssetById(ts_asset_id)
 
     def TSGetAssetById(self, ts_asset_id: int) -> sqlite3.Row | None:
         return self.TSGetConnection().execute(
@@ -537,13 +590,23 @@ class TSDatabase:
         with self._TSWriteTransaction() as ts_connection:
             for ts_id_batch in self._TSChunkedValues(list(ts_asset_ids), 500):
                 ts_placeholders = ",".join("?" for _ in ts_id_batch)
+                ts_doomed_rows = ts_connection.execute(
+                    f"SELECT path, root_lookup_id, folder_lookup_id FROM assets WHERE id IN ({ts_placeholders})",
+                    ts_id_batch,
+                ).fetchall()
                 ts_touched_folders.update(
                     (int(ts_row["root_lookup_id"]), int(ts_row["folder_lookup_id"]))
-                    for ts_row in ts_connection.execute(
-                        f"SELECT root_lookup_id, folder_lookup_id FROM assets WHERE id IN ({ts_placeholders})",
-                        ts_id_batch,
-                    ).fetchall()
+                    for ts_row in ts_doomed_rows
                 )
+                # The favorites table has no foreign key (it must survive a
+                # Rebuild Cache), so a removed asset's star is cleaned up here.
+                ts_doomed_paths = [str(ts_row["path"]) for ts_row in ts_doomed_rows]
+                if ts_doomed_paths:
+                    ts_path_placeholders = ",".join("?" for _ in ts_doomed_paths)
+                    ts_connection.execute(
+                        f"DELETE FROM asset_favorites WHERE path IN ({ts_path_placeholders})",
+                        ts_doomed_paths,
+                    )
                 ts_connection.execute(f"DELETE FROM assets_fts WHERE rowid IN ({ts_placeholders})", ts_id_batch)
                 ts_connection.execute(f"DELETE FROM assets WHERE id IN ({ts_placeholders})", ts_id_batch)
             self._TSRecomputeCompanionFlags(ts_touched_folders)

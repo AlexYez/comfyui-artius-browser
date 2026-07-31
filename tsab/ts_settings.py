@@ -101,6 +101,11 @@ TS_DEFAULT_PREVIEW_FORMAT = TS_BACKEND_SETTINGS["preview"]["image_format"]
 TS_DEFAULT_PREVIEW_QUALITY = TS_BACKEND_SETTINGS["preview"]["image_quality"]
 TS_DEFAULT_PLACEHOLDER_WIDTH = TS_BACKEND_SETTINGS["preview"]["placeholder_width"]
 TS_DEFAULT_PLACEHOLDER_HEIGHT = TS_BACKEND_SETTINGS["preview"]["placeholder_height"]
+# Version stamp of the stored image prompt-metadata blob. Bumping it makes
+# TSEnsureMetadata re-extract older blobs once, on the next detail view.
+# 5 added seed + split positive/negative, 6 added the model/LoRA list.
+TS_PROMPT_PARTS_VERSION = 6
+
 # Decompression-bomb guard for the image thumbnail path: images above this
 # pixel count get a placeholder instead of a full decode. PIL's own default
 # only errors at ~178 Mpx, and one full decode of such an image costs
@@ -142,7 +147,7 @@ TS_EVENT_ASSET_REMOVE = f"{TS_EVENT_PREFIX}:asset-remove"
 TS_EVENT_HEALTH = f"{TS_EVENT_PREFIX}:health"
 
 TS_DEFAULT_CONFIG = {
-    "version": 19,
+    "version": 20,
     "logging": {
         "enable_verbose": False,
         "enable_progress_console": True,
@@ -169,6 +174,7 @@ TS_DEFAULT_CONFIG = {
         "asset_preview_size": TS_DEFAULT_PREVIEW_SIZE,
         "asset_search": "",
         "asset_search_scope": "filename",
+        "asset_favorites_only": False,
         "workflow_sort_key": "created_at",
         "workflow_sort_direction": "desc",
         "workflow_preview_size": TS_DEFAULT_PREVIEW_SIZE,

@@ -530,6 +530,64 @@ export const tsPanelStyles = `<style>
                     flex: 1 1 220px;
                 }
 
+                /* The prompt-scope toggle sits INSIDE the search field's right
+                   edge. As a normal cluster child it wrapped onto a second row
+                   in a narrow sidebar, leaving the search field taller than
+                   every neighbouring control. The cluster therefore drops its
+                   own chrome and only positions the toggle; the field keeps the
+                   shared 32px control height. */
+                .ts-search-cluster {
+                    position: relative;
+                    flex: 1 1 220px;
+                    min-width: 150px;
+                    padding: 0;
+                    border: 0;
+                    background: transparent;
+                    flex-wrap: nowrap;
+                }
+
+                .ts-search-cluster .ts-search {
+                    flex: 1 1 auto;
+                    width: 100%;
+                    min-width: 0;
+                    /* Reserve exactly the toggle's measured width (set from JS
+                       so the reservation follows the translated label). */
+                    padding-right: calc(var(--ts-search-scope-inset, 0px) + 10px);
+                }
+
+                .ts-toolbar-cluster.ts-search-cluster .ts-search-scope {
+                    position: absolute;
+                    top: 50%;
+                    right: 4px;
+                    transform: translateY(-50%);
+                    min-height: 22px;
+                    height: 22px;
+                    padding: 0 9px;
+                    gap: 5px;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 999px;
+                    background: var(--ts-bg-3);
+                    font-size: 11px;
+                    line-height: 1;
+                    white-space: nowrap;
+                }
+
+                .ts-toolbar-cluster.ts-search-cluster .ts-search-scope::before {
+                    width: 7px;
+                    height: 7px;
+                    flex: 0 0 7px;
+                }
+
+                .ts-toolbar-cluster.ts-search-cluster .ts-search-scope:hover {
+                    border-color: color-mix(in srgb, var(--ts-accent) 52%, transparent);
+                }
+
+                .ts-toolbar-cluster.ts-search-cluster .ts-search-scope[data-active="true"] {
+                    border-color: color-mix(in srgb, var(--ts-accent) 58%, transparent);
+                    background: color-mix(in srgb, var(--ts-accent) 24%, var(--ts-bg-2));
+                    color: var(--ts-accent-contrast);
+                }
+
                 .ts-search,
                 select,
                 input[type="search"] {
@@ -581,6 +639,25 @@ export const tsPanelStyles = `<style>
                 .ts-tree-count {
                     color: var(--ts-muted);
                     font-size: 12px;
+                }
+
+                /* Missing ffmpeg/ffprobe is not a passing note — it silently
+                   disables every video/audio preview, so it reads as a warning
+                   chip with an actionable tooltip. */
+                .ts-health[data-state="warning"] {
+                    display: inline-flex;
+                    align-items: center;
+                    margin-top: 4px;
+                    padding: 3px 10px;
+                    border: 1px solid color-mix(in srgb, var(--ts-danger) 45%, transparent);
+                    border-radius: 999px;
+                    background: var(--ts-danger-surface);
+                    color: var(--ts-text);
+                    cursor: help;
+                }
+
+                .ts-health[hidden] {
+                    display: none;
                 }
 
                 .ts-progress {
@@ -927,6 +1004,46 @@ export const tsPanelStyles = `<style>
                     font-weight: 700;
                 }
 
+                /* Top-left star, opposite the hover action cluster. Unlike those
+                   actions it stays visible once set, so a starred asset reads
+                   as starred at a glance while scrolling. */
+                .ts-card-favorite {
+                    position: absolute;
+                    top: var(--ts-card-inset, 8px);
+                    left: var(--ts-card-inset, 8px);
+                    min-height: var(--ts-card-action-size, 22px);
+                    width: var(--ts-card-action-size, 22px);
+                    padding: 0;
+                    border: 0;
+                    border-radius: 999px;
+                    background: var(--ts-surface-overlay-strong);
+                    color: color-mix(in srgb, var(--ts-text) 55%, transparent);
+                    font-size: calc(var(--ts-card-action-font-size, 10px) + 2px);
+                    line-height: 1;
+                    opacity: 0;
+                    transition: opacity 0.14s ease, color 0.14s ease, transform 0.06s ease;
+                    z-index: 2;
+                }
+
+                .ts-card:hover .ts-card-favorite,
+                .ts-card[data-selected="true"] .ts-card-favorite,
+                .ts-card-favorite[data-favorite="true"] {
+                    opacity: 1;
+                }
+
+                .ts-card-favorite[data-favorite="true"] {
+                    color: #f2c14e;
+                }
+
+                .ts-card-favorite:hover {
+                    color: #f2c14e;
+                    border-color: transparent;
+                }
+
+                .ts-card-favorite:active {
+                    transform: scale(0.92);
+                }
+
                 .ts-card-badges {
                     position: absolute;
                     left: var(--ts-card-inset, 8px);
@@ -963,11 +1080,45 @@ export const tsPanelStyles = `<style>
                     inset: 0;
                     display: grid;
                     place-items: center;
+                    /* The overlay itself must not swallow grid interaction; only
+                       the action button inside it is clickable. */
                     pointer-events: none;
                     color: var(--ts-muted);
                     text-align: center;
                     padding: 24px;
                     font-size: 12px;
+                }
+
+                .ts-empty-card {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 6px;
+                    max-width: 420px;
+                }
+
+                .ts-empty-title {
+                    margin: 0;
+                    color: var(--ts-text);
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                .ts-empty-line {
+                    margin: 0;
+                    line-height: 1.45;
+                }
+
+                .ts-empty-action {
+                    margin-top: 8px;
+                    pointer-events: auto;
+                    max-width: 100%;
+                    padding: 6px 14px;
+                    /* Not a pill: in a narrow sidebar the label wraps to two or
+                       three lines, and a 999px radius turns it into a blob. */
+                    border-radius: 8px;
+                    font-size: 12px;
+                    line-height: 1.35;
                 }
 
                 @media (max-width: 960px) {

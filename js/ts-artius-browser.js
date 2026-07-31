@@ -8,13 +8,16 @@ import {
     tsFetchBrowserSettings,
     tsFetchJSON,
     tsGetRecentErrors,
+    tsLoadLocale,
     tsPostJSON,
+    tsResolveComfyLocale,
 } from "./ts-artius-browser-api.js";
 import {
     tsApiSettings,
     tsBrowserRuntimeSettings,
     tsProjectSettings,
 } from "./ts-artius-browser-settings.js";
+import { tsResolveLocaleCode } from "./ts-artius-browser-panel-state.js";
 import { tsEnsurePanelElement, tsGetPanelSingleton } from "./ts-artius-browser-panel.js";
 import { tsStartGlobal3DThumbnailWorker } from "./ts-artius-browser-3d-worker.js";
 
@@ -113,6 +116,78 @@ function tsHandleExecutionEnd() {
     tsDebouncedExecutionRescan();
 }
 
+// Sidebar tab strings are handed to ComfyUI once at registration, so a language
+// change has to push new ones into the registered tab object.
+let tsActiveLocaleCode = "";
+let tsLocaleWatchTimer = 0;
+let tsSidebarLocale = {};
+
+function tsT(tsKey, tsFallback) {
+    return tsSidebarLocale?.[tsKey] || tsFallback;
+}
+
+function tsBuildSidebarStrings(tsLocale) {
+    tsSidebarLocale = tsLocale && typeof tsLocale === "object" ? tsLocale : {};
+    return {
+        title: tsT("panel.title", tsProjectSettings.title),
+        label: tsT("sidebar.label", tsProjectSettings.label),
+        tooltip: tsT("sidebar.tooltip", tsProjectSettings.tooltip),
+    };
+}
+
+function tsUpdateRegisteredSidebarTab(tsStrings) {
+    // Mutating the object returned by getSidebarTabs goes through ComfyUI's
+    // reactive store, so the toolbar re-renders. Re-registering instead would
+    // close the sidebar when our tab is the active one.
+    try {
+        const tsTabs = app?.extensionManager?.getSidebarTabs?.();
+        const tsTab = Array.isArray(tsTabs)
+            ? tsTabs.find((tsCandidate) => tsCandidate?.id === tsProjectSettings.sidebarId)
+            : null;
+        if (!tsTab) {
+            return false;
+        }
+        Object.assign(tsTab, tsStrings);
+        return true;
+    } catch (tsError) {
+        tsConsoleWarn("Timesaver Artius Browser sidebar tab locale update failed", tsError);
+        return false;
+    }
+}
+
+async function tsSyncLocale(tsForceApply = false) {
+    const tsCode = tsResolveLocaleCode("", tsResolveComfyLocale());
+    if (!tsForceApply && tsCode === tsActiveLocaleCode) {
+        return null;
+    }
+    tsActiveLocaleCode = tsCode;
+    const tsLocale = await tsLoadLocale(tsCode).catch((tsError) => {
+        tsConsoleWarn("Timesaver Artius Browser locale load failed", tsError);
+        return null;
+    });
+    if (!tsLocale) {
+        return null;
+    }
+    const tsStrings = tsBuildSidebarStrings(tsLocale);
+    if (!tsForceApply) {
+        tsUpdateRegisteredSidebarTab(tsStrings);
+        // The panel keeps its own copy of the locale table.
+        window.dispatchEvent(new CustomEvent("tsab:locale-changed", { detail: { code: tsCode, locale: tsLocale } }));
+    }
+    return tsStrings;
+}
+
+function tsStartComfyLocaleWatch() {
+    // ComfyUI switches language live (it refreshes node definitions and reloads
+    // the workflow) but publishes no event for it, so the setting is polled at
+    // a low frequency. Each tick is one in-memory settings-store read and the
+    // locale JSON is cached, so a no-change tick costs nothing.
+    window.clearInterval(tsLocaleWatchTimer);
+    tsLocaleWatchTimer = window.setInterval(() => {
+        void tsSyncLocale();
+    }, 2000);
+}
+
 app.registerExtension({
     name: tsProjectSettings.extensionId,
     async setup() {
@@ -136,11 +211,16 @@ app.registerExtension({
             tsSetAutoscanEnabled(tsEvent?.detail?.autoscan !== false);
         });
 
+        // Resolve the label/tooltip from ComfyUI's current locale BEFORE the tab
+        // is registered, so a Russian ComfyUI shows a Russian sidebar entry on
+        // first paint rather than flashing English.
+        const tsSidebarStrings = (await tsSyncLocale(true)) || tsBuildSidebarStrings({});
+
         const tsSidebarDefinition = {
             id: tsProjectSettings.sidebarId,
-            title: tsProjectSettings.title,
-            label: tsProjectSettings.label,
-            tooltip: tsProjectSettings.tooltip,
+            title: tsSidebarStrings.title,
+            label: tsSidebarStrings.label,
+            tooltip: tsSidebarStrings.tooltip,
             icon: tsProjectSettings.sidebarIcon,
             type: "custom",
             render: (tsMountPoint) => {
@@ -161,6 +241,7 @@ app.registerExtension({
 
         if (app?.extensionManager?.registerSidebarTab) {
             app.extensionManager.registerSidebarTab(tsSidebarDefinition);
+            tsStartComfyLocaleWatch();
         } else {
             tsConsoleWarn("Timesaver Artius Browser sidebar tab registration is unavailable in this ComfyUI build");
         }

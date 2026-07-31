@@ -104,6 +104,8 @@ def TSBuildAssetQueryParts(
     if ts_filters.get("max_width") is not None:
         ts_where_clauses.append("assets_view.width <= ?")
         ts_parameters.append(int(ts_filters["max_width"]))
+    if ts_filters.get("favorites_only"):
+        ts_where_clauses.append("assets_view.is_favorite = 1")
     if ts_filters.get("min_height") is not None:
         ts_where_clauses.append("assets_view.height >= ?")
         ts_parameters.append(int(ts_filters["min_height"]))

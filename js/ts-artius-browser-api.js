@@ -223,6 +223,10 @@ export async function tsSave3DThumbnail(tsAssetId, tsImageDataURL) {
     return tsPostJSON(`${tsRouteBase}/3d/thumbnail/${tsAssetId}`, { image_data_url: tsImageDataURL });
 }
 
+export async function tsSetAssetFavorite(tsAssetId, tsIsFavorite) {
+    return tsPostJSON(`${tsRouteBase}/favorite/${tsAssetId}`, { favorite: Boolean(tsIsFavorite) });
+}
+
 export async function tsStage3DAssetForLoad3D(tsAssetId) {
     return tsPostJSON(`${tsRouteBase}/3d/stage/${tsAssetId}`, {});
 }

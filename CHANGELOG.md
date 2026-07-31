@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-07-31
+
+### Added
+- **Favorites.** A star on every asset card, a `Favorites` filter in the
+  toolbar and an entry in the right-click menu. Favorites are stored per file
+  path in a table that `Rebuild Cache` deliberately leaves alone, so starring
+  survives a full re-index.
+- **Model names.** Checkpoints, LoRAs and VAEs are read from the PNG `Prompt`
+  data, listed in the lightbox as copyable chips, and indexed for search — the
+  opt-in `Prompt` scope now matches prompts *and* model names. Images indexed
+  before this release pick the data up when their detail view is opened, or all
+  at once via `Rebuild Cache`.
+- **Click to 100%.** Clicking an image in the lightbox zooms to true pixel
+  scale at the clicked point (clicking again returns to fit), with a navigator
+  minimap in the corner for panning large renders.
+- **Informative empty states.** A first run explains what gets indexed and
+  offers `Rescan`; a fruitless filename search offers to search prompts and
+  models instead; an over-filtered view offers a one-click reset.
+- **Scan results.** A rescan or cache rebuild you started now reports what it
+  found ("12 indexed, 2 removed"). Automatic post-generation scans stay silent.
+- **Missing-tool warning.** When ffmpeg/ffprobe cannot be found, the toolbar
+  says what that actually costs ("Video and audio previews are disabled") and
+  how to fix it, instead of a quiet note. Cards whose preview could not be
+  generated now explain why on hover.
+
+### Changed
+- The prompt-scope toggle moved inside the search field's right edge, so the
+  field keeps the same height as the surrounding controls instead of wrapping
+  onto a second row in a narrow sidebar.
+- The panel now follows ComfyUI's language setting live, without a page reload,
+  and the sidebar entry itself is translated (`Браузер` / `浏览器` / `ブラウザ`).
+
+### Compatibility
+- Database schema 12 (additive: `asset_favorites`, `asset_metadata.model_text`,
+  a rebuilt full-text index). Existing databases upgrade in place; no re-scan
+  is required.
+- Config version 20 (adds `ui.asset_favorites_only`, default off).
+- New route `POST /asset_browser/favorite/{id}`; `/assets` and `/search` accept
+  `favorites=1`.
+
 ## [1.9.1] - 2026-07-30
 
 Stability and hardening release: every confirmed finding of a full-project

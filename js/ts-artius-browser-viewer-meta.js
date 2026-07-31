@@ -65,6 +65,25 @@ export function tsBuildImageMetaMarkup(tsAsset, tsDeps) {
             </div>
         `
         : "";
+    const tsModels = Array.isArray(tsAsset.models) ? tsAsset.models.filter(Boolean) : [];
+    const tsModelsMarkup = tsModels.length > 0
+        ? `
+            <div class="ts-meta-block">
+                <div class="ts-meta-row">
+                    <h4>${tsDeps.t("meta.models", "Models")}</h4>
+                    <button class="ts-meta-copy" type="button" data-copy-field="models">${tsDeps.t("button.copy", "Copy")}</button>
+                </div>
+                <div class="ts-model-list">
+                    ${tsModels.map((tsModel) => {
+                        // Show the bare file name (checkpoints usually sit in
+                        // subfolders) but keep the full path in the tooltip.
+                        const tsModelName = String(tsModel).split(/[\\/]/).pop() || String(tsModel);
+                        return `<span class="ts-model-chip" title="${tsDeps.escapeAttribute(tsModel)}">${tsDeps.escapeHTML(tsModelName)}</span>`;
+                    }).join("")}
+                </div>
+            </div>
+        `
+        : "";
     const tsWorkflowButtonMarkup = tsAsset.workflow_text
         ? `
             <div class="ts-meta-block">
@@ -79,6 +98,7 @@ export function tsBuildImageMetaMarkup(tsAsset, tsDeps) {
         ${tsPositivePromptMarkup}
         ${tsNegativePromptMarkup}
         ${tsSeedMarkup}
+        ${tsModelsMarkup}
         ${tsWorkflowButtonMarkup}
     `;
 }

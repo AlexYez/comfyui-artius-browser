@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import quote
 
-from .ts_utils import TSJsonLoads
+from .ts_utils import TSJsonLoads, TSRowValue
 
 
 def TSResolveTechnicalInfo(ts_row) -> dict[str, Any]:
@@ -107,6 +107,7 @@ def TSBuildAssetCard(ts_row, ts_roots: dict[str, dict[str, Any]], ts_preview_cac
         "allow_delete": bool(ts_root.get("allow_delete")),
         "root_label": ts_root.get("label", ts_row["root_id"]),
         "is_indexed": bool(ts_row["is_indexed"]),
+        "is_favorite": bool(TSRowValue(ts_row, "is_favorite", 0)),
         "has_preview": bool(ts_row["has_preview"]),
         "has_metadata": bool(ts_row["has_metadata"]),
         "has_workflow": bool(str(ts_row["workflow_text"] or "")),

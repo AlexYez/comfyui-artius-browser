@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-TS_DB_SCHEMA_VERSION = 11
+TS_DB_SCHEMA_VERSION = 12
 
-# The schema version that introduced the prompt_text FTS column. Databases at an
-# earlier version keep a filename-only FTS table (IF NOT EXISTS won't recreate
-# it), so they need a one-time FTS rebuild — repopulated from existing rows, no
-# re-scan required. Gated on a fixed constant so future schema bumps don't
-# needlessly re-run it.
-TS_DB_FTS_PROMPT_SCHEMA_VERSION = 11
+# The schema version that last changed the FTS table layout (v11 added
+# prompt_text, v12 added model_text). Databases below it keep the older column
+# set (CREATE VIRTUAL TABLE IF NOT EXISTS won't recreate it), so they need a
+# one-time FTS rebuild — repopulated from existing rows, no re-scan required.
+# Gated on a fixed constant so future schema bumps don't needlessly re-run it.
+TS_DB_FTS_PROMPT_SCHEMA_VERSION = 12
 
 TS_DB_DROP_SCHEMA_SQL = """
 DROP VIEW IF EXISTS assets_view;
@@ -81,7 +81,18 @@ CREATE TABLE IF NOT EXISTS asset_metadata (
     metadata_json TEXT NOT NULL DEFAULT '{}',
     prompt_text TEXT NOT NULL DEFAULT '',
     workflow_text TEXT NOT NULL DEFAULT '',
+    model_text TEXT NOT NULL DEFAULT '',
     FOREIGN KEY(asset_id) REFERENCES assets(id) ON DELETE CASCADE
+);
+
+-- User favorites are keyed by PATH, not asset id, and deliberately carry no
+-- foreign key: the index tables are a rebuildable cache (Rebuild Cache wipes
+-- them wholesale), while a starred asset is user data that must survive that.
+-- TS_DB_RESET_INDEX_SQL therefore leaves this table alone; a row is removed
+-- only when the asset itself is deleted or pruned.
+CREATE TABLE IF NOT EXISTS asset_favorites (
+    path TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_assets_path ON assets(path);
@@ -103,6 +114,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS assets_fts
 USING fts5(
     filename,
     prompt_text,
+    model_text,
     tokenize = 'unicode61'
 );
 
@@ -130,6 +142,8 @@ SELECT
     asset_roots.root_key AS root_id,
     COALESCE(asset_metadata.prompt_text, '') AS prompt_text,
     COALESCE(asset_metadata.workflow_text, '') AS workflow_text,
+    COALESCE(asset_metadata.model_text, '') AS model_text,
+    CASE WHEN asset_favorites.path IS NULL THEN 0 ELSE 1 END AS is_favorite,
     assets.is_indexed AS is_indexed,
     assets.has_preview AS has_preview,
     assets.has_metadata AS has_metadata,
@@ -141,7 +155,8 @@ INNER JOIN asset_types ON asset_types.id = assets.type_lookup_id
 INNER JOIN asset_extensions ON asset_extensions.id = assets.extension_lookup_id
 INNER JOIN asset_roots ON asset_roots.id = assets.root_lookup_id
 INNER JOIN asset_folders ON asset_folders.id = assets.folder_lookup_id
-LEFT JOIN asset_metadata ON asset_metadata.asset_id = assets.id;
+LEFT JOIN asset_metadata ON asset_metadata.asset_id = assets.id
+LEFT JOIN asset_favorites ON asset_favorites.path = assets.path;
 """
 
 TS_DB_FTS_REBUILD_SQL = """
@@ -149,14 +164,26 @@ DROP TABLE IF EXISTS assets_fts;
 CREATE VIRTUAL TABLE assets_fts USING fts5(
     filename,
     prompt_text,
+    model_text,
     tokenize = 'unicode61'
 );
-INSERT INTO assets_fts(rowid, filename, prompt_text)
-SELECT assets.id, assets.filename, COALESCE(asset_metadata.prompt_text, '')
+INSERT INTO assets_fts(rowid, filename, prompt_text, model_text)
+SELECT assets.id, assets.filename, COALESCE(asset_metadata.prompt_text, ''), COALESCE(asset_metadata.model_text, '')
 FROM assets
 LEFT JOIN asset_metadata ON asset_metadata.asset_id = assets.id;
 """
 
+# Additive column upgrades for databases created before the column existed.
+# CREATE TABLE IF NOT EXISTS never alters an existing table, so each entry is
+# applied with ALTER TABLE and a duplicate-column error is treated as "already
+# present" (see _TSMigrateAdditiveColumns).
+TS_DB_ADDITIVE_COLUMNS = (
+    ("asset_metadata", "model_text", "TEXT NOT NULL DEFAULT ''"),
+)
+
+# NOTE: asset_favorites is intentionally NOT cleared here — see the table
+# comment above. Rebuild Cache rebuilds the index, it does not discard the
+# user's starred assets.
 TS_DB_RESET_INDEX_SQL = """
 DROP TABLE IF EXISTS asset_user_fields;
 DELETE FROM assets_fts;

@@ -394,6 +394,15 @@ class TSAssetBrowserRuntime:
             raise TSWeb.HTTPNotFound()
         return self._TSApplyNoStoreHeaders(TSWeb.FileResponse(ts_file_path))
 
+    def TSSetAssetFavorite(self, ts_asset_id: int, ts_is_favorite: bool) -> dict[str, Any] | None:
+        ts_row = self.ts_database.TSSetAssetFavorite(ts_asset_id, ts_is_favorite)
+        if ts_row is None:
+            return None
+        # Emitted like any other row change so a second browser tab (and the
+        # "favorites only" filter in this one) reflects the star immediately.
+        self._TSEmitAssetUpsert(ts_row)
+        return self.ts_asset_catalog.TSBuildAssetCard(ts_row)
+
     def TSDeleteAssets(self, ts_asset_ids: list[int]) -> dict[str, Any]:
         return self.ts_delete_service.TSDeleteAssets(ts_asset_ids)
 

@@ -183,6 +183,11 @@ class TSConfigStore:
             ts_logging_section.setdefault("enable_verbose", False)
             ts_logging_section.setdefault("enable_progress_console", True)
             ts_result["version"] = 19
+        if TSCurrentVersion() < 20:
+            # v20 adds the "favorites only" grid filter. Default off so an
+            # upgrade never hides a library behind an unexpected filter.
+            ts_result.setdefault("ui", {}).setdefault("asset_favorites_only", False)
+            ts_result["version"] = 20
         self._TSNormalizeTopLevelSections(ts_result, ts_default)
         return ts_result
 

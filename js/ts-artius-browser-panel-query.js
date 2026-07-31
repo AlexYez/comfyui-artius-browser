@@ -44,6 +44,13 @@ export function tsBuildAssetSearchParams(tsOptions = {}) {
     if (tsFolder) {
         tsParams.set("folder", String(tsFolder));
     }
+    const tsFavoritesOnly = Object.prototype.hasOwnProperty.call(tsOverrides, "favoritesOnly")
+        ? tsOverrides.favoritesOnly
+        : tsOptions.favoritesOnly;
+    // Only sent when active; "show everything" stays the implicit default.
+    if (tsFavoritesOnly) {
+        tsParams.set("favorites", "1");
+    }
     // Optional metadata filters (assets only). Empty date / 0 dimension means
     // "no filter" and is omitted so the query stays minimal.
     const tsFilters = Object.prototype.hasOwnProperty.call(tsOverrides, "filters")

@@ -25,6 +25,7 @@ TS_ROUTE_DEFINITIONS = (
     ("POST", "/asset_browser/rescan", "TSHandleRescan"),
     ("POST", "/asset_browser/rebuild_cache", "TSHandleRebuildCache"),
     ("POST", "/asset_browser/delete", "TSHandleDelete"),
+    ("POST", "/asset_browser/favorite/{id}", "TSHandleFavorite"),
     ("GET", "/asset_browser/settings", "TSHandleSettingsGet"),
     ("POST", "/asset_browser/settings", "TSHandleSettingsPost"),
     ("POST", "/asset_browser/workflow/delete", "TSHandleWorkflowDelete"),
@@ -170,6 +171,7 @@ async def TSHandleAssets(ts_runtime, ts_request):
         "sort_key": ts_request.query.get("sort") or "created_at",
         "sort_direction": ts_request.query.get("order") or "desc",
         "search_scope": ts_request.query.get("search_scope") or "filename",
+        "favorites_only": str(ts_request.query.get("favorites") or "").lower() in {"1", "true", "yes"},
     }
     ts_limit = min(500, max(1, TSParseMaybeInt(ts_request.query.get("limit")) or TS_DEFAULT_PAGE_SIZE))
     ts_view = ts_request.query.get("view") or "flat"
@@ -240,6 +242,19 @@ async def TSHandleDelete(ts_runtime, ts_request):
     TSLogVerbose("route.delete.request", asset_ids=ts_asset_ids, path=ts_request.path)
     ts_result = await asyncio.to_thread(ts_runtime.TSDeleteAssets, ts_asset_ids)
     return TSWeb.json_response(ts_result)
+
+
+async def TSHandleFavorite(ts_runtime, ts_request):
+    ts_asset_id = TSParseRouteAssetId(ts_request)
+    ts_payload = await TSReadJsonObject(ts_request, ts_required=True)
+    ts_favorite_value = ts_payload.get("favorite")
+    if not isinstance(ts_favorite_value, bool):
+        raise TSWeb.HTTPBadRequest(reason="Expected boolean favorite")
+    TSLogVerbose("route.favorite.post", asset_id=ts_asset_id, favorite=ts_favorite_value, path=ts_request.path)
+    ts_asset = await asyncio.to_thread(ts_runtime.TSSetAssetFavorite, ts_asset_id, ts_favorite_value)
+    if ts_asset is None:
+        raise TSWeb.HTTPNotFound()
+    return TSWeb.json_response({"asset": ts_asset})
 
 
 async def TSHandleSettingsGet(ts_runtime, ts_request):

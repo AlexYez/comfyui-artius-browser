@@ -177,6 +177,73 @@ def TSExtractPromptPartsFromPromptField(ts_prompt_value) -> tuple[str, str]:
     return ts_positive_prompt, ts_negative_prompt
 
 
+# Model references live in the API-format Prompt JSON as plain string inputs.
+# Two independent signals identify them, so unknown/custom node packs still
+# resolve: a value that ends in a known model-file extension, or a well-known
+# input key name (some packs store a bare name without the extension).
+TS_MODEL_FILE_EXTENSIONS = (".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".gguf", ".sft", ".onnx")
+TS_MODEL_INPUT_KEYS = (
+    "ckpt_name",
+    "unet_name",
+    "model_name",
+    "lora_name",
+    "vae_name",
+    "clip_name",
+    "control_net_name",
+    "style_model_name",
+    "upscale_model_name",
+    "gguf_name",
+)
+TS_MAX_MODEL_ENTRIES = 32
+TS_MAX_MODEL_NAME_LENGTH = 256
+
+
+def TSExtractModelsFromPromptField(ts_prompt_value) -> list[str]:
+    """Collect model/LoRA/VAE file references from the PNG ``Prompt`` JSON.
+
+    Returns the distinct references in traversal order. Linked inputs are
+    ``[node_id, slot]`` lists and are skipped - only literal strings that the
+    node actually loaded are reported.
+    """
+    if not isinstance(ts_prompt_value, str):
+        return []
+    ts_prompt_text = ts_prompt_value.strip()
+    if not ts_prompt_text:
+        return []
+    try:
+        ts_prompt_payload = json.loads(ts_prompt_text)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(ts_prompt_payload, dict):
+        return []
+    ts_models: list[str] = []
+    ts_seen: set[str] = set()
+    for ts_node in ts_prompt_payload.values():
+        if not isinstance(ts_node, dict):
+            continue
+        ts_inputs = ts_node.get("inputs")
+        if not isinstance(ts_inputs, dict):
+            continue
+        for ts_key, ts_value in ts_inputs.items():
+            if not isinstance(ts_value, str):
+                continue
+            ts_clean = ts_value.strip()
+            if not ts_clean or len(ts_clean) > TS_MAX_MODEL_NAME_LENGTH:
+                continue
+            ts_key_text = str(ts_key).lower()
+            ts_is_model_file = ts_clean.lower().endswith(TS_MODEL_FILE_EXTENSIONS)
+            if not ts_is_model_file and ts_key_text not in TS_MODEL_INPUT_KEYS:
+                continue
+            ts_dedupe_key = ts_clean.lower()
+            if ts_dedupe_key in ts_seen:
+                continue
+            ts_seen.add(ts_dedupe_key)
+            ts_models.append(ts_clean)
+            if len(ts_models) >= TS_MAX_MODEL_ENTRIES:
+                return ts_models
+    return ts_models
+
+
 def _TSNormalizeSeedValue(ts_value) -> str:
     if isinstance(ts_value, bool):
         return ""

@@ -40,6 +40,7 @@ def TSProcessCandidateTuple(
         ts_metadata_json = str(ts_metadata_payload.get("metadata") or "{}")
         ts_prompt_text = str(ts_metadata_payload.get("prompt_text") or "")
         ts_workflow_text = str(ts_metadata_payload.get("workflow_text") or "")
+        ts_model_text = str(ts_metadata_payload.get("model_text") or "")
         ts_has_metadata = bool(
             ts_metadata_payload.get("has_metadata")
             or (ts_metadata_json and ts_metadata_json != "{}")
@@ -53,6 +54,7 @@ def TSProcessCandidateTuple(
             ts_metadata=ts_metadata_json,
             ts_prompt_text=ts_prompt_text,
             ts_workflow_text=ts_workflow_text,
+            ts_model_text=ts_model_text,
             ts_has_preview=ts_has_preview,
             ts_has_metadata=ts_has_metadata,
         )

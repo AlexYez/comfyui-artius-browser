@@ -45,6 +45,20 @@ def TSJsonLoads(ts_value: str | None, ts_default: Any) -> Any:
         return ts_default
 
 
+def TSRowValue(ts_row: Any, ts_key: str, ts_default: Any = None) -> Any:
+    """Read a column that may be absent from an older/partial row shape.
+
+    Columns added by an additive migration (model_text, is_favorite) exist in
+    every migrated database, but a stale assets_view, a hand-built row in a
+    caller, or a test fixture can still lack them. sqlite3.Row raises
+    IndexError and a dict raises KeyError; both mean "not present here".
+    """
+    try:
+        return ts_row[ts_key]
+    except (IndexError, KeyError):
+        return ts_default
+
+
 def TSMaybeParseJsonText(ts_value: Any) -> Any | None:
     if not isinstance(ts_value, str):
         return None

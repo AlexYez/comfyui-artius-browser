@@ -294,6 +294,68 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     cursor: grabbing;
                     transition: none;
                 }
+                /* Navigator/minimap: shown only while zoomed in, so panning a
+                   100% view keeps a sense of where you are in the frame. */
+                .ts-image-navigator {
+                    position: absolute;
+                    right: 14px;
+                    bottom: 14px;
+                    z-index: 3;
+                    width: 148px;
+                    max-height: 148px;
+                    padding: 0;
+                    overflow: hidden;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 8px;
+                    background: var(--ts-bg-2);
+                    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+                    cursor: crosshair;
+                    line-height: 0;
+                }
+                .ts-image-navigator[hidden] {
+                    display: none;
+                }
+                /* Two classes so this wins over ".ts-stage img", which would
+                   otherwise cap the thumbnail at the stage box and round it. */
+                .ts-stage .ts-image-navigator-image {
+                    display: block;
+                    width: 100%;
+                    height: auto;
+                    max-width: 100%;
+                    max-height: 148px;
+                    object-fit: contain;
+                    border-radius: 0;
+                    background: transparent;
+                    transform: none;
+                    transition: none;
+                    cursor: crosshair;
+                    pointer-events: none;
+                    user-select: none;
+                    -webkit-user-drag: none;
+                }
+                .ts-image-navigator-view {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    border: 1px solid var(--ts-accent);
+                    background: color-mix(in srgb, var(--ts-accent) 18%, transparent);
+                    pointer-events: none;
+                    will-change: transform;
+                }
+                .ts-model-list {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 6px;
+                }
+                .ts-model-chip {
+                    padding: 3px 8px;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 999px;
+                    background: var(--ts-bg-2);
+                    font-size: 11px;
+                    line-height: 1.3;
+                    word-break: break-all;
+                }
                 .ts-stage-nav {
                     position: absolute;
                     top: 50%;
@@ -992,6 +1054,8 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 ? tsAsset.negative_prompt_text
             : tsField === "seed"
                 ? tsAsset.seed
+            : tsField === "models"
+                ? (Array.isArray(tsAsset.models) ? tsAsset.models.join("\n") : "")
             : tsAsset.prompt_text;
         if (!tsValue) {
             return;
@@ -1736,18 +1800,83 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         let tsPanStartY = 0;
         let tsPanOriginX = 0;
         let tsPanOriginY = 0;
+        let tsPointerMoved = false;
+        let tsPointerDownX = 0;
+        let tsPointerDownY = 0;
+        let tsNavigatorDragging = false;
+
+        // Navigator (minimap): only meaningful once the image is larger than
+        // the stage, which is exactly when panning starts to feel blind.
+        const tsNavigator = document.createElement("div");
+        tsNavigator.className = "ts-image-navigator";
+        tsNavigator.hidden = true;
+        const tsNavigatorImage = document.createElement("img");
+        tsNavigatorImage.className = "ts-image-navigator-image";
+        tsNavigatorImage.draggable = false;
+        tsNavigatorImage.alt = "";
+        tsNavigatorImage.src = tsImage.getAttribute("src") || "";
+        const tsNavigatorView = document.createElement("div");
+        tsNavigatorView.className = "ts-image-navigator-view";
+        tsNavigator.append(tsNavigatorImage, tsNavigatorView);
+        tsStage.append(tsNavigator);
+
+        const tsGetBaseSize = () => ({
+            tsWidth: tsImage.offsetWidth || tsImage.clientWidth || 0,
+            tsHeight: tsImage.offsetHeight || tsImage.clientHeight || 0,
+        });
+
+        const tsGetNativeScale = () => {
+            // "100%" = one image pixel per screen pixel. The <img> is laid out
+            // to fit the stage, so the factor is natural / displayed size.
+            const tsBase = tsGetBaseSize();
+            const tsNaturalWidth = Number(tsImage.naturalWidth) || Number(tsAsset?.width) || 0;
+            if (!tsBase.tsWidth || !tsNaturalWidth) {
+                return 1;
+            }
+            return tsNaturalWidth / tsBase.tsWidth;
+        };
+
+        const tsGetMaxScale = () => Math.max(tsZoomLimits.tsMax, tsGetNativeScale());
 
         const tsClampTranslate = () => {
-            const tsBaseWidth = tsImage.offsetWidth || tsImage.clientWidth || 0;
-            const tsBaseHeight = tsImage.offsetHeight || tsImage.clientHeight || 0;
+            const tsBase = tsGetBaseSize();
             const tsStageWidth = tsStage.clientWidth || 0;
             const tsStageHeight = tsStage.clientHeight || 0;
-            const tsScaledWidth = tsBaseWidth * tsScale;
-            const tsScaledHeight = tsBaseHeight * tsScale;
+            const tsScaledWidth = tsBase.tsWidth * tsScale;
+            const tsScaledHeight = tsBase.tsHeight * tsScale;
             const tsMaxX = Math.max(0, (tsScaledWidth - tsStageWidth) / 2);
             const tsMaxY = Math.max(0, (tsScaledHeight - tsStageHeight) / 2);
             tsTranslateX = Math.max(-tsMaxX, Math.min(tsMaxX, tsTranslateX));
             tsTranslateY = Math.max(-tsMaxY, Math.min(tsMaxY, tsTranslateY));
+        };
+
+        const tsUpdateNavigator = () => {
+            if (tsScale <= 1.001) {
+                tsNavigator.hidden = true;
+                return;
+            }
+            const tsBase = tsGetBaseSize();
+            const tsScaledWidth = tsBase.tsWidth * tsScale;
+            const tsScaledHeight = tsBase.tsHeight * tsScale;
+            if (!tsScaledWidth || !tsScaledHeight) {
+                tsNavigator.hidden = true;
+                return;
+            }
+            tsNavigator.hidden = false;
+            const tsNavigatorWidth = tsNavigator.clientWidth || 0;
+            const tsNavigatorHeight = tsNavigator.clientHeight || 0;
+            const tsViewFractionX = Math.min(1, (tsStage.clientWidth || 0) / tsScaledWidth);
+            const tsViewFractionY = Math.min(1, (tsStage.clientHeight || 0) / tsScaledHeight);
+            // Where the stage centre sits inside the image, 0..1.
+            const tsCentreX = 0.5 - (tsTranslateX / tsScaledWidth);
+            const tsCentreY = 0.5 - (tsTranslateY / tsScaledHeight);
+            const tsViewWidth = tsNavigatorWidth * tsViewFractionX;
+            const tsViewHeight = tsNavigatorHeight * tsViewFractionY;
+            const tsViewLeft = Math.max(0, Math.min(tsNavigatorWidth - tsViewWidth, (tsNavigatorWidth * tsCentreX) - (tsViewWidth / 2)));
+            const tsViewTop = Math.max(0, Math.min(tsNavigatorHeight - tsViewHeight, (tsNavigatorHeight * tsCentreY) - (tsViewHeight / 2)));
+            tsNavigatorView.style.width = `${tsViewWidth}px`;
+            tsNavigatorView.style.height = `${tsViewHeight}px`;
+            tsNavigatorView.style.transform = `translate(${tsViewLeft}px, ${tsViewTop}px)`;
         };
 
         const tsApplyTransform = () => {
@@ -1762,6 +1891,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsStage.dataset.zoomed = String(tsScale > 1);
             tsStage.dataset.panning = String(tsPanning);
             tsImage.style.transform = `translate(${tsTranslateX}px, ${tsTranslateY}px) scale(${tsScale})`;
+            tsUpdateNavigator();
         };
 
         const tsGetStagePoint = (tsClientX, tsClientY) => {
@@ -1772,19 +1902,8 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             };
         };
 
-        const tsHandleWheel = (tsEvent) => {
-            tsEvent.preventDefault();
-            const tsNextScale = Math.max(
-                tsZoomLimits.tsMin,
-                Math.min(
-                    tsZoomLimits.tsMax,
-                    tsScale * (tsEvent.deltaY < 0 ? tsZoomLimits.tsStepIn : tsZoomLimits.tsStepOut),
-                ),
-            );
-            if (Math.abs(tsNextScale - tsScale) < 0.0001) {
-                return;
-            }
-            const tsPoint = tsGetStagePoint(tsEvent.clientX, tsEvent.clientY);
+        const tsZoomAroundPoint = (tsNextScale, tsClientX, tsClientY) => {
+            const tsPoint = tsGetStagePoint(tsClientX, tsClientY);
             const tsLocalX = (tsPoint.tsX - tsTranslateX) / tsScale;
             const tsLocalY = (tsPoint.tsY - tsTranslateY) / tsScale;
             tsScale = tsNextScale;
@@ -1793,7 +1912,92 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsApplyTransform();
         };
 
+        const tsHandleWheel = (tsEvent) => {
+            tsEvent.preventDefault();
+            const tsNextScale = Math.max(
+                tsZoomLimits.tsMin,
+                Math.min(
+                    tsGetMaxScale(),
+                    tsScale * (tsEvent.deltaY < 0 ? tsZoomLimits.tsStepIn : tsZoomLimits.tsStepOut),
+                ),
+            );
+            if (Math.abs(tsNextScale - tsScale) < 0.0001) {
+                return;
+            }
+            tsZoomAroundPoint(tsNextScale, tsEvent.clientX, tsEvent.clientY);
+        };
+
+        const tsHandleStageClick = (tsEvent) => {
+            // Click-to-100%: the single most common thing to want on a
+            // generated image is "show me the real pixels here". Ignored when
+            // the pointer actually dragged (that was a pan), when the image is
+            // already smaller than the stage (100% would shrink it), or when
+            // the click landed on the navigator.
+            if (tsEvent.button !== 0 || tsPointerMoved || tsNavigator.contains(tsEvent.target)) {
+                return;
+            }
+            const tsNativeScale = tsGetNativeScale();
+            if (tsScale > 1.001) {
+                tsScale = 1;
+                tsTranslateX = 0;
+                tsTranslateY = 0;
+                tsApplyTransform();
+                return;
+            }
+            if (tsNativeScale <= 1.02) {
+                return;
+            }
+            tsZoomAroundPoint(Math.min(tsGetMaxScale(), tsNativeScale), tsEvent.clientX, tsEvent.clientY);
+        };
+
+        const tsApplyNavigatorPoint = (tsClientX, tsClientY) => {
+            const tsRect = tsNavigator.getBoundingClientRect();
+            if (!tsRect.width || !tsRect.height) {
+                return;
+            }
+            const tsBase = tsGetBaseSize();
+            const tsNormalizedX = Math.max(0, Math.min(1, (tsClientX - tsRect.left) / tsRect.width));
+            const tsNormalizedY = Math.max(0, Math.min(1, (tsClientY - tsRect.top) / tsRect.height));
+            tsTranslateX = -((tsNormalizedX - 0.5) * tsBase.tsWidth * tsScale);
+            tsTranslateY = -((tsNormalizedY - 0.5) * tsBase.tsHeight * tsScale);
+            tsApplyTransform();
+        };
+
+        const tsHandleNavigatorPointerDown = (tsEvent) => {
+            if (tsEvent.button !== 0) {
+                return;
+            }
+            tsEvent.preventDefault();
+            tsEvent.stopPropagation();
+            tsNavigatorDragging = true;
+            tsNavigator.setPointerCapture?.(tsEvent.pointerId);
+            tsApplyNavigatorPoint(tsEvent.clientX, tsEvent.clientY);
+        };
+
+        const tsHandleNavigatorPointerMove = (tsEvent) => {
+            if (!tsNavigatorDragging) {
+                return;
+            }
+            tsEvent.preventDefault();
+            tsApplyNavigatorPoint(tsEvent.clientX, tsEvent.clientY);
+        };
+
+        const tsHandleNavigatorPointerUp = (tsEvent) => {
+            if (!tsNavigatorDragging) {
+                return;
+            }
+            tsNavigatorDragging = false;
+            try {
+                tsNavigator.releasePointerCapture?.(tsEvent.pointerId);
+            } catch {
+                // no-op
+            }
+        };
+
         const tsHandlePointerDown = (tsEvent) => {
+            tsPointerMoved = false;
+            tsPointerDownX = tsEvent.clientX;
+            tsPointerDownY = tsEvent.clientY;
             if ((tsEvent.button !== 0 && tsEvent.button !== 1) || tsScale <= 1) {
                 return;
             }
@@ -1809,6 +2013,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         };
 
         const tsHandlePointerMove = (tsEvent) => {
+            if (!tsPointerMoved
+                && (Math.abs(tsEvent.clientX - tsPointerDownX) > 4 || Math.abs(tsEvent.clientY - tsPointerDownY) > 4)) {
+                tsPointerMoved = true;
+            }
             if (!tsPanning || tsEvent.pointerId !== tsPointerId) {
                 return;
             }
@@ -1861,6 +2069,12 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         tsStage.addEventListener("lostpointercapture", tsStopPanning);
         tsStage.addEventListener("mousedown", tsPreventMiddleDefault);
         tsStage.addEventListener("auxclick", tsPreventMiddleDefault);
+        tsStage.addEventListener("click", tsHandleStageClick);
+        tsNavigator.addEventListener("pointerdown", tsHandleNavigatorPointerDown);
+        tsNavigator.addEventListener("pointermove", tsHandleNavigatorPointerMove);
+        tsNavigator.addEventListener("pointerup", tsHandleNavigatorPointerUp);
+        tsNavigator.addEventListener("pointercancel", tsHandleNavigatorPointerUp);
+        tsImage.addEventListener("load", tsUpdateNavigator);
         window.addEventListener("resize", tsHandleReset);
         tsApplyTransform();
 
@@ -1875,6 +2089,13 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsStage.removeEventListener("lostpointercapture", tsStopPanning);
             tsStage.removeEventListener("mousedown", tsPreventMiddleDefault);
             tsStage.removeEventListener("auxclick", tsPreventMiddleDefault);
+            tsStage.removeEventListener("click", tsHandleStageClick);
+            tsNavigator.removeEventListener("pointerdown", tsHandleNavigatorPointerDown);
+            tsNavigator.removeEventListener("pointermove", tsHandleNavigatorPointerMove);
+            tsNavigator.removeEventListener("pointerup", tsHandleNavigatorPointerUp);
+            tsNavigator.removeEventListener("pointercancel", tsHandleNavigatorPointerUp);
+            tsImage.removeEventListener("load", tsUpdateNavigator);
+            tsNavigator.remove();
             delete tsStage.dataset.imageZoomable;
             delete tsStage.dataset.zoomed;
             delete tsStage.dataset.panning;

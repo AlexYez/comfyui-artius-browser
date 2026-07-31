@@ -3,9 +3,13 @@ from __future__ import annotations
 from PIL import Image
 
 from .common import TSBuildDiscoveredPayload, TSBuildIndexedPayload
-from .prompt_metadata import TSExtractPromptPartsFromPromptField, TSExtractSeedFromPromptField
+from .prompt_metadata import (
+    TSExtractModelsFromPromptField,
+    TSExtractPromptPartsFromPromptField,
+    TSExtractSeedFromPromptField,
+)
 from ..ts_metadata_extract import TSExtractWorkflowText
-from ..ts_settings import TS_IMAGE_EXTENSIONS
+from ..ts_settings import TS_IMAGE_EXTENSIONS, TS_PROMPT_PARTS_VERSION
 from ..ts_types import TSAssetPayload, TSAssetStat
 from ..ts_utils import TSJsonDumps
 
@@ -105,18 +109,23 @@ class TSImageHandler:
         ts_workflow_field = ts_metadata.get("Workflow") or ts_metadata.get("workflow") or ""
         ts_prompt_text, ts_negative_prompt_text = TSExtractPromptPartsFromPromptField(ts_prompt_field)
         ts_seed_text = TSExtractSeedFromPromptField(ts_prompt_field)
+        ts_models = TSExtractModelsFromPromptField(ts_prompt_field)
         ts_workflow_text = TSExtractWorkflowText({"Workflow": ts_workflow_field}) if ts_workflow_field else ""
         ts_metadata_payload = {}
-        if ts_prompt_text or ts_negative_prompt_text or ts_workflow_text or ts_seed_text:
+        if ts_prompt_text or ts_negative_prompt_text or ts_workflow_text or ts_seed_text or ts_models:
             ts_metadata_payload = {
-                "prompt_parts_version": 5,
+                "prompt_parts_version": TS_PROMPT_PARTS_VERSION,
                 "positive_prompt_text": ts_prompt_text,
                 "negative_prompt_text": ts_negative_prompt_text,
                 "seed": ts_seed_text,
+                "models": ts_models,
             }
         return {
             "metadata": TSJsonDumps(ts_metadata_payload) if ts_metadata_payload else "{}",
             "prompt_text": ts_prompt_text,
             "workflow_text": ts_workflow_text,
+            # Newline-joined for the FTS "model_text" column; the structured
+            # list stays in the metadata blob for display.
+            "model_text": "\n".join(ts_models),
             "has_metadata": True,
         }

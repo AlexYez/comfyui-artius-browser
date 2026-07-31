@@ -25,6 +25,7 @@ import {
     tsRouteBase,
     tsSave3DThumbnail,
     tsSaveBrowserSettings,
+    tsSetAssetFavorite,
     tsShowToast,
 } from "./ts-artius-browser-api.js";
 import { tsCapture3DThumbnail } from "./ts-artius-browser-3d.js";
@@ -102,6 +103,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsFilterMinHeight: 0,
             tsFilterMaxHeight: 0,
             tsFiltersOpen: false,
+            tsFavoritesOnly: false,
             tsSortKey: tsPanelSettings.defaultSort.key,
             tsSortDirection: tsPanelSettings.defaultSort.direction,
             tsPreviewSize: tsPreviewSizeRange.default,
@@ -179,6 +181,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             applyPersistedAsset: (tsAssetPatch) => this.tsApplyPersisted3DThumbnail(tsAssetPatch),
             warn: (...tsArgs) => tsConsoleWarn(...tsArgs),
         });
+        // Set when the user presses Rescan/Rebuild so the next index-complete
+        // reports its result once; automatic rescans never set it.
+        this.tsPendingScanSummary = false;
         this.tsSidebarRefreshTimers = new Set();
         this.tsWorkflowLibrary = [];
         this.tsWorkflowLibraryLoaded = false;
@@ -191,11 +196,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             ["tsab:asset-upsert", (tsEvent) => this.tsHandleAssetUpsertEvent(tsEvent)],
             ["tsab:asset-remove", (tsEvent) => this.tsHandleAssetRemoveEvent(tsEvent)],
         ];
+        // ComfyUI applies a language change without reloading the page, so the
+        // panel re-hydrates its own text when the extension entry point detects
+        // one. Bound/unbound alongside the api events.
+        this.tsLocaleChangedListener = (tsEvent) => this.tsHandleLocaleChanged(tsEvent);
         this.attachShadow({ mode: "open" });
     }
 
     connectedCallback() {
         this.ts3DQueue.tsResume();
+        window.addEventListener("tsab:locale-changed", this.tsLocaleChangedListener);
         if (this.tsConnectedOnce) {
             this.tsBindApiEvents();
             this.tsStartWidthTracking();
@@ -226,6 +236,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     disconnectedCallback() {
+        window.removeEventListener("tsab:locale-changed", this.tsLocaleChangedListener);
         this.ts3DQueue.tsDispose();
         for (const tsTimerId of this.tsSidebarRefreshTimers) {
             window.clearTimeout(tsTimerId);
@@ -249,6 +260,21 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         // sidebar hide/show while tsBindEvents only ever runs on first connect.
         // The twin tsBindTreeResizer follows the same bind-once rule.
         this.tsUnbindApiEvents();
+    }
+
+    tsHandleLocaleChanged(tsEvent) {
+        const tsLocale = tsEvent?.detail?.locale;
+        if (!tsLocale || typeof tsLocale !== "object") {
+            return;
+        }
+        this.tsState.tsLocale = tsLocale;
+        if (!this.tsRefs) {
+            return;
+        }
+        this.tsHydrateText();
+        // Card buttons, badges and the empty state all carry translated text.
+        this.tsScheduleGridRender(true);
+        this.tsRenderTree(true);
     }
 
     async tsInitAsync() {
@@ -500,6 +526,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             if (tsUI.asset_search_scope === "all" || tsUI.asset_search_scope === "filename") {
                 this.tsState.tsSearchScope = tsUI.asset_search_scope;
             }
+            this.tsState.tsFavoritesOnly = Boolean(tsUI.asset_favorites_only);
             const tsAssetTypes = tsNormalizeAssetTypeSet(tsUI.asset_types, tsTypeOrder);
             if (tsAssetTypes) {
                 this.tsState.tsTypes = tsAssetTypes;
@@ -602,6 +629,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 asset_preview_size: this.tsState.tsAssetPreviewSize,
                 asset_search: this.tsState.tsAssetSearch,
                 asset_search_scope: this.tsState.tsSearchScope,
+                asset_favorites_only: Boolean(this.tsState.tsFavoritesOnly),
                 workflow_sort_key: this.tsState.tsWorkflowSortKey,
                 workflow_sort_direction: this.tsState.tsWorkflowSortDirection,
                 workflow_preview_size: this.tsState.tsWorkflowPreviewSize,
@@ -808,6 +836,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                             <button class="ts-mode-button ts-mode-tree" type="button"></button>
                         </div>
                         <input class="ts-preview-size" type="range" min="${tsPreviewSizeRange.min}" max="${tsPreviewSizeRange.max}" step="${tsPreviewSizeRange.step}" value="${tsPreviewSizeRange.default}">
+                        <button class="ts-toggle-button ts-favorites-toggle" type="button" data-active="false"></button>
                         <button class="ts-toggle-button ts-filters-toggle" type="button" data-active="false"></button>
                         <button class="ts-toggle-button ts-autoscan" type="button" data-active="true">
                             <span class="ts-autoscan-label"></span>
@@ -896,6 +925,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsAutoscan: this.shadowRoot.querySelector(".ts-autoscan"),
             tsAutoscanLabel: this.shadowRoot.querySelector(".ts-autoscan-label"),
             tsRescan: this.shadowRoot.querySelector(".ts-rescan"),
+            tsFavoritesToggle: this.shadowRoot.querySelector(".ts-favorites-toggle"),
             tsFiltersToggle: this.shadowRoot.querySelector(".ts-filters-toggle"),
             tsFilterPanel: this.shadowRoot.querySelector(".ts-filter-panel"),
             tsFilterDateFrom: this.shadowRoot.querySelector(".ts-filter-date-from"),
@@ -1046,11 +1076,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsSearchScope.addEventListener("click", () => {
             this.tsState.tsSearchScope = this.tsState.tsSearchScope === "all" ? "filename" : "all";
             this.tsRefs.tsSearchScope.dataset.active = String(this.tsState.tsSearchScope === "all");
+            this.tsApplySearchScopeInset();
             this.tsQueueSaveUISettings();
             if (String(this.tsState.tsSearch || "").trim()) {
                 this.tsFetchAssets(true);
             }
         });
+        this.tsRefs.tsFavoritesToggle.addEventListener("click", () => this.tsToggleFavoritesFilter());
         this.tsRefs.tsFiltersToggle.addEventListener("click", () => this.tsToggleFilterPanel());
         this.tsBindFilterInputs();
         this.tsRefs.tsFilterClear.addEventListener("click", () => this.tsClearFilters());
@@ -1059,6 +1091,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsDeleteSelected.addEventListener("click", () => this.tsDeleteSelected());
         this.tsBindToolbarResizer();
         this.tsRefs.tsGalleryScroll.addEventListener("scroll", () => this.tsHandleGalleryScroll(), { passive: true });
+        this.tsRefs.tsEmpty.addEventListener("click", (tsEvent) => this.tsHandleEmptyStateClick(tsEvent));
         this.tsRefs.tsGalleryContent.addEventListener("click", (tsEvent) => this.tsHandleGalleryClick(tsEvent));
         this.tsRefs.tsGalleryContent.addEventListener("dblclick", (tsEvent) => this.tsHandleGalleryDoubleClick(tsEvent));
         this.tsRefs.tsGalleryContent.addEventListener("contextmenu", (tsEvent) => this.tsHandleGalleryContextMenu(tsEvent));
@@ -1124,6 +1157,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRenderProgress();
         this.tsRenderSelectionButtons();
         if (tsShouldRefresh) {
+            this.tsShowScanSummaryToast(tsDetail.status);
             this.tsInvalidateResponseCache();
             this.tsDebouncedRealtimeRefresh();
         }
@@ -1200,9 +1234,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         return true;
     }
 
-    tsApplyPersisted3DThumbnail(tsAssetPatch) {
-        // Called by the 3D queue after a capture is saved to the backend: merge
-        // the returned card into the panel's item list and repaint its card.
+    tsApplyPersistedAsset(tsAssetPatch) {
+        // Merge an authoritative card returned by the backend into the panel's
+        // item list and repaint its visible card.
         if (!tsAssetPatch?.id) {
             return;
         }
@@ -1216,6 +1250,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         };
         this.tsItemsRevision += 1;
         this.tsPatchVisibleCard(this.tsState.tsItems[tsIndex]);
+    }
+
+    tsApplyPersisted3DThumbnail(tsAssetPatch) {
+        // Called by the 3D queue after a capture is saved to the backend.
+        this.tsApplyPersistedAsset(tsAssetPatch);
     }
 
     tsHandleAssetUpsertEvent(tsEvent) {
@@ -1290,8 +1329,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsToolbarResizer.title = this.tsT("tooltip.toolbarResize", "Drag to resize the toolbar.");
         this.tsRefs.tsGalleryContent.setAttribute("aria-label", this.tsT("aria.gallery", "Asset grid"));
         this.tsRefs.tsSearchScope.textContent = this.tsT("button.searchPrompts", "Prompt");
-        this.tsRefs.tsSearchScope.title = this.tsT("tooltip.searchPrompts", "Also search inside prompts (not just filenames).");
+        this.tsRefs.tsSearchScope.title = this.tsT("tooltip.searchPrompts", "Also search inside prompts and model names (not just filenames).");
         this.tsRefs.tsSearchScope.dataset.active = String(this.tsState.tsSearchScope === "all");
+        this.tsApplySearchScopeInset();
+        this.tsRefs.tsFavoritesToggle.textContent = this.tsT("button.favorites", "Favorites");
+        this.tsRefs.tsFavoritesToggle.title = this.tsT("tooltip.favorites", "Show only assets you starred.");
         this.tsRefs.tsFiltersToggle.textContent = this.tsT("button.filters", "Filters");
         this.tsRefs.tsFiltersToggle.title = this.tsT("tooltip.filters", "Filter assets by date and resolution.");
         this.tsRefs.tsFilterLabelDate.textContent = this.tsT("filter.date", "Date");
@@ -1312,7 +1354,26 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRenderToolbarForSection();
         this.tsRenderTypeChips();
         this.tsRenderSortOptions();
+        // Both render translated option labels ("All Folders", "Desc") that are
+        // otherwise only refreshed by a fetch, so a live language switch would
+        // leave them in the previous language.
+        this.tsRenderRootOptions();
+        this.tsRenderSortDirection();
         this.tsViewer?.tsSetLocale(this.tsState.tsLocale);
+    }
+
+    tsApplySearchScopeInset() {
+        // The toggle is absolutely positioned inside the search field, so the
+        // field must reserve its width as padding or typed text slides under
+        // it. The label is localized (and hidden entirely in the Workflows
+        // section), so the reservation is measured rather than hard-coded.
+        const tsCluster = this.tsRefs.tsSearchScope?.parentElement;
+        if (!tsCluster) {
+            return;
+        }
+        const tsHidden = this.tsRefs.tsSearchScope.hidden;
+        const tsWidth = tsHidden ? 0 : Math.round(this.tsRefs.tsSearchScope.offsetWidth || 0);
+        tsCluster.style.setProperty("--ts-search-scope-inset", `${tsWidth ? tsWidth + 8 : 0}px`);
     }
 
     tsRenderSectionButtons() {
@@ -1342,6 +1403,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsDeleteSelected.hidden = tsWorkflowSection;
         this.tsRefs.tsSearchScope.hidden = tsWorkflowSection;
         this.tsRefs.tsSearchScope.style.display = tsWorkflowHiddenDisplay;
+        this.tsApplySearchScopeInset();
+        this.tsRenderFavoritesToggle();
         this.tsRenderFilterPanel();
         this.tsRefs.tsTypeCluster.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRootGroup.style.display = tsWorkflowHiddenDisplay;
@@ -1520,6 +1583,61 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
     }
 
+    tsRenderFavoritesToggle() {
+        const tsWorkflowSection = this.tsIsWorkflowSection();
+        this.tsRefs.tsFavoritesToggle.hidden = tsWorkflowSection;
+        this.tsRefs.tsFavoritesToggle.style.display = tsWorkflowSection ? "none" : "";
+        this.tsRefs.tsFavoritesToggle.dataset.active = String(Boolean(this.tsState.tsFavoritesOnly));
+    }
+
+    tsToggleFavoritesFilter() {
+        this.tsState.tsFavoritesOnly = !this.tsState.tsFavoritesOnly;
+        this.tsRenderFavoritesToggle();
+        this.tsQueueSaveUISettings();
+        this.tsFetchAssets(true);
+    }
+
+    async tsToggleAssetFavorite(tsAssetId) {
+        const tsAsset = this.tsFindItemById(Number(tsAssetId));
+        if (!tsAsset) {
+            return;
+        }
+        const tsNextFavorite = !tsAsset.is_favorite;
+        // Optimistic: the star flips immediately, and the authoritative card
+        // from the response (or the asset-upsert event) replaces it. On failure
+        // the local flag is rolled back so the UI never lies.
+        tsAsset.is_favorite = tsNextFavorite;
+        this.tsRefreshCardFavorite(tsAsset.id, tsNextFavorite);
+        try {
+            const tsPayload = await tsSetAssetFavorite(tsAsset.id, tsNextFavorite);
+            const tsUpdatedAsset = tsPayload?.asset;
+            if (tsUpdatedAsset?.id) {
+                this.tsApplyPersistedAsset(tsUpdatedAsset);
+            }
+            this.tsInvalidateResponseCache();
+            if (this.tsState.tsFavoritesOnly && !tsNextFavorite) {
+                // The card no longer belongs in a favorites-only listing.
+                this.tsRemoveItemsByIds([tsAsset.id]);
+            }
+        } catch (tsError) {
+            tsAsset.is_favorite = !tsNextFavorite;
+            this.tsRefreshCardFavorite(tsAsset.id, !tsNextFavorite);
+            tsShowToast("error", this.tsT("toast.favoriteFailed", "Could not update favorite"), String(tsError?.message || tsError || ""));
+        }
+    }
+
+    tsRefreshCardFavorite(tsAssetId, tsIsFavorite) {
+        const tsCard = this.tsRefs.tsGalleryContent.querySelector(`[data-card-id="${tsAssetId}"]`);
+        const tsButton = tsCard?.querySelector('[data-action="favorite"]');
+        if (!tsButton) {
+            return;
+        }
+        tsButton.dataset.favorite = String(Boolean(tsIsFavorite));
+        tsButton.title = tsIsFavorite
+            ? this.tsT("button.unfavorite", "Remove from favorites")
+            : this.tsT("button.favorite", "Add to favorites");
+    }
+
     tsClearFilters() {
         this.tsState.tsFilterDateFrom = "";
         this.tsState.tsFilterDateTo = "";
@@ -1592,6 +1710,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         // button tooltip. Automatic rescans (bootstrap, post-execution)
         // still pass an explicit { root_id: "output" } override.
         const tsPayload = tsOverridePayload || (this.tsState.tsRootId !== "all" ? { root_id: this.tsState.tsRootId } : {});
+        // Only a scan the user asked for reports its result in a toast; the
+        // automatic post-generation rescans pass an override payload.
+        this.tsPendingScanSummary = tsOverridePayload === undefined;
         this.tsState.tsScanStatus = {
             running: true,
             phase: "count",
@@ -1614,6 +1735,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser rescan failed", tsError);
             tsShowToast("error", this.tsT("toast.rescanFailed", "Rescan failed"), String(tsError?.message || tsError || ""));
+            this.tsPendingScanSummary = false;
             // The optimistic local status above never gets corrected by
             // tsab:index-* events when the POST itself failed (no scan
             // started), so drop it here or Rescan/Rebuild stay disabled.
@@ -1640,6 +1762,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (!tsConfirmed) {
             return;
         }
+        this.tsPendingScanSummary = true;
         this.tsState.tsScanStatus = {
             running: true,
             phase: "count",
@@ -1678,6 +1801,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser rebuild cache failed", tsError);
             tsShowToast("error", this.tsT("toast.rebuildFailed", "Rebuild cache failed"), String(tsError?.message || tsError || ""));
+            this.tsPendingScanSummary = false;
             if (!tsRebuildStarted) {
                 // POST failed — no scan is running server-side, so no
                 // tsab:index-* event will clear the optimistic status.
@@ -1720,6 +1844,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             folder: this.tsState.tsFolder,
             filters: this.tsBuildActiveFilters(),
             searchScope: this.tsIsWorkflowSection() ? "filename" : this.tsState.tsSearchScope,
+            favoritesOnly: !this.tsIsWorkflowSection() && Boolean(this.tsState.tsFavoritesOnly),
             overrides: tsOverrides,
         });
     }
@@ -2082,9 +2207,51 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsRenderHealth() {
         const tsMissing = (this.tsState.tsHealth || []).filter((tsIssue) => !tsIssue.ts_available);
-        this.tsRefs.tsHealth.textContent = tsMissing.length > 0
-            ? `${this.tsT("health.missingTools", "Missing tools")}: ${tsMissing.map((tsIssue) => tsIssue.ts_name).join(", ")}`
-            : "";
+        const tsHealthElement = this.tsRefs.tsHealth;
+        if (tsMissing.length === 0) {
+            tsHealthElement.textContent = "";
+            tsHealthElement.hidden = true;
+            tsHealthElement.removeAttribute("title");
+            delete tsHealthElement.dataset.state;
+            return;
+        }
+        // Name the consequence first: "ffprobe is missing" means nothing to a
+        // user staring at video cards that never got a poster frame.
+        tsHealthElement.hidden = false;
+        tsHealthElement.dataset.state = "warning";
+        tsHealthElement.textContent = `${this.tsT("health.previewsDisabled", "Video and audio previews are disabled")} — ${this.tsT("health.missingTools", "Missing tools")}: ${tsMissing.map((tsIssue) => tsIssue.ts_name).join(", ")}`;
+        tsHealthElement.title = this.tsT(
+            "health.missingToolsHint",
+            "Install ffmpeg and ffprobe and make them reachable on PATH (or set their full paths in config.json), then run Rebuild Cache.",
+        );
+    }
+
+    tsShowScanSummaryToast(tsStatus) {
+        // Only for scans the user explicitly asked for. Autoscan also fires
+        // index-complete after every generation, and a toast on each of those
+        // would be pure noise.
+        if (!this.tsPendingScanSummary) {
+            return;
+        }
+        this.tsPendingScanSummary = false;
+        if (tsStatus?.error) {
+            tsShowToast("error", this.tsT("toast.scanFailed", "Scan failed"), String(tsStatus.error));
+            return;
+        }
+        const tsChanged = Number(tsStatus?.changed || 0);
+        const tsDeleted = Number(tsStatus?.deleted || 0);
+        if (tsChanged === 0 && tsDeleted === 0) {
+            tsShowToast("info", this.tsT("toast.scanDone", "Scan finished"), this.tsT("toast.scanNoChanges", "No changes found"));
+            return;
+        }
+        const tsParts = [];
+        if (tsChanged > 0) {
+            tsParts.push(this.tsT("toast.scanIndexed", "{count} indexed").replace("{count}", String(tsChanged)));
+        }
+        if (tsDeleted > 0) {
+            tsParts.push(this.tsT("toast.scanRemoved", "{count} removed").replace("{count}", String(tsDeleted)));
+        }
+        tsShowToast("success", this.tsT("toast.scanDone", "Scan finished"), tsParts.join(", "));
     }
 
 
@@ -2152,7 +2319,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return `<video class="ts-workflow-preview" src="${this.tsEscapeAttribute(tsPreviewURL)}" muted loop autoplay playsinline preload="metadata"></video>`;
         }
         const tsImageClass = this.tsIsWorkflowSection() ? ` class="ts-workflow-preview"` : "";
-        return `<img${tsImageClass} src="${this.tsEscapeAttribute(tsPreviewURL)}" alt="${this.tsEscapeAttribute(tsItem?.filename || "")}" loading="eager" decoding="async" fetchpriority="low" draggable="false">`;
+        // A placeholder preview means generation failed (corrupt file, missing
+        // ffmpeg) and will not be retried until the file changes — say so
+        // instead of leaving the user with a silent grey tile.
+        const tsPlaceholderTitle = !this.tsIsWorkflowSection() && tsItem?.preview_is_placeholder
+            ? ` title="${this.tsEscapeAttribute(this.tsT("tooltip.previewUnavailable", "No preview could be generated for this file (unsupported, corrupt, or a missing tool). Rebuild Cache retries it."))}"`
+            : "";
+        return `<img${tsImageClass}${tsPlaceholderTitle} src="${this.tsEscapeAttribute(tsPreviewURL)}" alt="${this.tsEscapeAttribute(tsItem?.filename || "")}" loading="eager" decoding="async" fetchpriority="low" draggable="false">`;
     }
 
     tsPlayGridEntrance() {
@@ -2203,6 +2376,87 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsGalleryContent.innerHTML = tsCards.join("");
     }
 
+    tsBuildEmptyState() {
+        // Which "nothing here" story to tell. The distinction matters: a first
+        // run with an empty library needs onboarding, a fruitless filename
+        // search needs the prompt-scope escape hatch, and an over-filtered view
+        // needs a way back — three very different next actions.
+        if (this.tsIsWorkflowSection()) {
+            return { tsTitle: this.tsT("empty.workflows", "No workflows match the current filters."), tsLines: [], tsAction: null };
+        }
+        const tsSearchText = String(this.tsState.tsSearch || "").trim();
+        const tsScanStatus = this.tsState.tsScanStatus;
+        const tsNeverScanned = !tsScanStatus?.running && !tsScanStatus?.started_at;
+        if (tsSearchText && this.tsState.tsSearchScope !== "all") {
+            return {
+                tsTitle: this.tsT("empty.searchTitle", "Nothing found by filename."),
+                tsLines: [this.tsT("empty.searchHint", "This search only looks at filenames.")],
+                tsAction: { tsAction: "search-prompts", tsLabel: this.tsT("empty.searchPromptsAction", "Search prompts and models too") },
+            };
+        }
+        if (this.tsState.tsFavoritesOnly || this.tsHasActiveFilters() || this.tsState.tsTypes.size > 0 || tsSearchText) {
+            return {
+                tsTitle: this.tsT("empty.title", "No assets match the current filters."),
+                tsLines: [],
+                tsAction: { tsAction: "clear-filters", tsLabel: this.tsT("empty.clearFiltersAction", "Reset filters") },
+            };
+        }
+        if (tsNeverScanned || this.tsState.tsItems.length === 0) {
+            return {
+                tsTitle: this.tsT("empty.onboardTitle", "Your library is empty."),
+                tsLines: [
+                    this.tsT("empty.onboardScope", "Artius Browser indexes the ComfyUI output and input folders."),
+                    this.tsT("empty.onboardGenerate", "Generate something, or press Rescan to index existing files."),
+                    this.tsT("empty.onboardRoots", "Extra folders can be added as custom roots in config.json."),
+                ],
+                tsAction: { tsAction: "rescan", tsLabel: this.tsT("button.rescan", "Rescan") },
+            };
+        }
+        return { tsTitle: this.tsT("empty.title", "No assets match the current filters."), tsLines: [], tsAction: null };
+    }
+
+    tsBuildEmptyStateMarkup() {
+        const tsState = this.tsBuildEmptyState();
+        const tsLinesMarkup = tsState.tsLines
+            .map((tsLine) => `<p class="ts-empty-line">${this.tsEscapeHTML(tsLine)}</p>`)
+            .join("");
+        const tsActionMarkup = tsState.tsAction
+            ? `<button class="ts-empty-action" type="button" data-empty-action="${this.tsEscapeAttribute(tsState.tsAction.tsAction)}">${this.tsEscapeHTML(tsState.tsAction.tsLabel)}</button>`
+            : "";
+        return `
+            <div class="ts-empty-card">
+                <p class="ts-empty-title">${this.tsEscapeHTML(tsState.tsTitle)}</p>
+                ${tsLinesMarkup}
+                ${tsActionMarkup}
+            </div>
+        `;
+    }
+
+    tsHandleEmptyStateClick(tsEvent) {
+        const tsButton = tsEvent.target.closest("[data-empty-action]");
+        if (!tsButton) {
+            return;
+        }
+        const tsAction = tsButton.dataset.emptyAction;
+        if (tsAction === "search-prompts") {
+            this.tsState.tsSearchScope = "all";
+            this.tsRefs.tsSearchScope.dataset.active = "true";
+            this.tsApplySearchScopeInset();
+            this.tsQueueSaveUISettings();
+            this.tsFetchAssets(true);
+        } else if (tsAction === "clear-filters") {
+            this.tsState.tsFavoritesOnly = false;
+            this.tsState.tsTypes.clear();
+            this.tsState.tsSearch = "";
+            this.tsRefs.tsSearch.value = "";
+            this.tsRenderFavoritesToggle();
+            this.tsRenderTypeChips();
+            this.tsClearFilters();
+        } else if (tsAction === "rescan") {
+            void this.tsRequestRescan();
+        }
+    }
+
     tsRenderGrid(tsForce = false) {
         const tsItems = this.tsState.tsItems;
         const tsWorkflowSection = this.tsIsWorkflowSection();
@@ -2234,12 +2488,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return;
         }
 
-        const tsEmptyMessage = tsWorkflowSection
-            ? this.tsT("empty.workflows", "No workflows match the current filters.")
-            : (tsItems.length === 0 && !this.tsState.tsScanStatus?.running && !this.tsState.tsScanStatus?.started_at
-                ? this.tsT("empty.scan", "No indexed assets yet. Click Rescan to scan ComfyUI output.")
-                : this.tsT("empty.title", "No assets match the current filters."));
-        this.tsRefs.tsEmpty.textContent = tsItems.length === 0 ? tsEmptyMessage : "";
+        this.tsRefs.tsEmpty.innerHTML = tsItems.length === 0 ? this.tsBuildEmptyStateMarkup() : "";
         if (tsItems.length === 0) {
             this.tsRefs.tsGalleryContent.innerHTML = "";
             this.tsLastGridMarkupKey = "empty";
@@ -2317,6 +2566,17 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 >
                     <div class="ts-card-media">
                         ${tsMediaMarkup}
+                        ${tsWorkflowSection ? "" : `
+                            <button
+                                class="ts-card-favorite"
+                                type="button"
+                                data-action="favorite"
+                                data-card-id="${tsItem.id}"
+                                data-favorite="${String(Boolean(tsItem.is_favorite))}"
+                                aria-pressed="${String(Boolean(tsItem.is_favorite))}"
+                                title="${tsItem.is_favorite ? this.tsT("button.unfavorite", "Remove from favorites") : this.tsT("button.favorite", "Add to favorites")}"
+                            >★</button>
+                        `}
                         ${tsShowActions ? `
                             <div class="ts-card-actions">
                                 ${tsWorkflowSection ? `<button type="button" data-action="load-workflow" data-card-id="${tsItem.id}" title="${this.tsT("button.loadWorkflow", "Load Workflow")}">L</button>` : ""}
@@ -2448,6 +2708,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 void this.tsCopyAssetWorkflow(tsAsset.id);
             } else if (tsAction === "load-workflow") {
                 void this.tsOpenWorkflowById(tsAsset.id);
+            } else if (tsAction === "favorite") {
+                void this.tsToggleAssetFavorite(tsAsset.id);
             } else if (tsAction === "download") {
                 tsOpenDownload(tsAsset);
             } else if (tsAction === "delete") {
@@ -2494,6 +2756,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             ];
         }
         const tsItems = [];
+        tsItems.push({
+            tsAction: "favorite",
+            tsLabel: tsAsset.is_favorite
+                ? this.tsT("menu.unfavorite", "Remove from favorites")
+                : this.tsT("menu.favorite", "Add to favorites"),
+        });
         if (tsAsset.type !== "video" && tsAsset.type !== "audio") {
             tsItems.push({ tsAction: "copy", tsLabel: this.tsT("menu.copyPrompt", "Copy prompt") });
         }
@@ -2625,7 +2893,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return;
         }
         const tsAction = tsButton.dataset.menuAction;
-        if (tsAction === "copy") {
+        if (tsAction === "favorite") {
+            void this.tsToggleAssetFavorite(tsAsset.id);
+        } else if (tsAction === "copy") {
             void this.tsCopyAssetPrompt(tsAsset.id);
         } else if (tsAction === "workflow") {
             void this.tsCopyAssetWorkflow(tsAsset.id);

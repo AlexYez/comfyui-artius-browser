@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import Any
 
 from .ts_types import TSAssetPayload
+from .ts_utils import TSRowValue
 
 
 def TSComputeAssetStatus(ts_is_indexed: bool, ts_has_preview: bool, ts_has_metadata: bool) -> str:
@@ -37,6 +38,7 @@ def TSPayloadFromAssetRow(ts_row: Any) -> TSAssetPayload:
         ts_root_id=str(ts_row["root_id"] or "output"),
         ts_prompt_text=str(ts_row["prompt_text"] or ""),
         ts_workflow_text=str(ts_row["workflow_text"] or ""),
+        ts_model_text=str(TSRowValue(ts_row, "model_text") or ""),
         ts_created_at=int(ts_row["created_at"] or 0),
         ts_is_indexed=bool(ts_row["is_indexed"]),
         ts_has_preview=bool(ts_row["has_preview"]),
