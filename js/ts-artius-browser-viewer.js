@@ -1814,7 +1814,12 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         tsNavigatorImage.className = "ts-image-navigator-image";
         tsNavigatorImage.draggable = false;
         tsNavigatorImage.alt = "";
-        tsNavigatorImage.src = tsImage.getAttribute("src") || "";
+        // The cached thumbnail, not the original: the minimap is ~148px wide,
+        // so pointing it at the full-resolution file would keep a second
+        // full-size decoded bitmap alive for the whole lightbox session.
+        tsNavigatorImage.src = tsAsset?.preview_url
+            ? tsApiURL(tsAsset.preview_url)
+            : (tsImage.getAttribute("src") || "");
         const tsNavigatorView = document.createElement("div");
         tsNavigatorView.className = "ts-image-navigator-view";
         tsNavigator.append(tsNavigatorImage, tsNavigatorView);

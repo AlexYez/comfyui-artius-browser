@@ -9,6 +9,12 @@ TS_DB_SCHEMA_VERSION = 12
 # Gated on a fixed constant so future schema bumps don't needlessly re-run it.
 TS_DB_FTS_PROMPT_SCHEMA_VERSION = 12
 
+# Used ONLY by _TSRebuildSchema, the corruption fallback. Every table that
+# assets_view depends on has to be listed here: a dependency left outside this
+# contour cannot be repaired, so the CREATE VIEW below would fail again on every
+# start and the extension would never load. asset_favorites is user data rather
+# than cache, so _TSRebuildSchema salvages its rows before running this script
+# and restores them afterwards.
 TS_DB_DROP_SCHEMA_SQL = """
 DROP VIEW IF EXISTS assets_view;
 DROP TABLE IF EXISTS assets_fts;
@@ -18,6 +24,7 @@ DROP TABLE IF EXISTS asset_folders;
 DROP TABLE IF EXISTS asset_roots;
 DROP TABLE IF EXISTS asset_extensions;
 DROP TABLE IF EXISTS asset_types;
+DROP TABLE IF EXISTS asset_favorites;
 DROP TABLE IF EXISTS asset_user_fields;
 """
 

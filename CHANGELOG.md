@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.2] - 2026-07-31
+
+### Fixed
+- A damaged cache database could leave the browser permanently broken. SQLite
+  does not resolve column references when a view is created, so a missing or
+  mis-shaped table behind `assets_view` passed startup silently and then failed
+  every listing query with "no such column" — with nothing to repair it. Startup
+  now proves the view and the search index are actually readable and rebuilds
+  once if they are not. Starred assets are carried across that rebuild.
+- The scan-result toast could fire for an automatic scan. Finishing a
+  user-started scan while the Workflows tab was open left the toast armed, so
+  the next post-generation scan reported numbers nobody asked for.
+
+### Changed
+- The lightbox navigator now draws the cached thumbnail instead of the original
+  file, so panning a large render no longer keeps a second full-resolution
+  bitmap in memory.
+- Documented schema and config versions are verified against the code by
+  `check_release.py`; the version number was removed from the README file tree,
+  where it duplicated the same fact in seven languages and drifted twice.
+
 ## [1.10.1] - 2026-07-31
 
 ### Fixed

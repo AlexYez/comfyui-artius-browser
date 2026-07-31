@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 import threading
 import time
@@ -22,6 +23,8 @@ from .ts_db_schema import (
 )
 from .ts_logging import TSLogVerbose
 from .ts_types import TSAssetPayload
+
+TSLogger = logging.getLogger("TSArtiusBrowser")
 
 TS_COMPANION_NON_IMAGE_TYPE_KEYS = ("video", "audio", "3d")
 
@@ -99,9 +102,33 @@ class TSDatabase:
             self._TSRebuildSchema(ts_connection, ts_user_version, "additive_failed")
         else:
             self._TSMigrateFTSPromptColumn(ts_connection, ts_user_version)
+        self._TSEnsureReadableSchema(ts_connection, ts_user_version)
         if ts_user_version != TS_DB_SCHEMA_VERSION:
             ts_connection.execute(f"PRAGMA user_version = {TS_DB_SCHEMA_VERSION}")
         TSLogVerbose("db.migrated", database=str(self.ts_database_path), schema_version=TS_DB_SCHEMA_VERSION)
+
+    def _TSEnsureReadableSchema(self, ts_connection: sqlite3.Connection, ts_user_version: int) -> None:
+        # SQLite does NOT resolve column references when a view is created, so
+        # a table the view reads (assets, asset_metadata, asset_favorites) can
+        # be missing or mis-shaped while every CREATE in the schema script
+        # succeeds. The damage would then surface on every listing query as
+        # "no such column", forever, because nothing re-runs the repair path.
+        # Proving the view is actually queryable turns that permanent breakage
+        # into a one-time rebuild.
+        try:
+            # Name the newest, most drift-prone columns explicitly: these are
+            # what the favorites filter reads and what every FTS write inserts.
+            ts_connection.execute("SELECT id, is_favorite, model_text FROM assets_view LIMIT 1").fetchone()
+            ts_connection.execute("SELECT rowid, filename, prompt_text, model_text FROM assets_fts LIMIT 1").fetchone()
+        except sqlite3.DatabaseError as ts_error:
+            if self._TSIsTransientLockError(ts_error):
+                raise
+            TSLogVerbose(
+                "db.schema.unreadable",
+                database=str(self.ts_database_path),
+                error=str(ts_error),
+            )
+            self._TSRebuildSchema(ts_connection, ts_user_version, "schema_unreadable")
 
     def _TSMigrateFTSPromptColumn(self, ts_connection: sqlite3.Connection, ts_user_version: int) -> None:
         # A pre-v11 database has a filename-only FTS table that IF NOT EXISTS
@@ -126,14 +153,56 @@ class TSDatabase:
                 raise
             self._TSRebuildSchema(ts_connection, ts_user_version, "fts_prompt_migration_failed")
 
+    def _TSSalvageFavorites(self, ts_connection: sqlite3.Connection) -> list[tuple[str, int]]:
+        # Best-effort read of the one user-owned table before a destructive
+        # rebuild. A failure here is expected when that table is the corrupt
+        # one - losing stars is bad, never starting again is worse.
+        try:
+            ts_rows = ts_connection.execute("SELECT path, created_at FROM asset_favorites").fetchall()
+        except sqlite3.DatabaseError as ts_error:
+            TSLogVerbose("db.favorites.salvage_failed", error=str(ts_error))
+            return []
+        return [(str(ts_row["path"]), int(ts_row["created_at"] or 0)) for ts_row in ts_rows if ts_row["path"]]
+
+    def _TSRestoreFavorites(self, ts_connection: sqlite3.Connection, ts_favorites: list[tuple[str, int]]) -> None:
+        if not ts_favorites:
+            return
+        try:
+            ts_connection.executemany(
+                "INSERT OR IGNORE INTO asset_favorites(path, created_at) VALUES (?, ?)",
+                ts_favorites,
+            )
+        except sqlite3.DatabaseError as ts_error:
+            TSLogVerbose("db.favorites.restore_failed", count=len(ts_favorites), error=str(ts_error))
+            return
+        TSLogVerbose("db.favorites.restored", count=len(ts_favorites))
+
     def _TSRebuildSchema(
         self,
         ts_connection: sqlite3.Connection,
         ts_user_version: int,
         ts_reason: str,
     ) -> None:
-        ts_connection.executescript(TS_DB_DROP_SCHEMA_SQL)
-        ts_connection.executescript(TS_DB_SCHEMA_SQL)
+        # The index tables are a rebuildable cache, but asset_favorites is not:
+        # carry its rows across the drop so a corruption recovery costs the user
+        # a re-scan, never their starred assets.
+        ts_favorites = self._TSSalvageFavorites(ts_connection)
+        try:
+            ts_connection.executescript(TS_DB_DROP_SCHEMA_SQL)
+            ts_connection.executescript(TS_DB_SCHEMA_SQL)
+        except sqlite3.DatabaseError:
+            # Nothing else can repair the file from inside the process; make the
+            # only remaining manual step obvious instead of failing on import
+            # with a bare sqlite traceback on every ComfyUI start.
+            TSLogger.error(
+                "Timesaver Artius Browser could not repair its cache database. "
+                "Close ComfyUI and delete %s, then start again - it will be rebuilt "
+                "(indexed assets are re-scanned; %d favorite(s) will be lost).",
+                self.ts_database_path,
+                len(ts_favorites),
+            )
+            raise
+        self._TSRestoreFavorites(ts_connection, ts_favorites)
         TSLogVerbose(
             "db.migration.rebuilt",
             database=str(self.ts_database_path),

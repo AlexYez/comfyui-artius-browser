@@ -1148,6 +1148,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsHandleScanEvent(tsEvent, tsShouldRefresh) {
         if (this.tsIsWorkflowSection()) {
+            // Disarm the summary here too. A scan the user started while the
+            // Workflows tab is open still completes; leaving the flag set would
+            // hand its toast to whatever automatic scan finishes next, back on
+            // the Assets tab, reporting numbers nobody asked for.
+            if (tsShouldRefresh) {
+                this.tsPendingScanSummary = false;
+            }
             return;
         }
         const tsDetail = this.tsReadEventDetail(tsEvent);

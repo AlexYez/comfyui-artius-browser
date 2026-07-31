@@ -253,7 +253,7 @@ Delete `ComfyUI/output/.ts_artius_browser/`, restart ComfyUI, scan again. All pr
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # asset index
-├── config.json        # UI + tools settings (schema v18)
+├── config.json        # UI + tools settings
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -631,7 +631,7 @@ Borra `ComfyUI/output/.ts_artius_browser/`, reinicia ComfyUI, escanea de nuevo. 
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # índice de assets
-├── config.json        # ajustes de UI + herramientas (schema v18)
+├── config.json        # ajustes de UI + herramientas
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -860,7 +860,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # 资产索引
-├── config.json        # UI + 工具设置 (schema v18)
+├── config.json        # UI + 工具设置
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -1090,7 +1090,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # アセットインデックス
-├── config.json        # UI + ツール設定 (schema v18)
+├── config.json        # UI + ツール設定
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -1320,7 +1320,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # 에셋 인덱스
-├── config.json        # UI + 도구 설정 (schema v18)
+├── config.json        # UI + 도구 설정
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -1780,7 +1780,7 @@ Elimina `ComfyUI/output/.ts_artius_browser/`, riavvia ComfyUI, esegui di nuovo l
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # indice asset
-├── config.json        # impostazioni UI + strumenti (schema v18)
+├── config.json        # impostazioni UI + strumenti
 └── cache/
     ├── thumbnails/
     ├── video_frames/
@@ -2242,7 +2242,7 @@ Apaga `ComfyUI/output/.ts_artius_browser/`, reinicia o ComfyUI, scaneia outra ve
 ```
 ComfyUI/output/.ts_artius_browser/
 ├── db.sqlite          # índice de assets
-├── config.json        # definições de UI + ferramentas (schema v18)
+├── config.json        # definições de UI + ferramentas
 └── cache/
     ├── thumbnails/
     ├── video_frames/
