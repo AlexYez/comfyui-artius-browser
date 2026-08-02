@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `window.tsArtiusBrowser.mountPanel(host)` — embed API that mounts the
+  singleton browser panel into a host element and restores it on `unmount()`.
+  Added 2026-08-02 by the AI agent building `comfyui-timesaver`'s
+  TS Image Studio (its Library tab hosts the panel through this call);
+  review alongside that project's `js/_studio/_assets.js`.
+
 ## [1.11.0] - 2026-08-01
 
 Stable release of the 1.10.x line. No code changes since 1.10.2 — the version

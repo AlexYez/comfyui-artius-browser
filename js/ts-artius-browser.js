@@ -199,6 +199,32 @@ app.registerExtension({
         // most recent non-fatal warnings even when the debug console is off.
         window.tsArtiusBrowser = Object.assign(window.tsArtiusBrowser || {}, {
             getRecentErrors: tsGetRecentErrors,
+            // Embed API (added 2026-08-02 by the AI agent working on
+            // comfyui-timesaver's TS Image Studio — see CHANGELOG). Mounts the
+            // SINGLETON panel into a host element (e.g. the studio's Library
+            // tab) and returns it to its previous parent on unmount. The
+            // singleton is shared with the sidebar tab, so one mount is live
+            // at a time; a fullscreen studio and the sidebar are never
+            // usefully visible together, which makes the move safe.
+            mountPanel(tsHost, _tsOptions = {}) {
+                const tsPanel = tsGetPanelSingleton();
+                const tsPrevParent = tsPanel.parentElement;
+                const tsPrevSibling = tsPanel.nextSibling;
+                tsHost.appendChild(tsPanel);
+                return {
+                    unmount() {
+                        try {
+                            if (tsPrevParent) {
+                                tsPrevParent.insertBefore(tsPanel, tsPrevSibling);
+                            } else {
+                                tsPanel.remove();
+                            }
+                        } catch (tsError) {
+                            tsConsoleWarn("Timesaver Artius Browser mountPanel unmount failed", tsError);
+                        }
+                    },
+                };
+            },
         });
         try {
             const tsSettingsPayload = await tsFetchBrowserSettings();
