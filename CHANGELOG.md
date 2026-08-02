@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-08-01
+
+Stable release of the 1.10.x line. No code changes since 1.10.2 — the version
+is promoted after a full verification pass against a live ComfyUI: the complete
+HTTP surface, the schema self-repair against copies of a real 6k-asset
+database, concurrent read load during a scan, and the whole GUI suite.
+
+Everything the line introduced is listed under 1.10.0 (favorites, model-name
+search, click-to-100% lightbox with navigator, live localization, informative
+empty states) and 1.10.1 / 1.10.2 (request-integer bounds, self-repairing
+schema probe, scan-toast disarm, thumbnail-backed navigator).
+
 ## [1.10.2] - 2026-07-31
 
 ### Fixed
