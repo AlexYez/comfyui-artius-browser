@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from PIL import Image
 
 from .common import TSBuildDiscoveredPayload, TSBuildIndexedPayload
@@ -16,6 +18,55 @@ from ..ts_utils import TSJsonDumps
 # The only PNG text keys this handler reads (see TSExtractMetadata). Used to
 # decide whether the expensive post-IDAT text-chunk read is worth doing.
 TS_PNG_METADATA_KEYS = ("Prompt", "prompt", "Workflow", "workflow")
+
+
+# [AI agent] Session snapshot written by TS Image Studio (comfyui-timesaver).
+# It sits in its own PNG text chunk beside ComfyUI's Prompt/Workflow, so an
+# image made in the studio can be told apart from any other render and shown
+# with the mode it was made in. Images without the chunk are unaffected — the
+# browser behaves exactly as it did before.
+TS_STUDIO_CHUNK_KEY = "ts_studio"
+TS_STUDIO_APP_ID = "ts-image-studio"
+
+
+def TSExtractStudioSession(ts_metadata: dict[str, str]) -> dict[str, str]:
+    """The studio tag for a render, or {} for anything not made in it.
+
+    Only the few fields a browser can display are kept: the whole snapshot
+    stays in the file, where the studio itself reads it back from.
+    """
+    ts_raw = ts_metadata.get(TS_STUDIO_CHUNK_KEY) or ""
+    if not ts_raw:
+        return {}
+    try:
+        ts_snapshot = json.loads(ts_raw)
+    except Exception:
+        # A damaged chunk costs the tag, never the rest of the metadata.
+        return {}
+    if not isinstance(ts_snapshot, dict):
+        return {}
+    ts_mode = str(ts_snapshot.get("ui_mode") or ts_snapshot.get("mode") or "").strip()
+    if not ts_mode:
+        return {}
+    ts_values = ts_snapshot.get("values")
+    ts_tag = {
+        "app": TS_STUDIO_APP_ID,
+        "mode": ts_mode,
+        "backend_mode": str(ts_snapshot.get("mode") or "").strip(),
+        "family": str(ts_snapshot.get("family") or "").strip(),
+        "family_label": str(ts_snapshot.get("family_label") or "").strip(),
+        "backend": str(ts_snapshot.get("backend") or "").strip(),
+    }
+    if isinstance(ts_values, dict):
+        # Settings worth seeing at a glance; everything else is a click away.
+        for ts_key in ("seed", "steps", "cfg", "denoise", "width", "height"):
+            ts_value = ts_values.get(ts_key)
+            if isinstance(ts_value, (int, float, str)) and str(ts_value) != "":
+                ts_tag[ts_key] = ts_value
+    ts_loras = ts_snapshot.get("loras")
+    if isinstance(ts_loras, list) and ts_loras:
+        ts_tag["lora_count"] = len(ts_loras)
+    return ts_tag
 
 
 def _TSCollectMetadataEntries(ts_metadata: dict[str, str], ts_source: dict) -> None:
@@ -111,8 +162,9 @@ class TSImageHandler:
         ts_seed_text = TSExtractSeedFromPromptField(ts_prompt_field)
         ts_models = TSExtractModelsFromPromptField(ts_prompt_field)
         ts_workflow_text = TSExtractWorkflowText({"Workflow": ts_workflow_field}) if ts_workflow_field else ""
+        ts_studio = TSExtractStudioSession(ts_metadata)
         ts_metadata_payload = {}
-        if ts_prompt_text or ts_negative_prompt_text or ts_workflow_text or ts_seed_text or ts_models:
+        if ts_prompt_text or ts_negative_prompt_text or ts_workflow_text or ts_seed_text or ts_models or ts_studio:
             ts_metadata_payload = {
                 "prompt_parts_version": TS_PROMPT_PARTS_VERSION,
                 "positive_prompt_text": ts_prompt_text,
@@ -120,6 +172,8 @@ class TSImageHandler:
                 "seed": ts_seed_text,
                 "models": ts_models,
             }
+            if ts_studio:
+                ts_metadata_payload["studio"] = ts_studio
         return {
             "metadata": TSJsonDumps(ts_metadata_payload) if ts_metadata_payload else "{}",
             "prompt_text": ts_prompt_text,

@@ -1069,6 +1069,19 @@ export const tsPanelStyles = `<style>
                     background: var(--ts-surface-overlay-soft);
                 }
 
+                /* [AI agent] Studio renders carry an accented badge so they
+                   stand out from ordinary output at a glance. The colours are
+                   literal rather than themed: the badge sits over user media
+                   and has to stay readable on any picture. */
+                .ts-card-badge[data-kind="studio"] {
+                    background: rgba(122, 106, 176, 0.92);
+                    color: #f4f2fb;
+                    font-weight: 600;
+                    max-width: calc(100% - (var(--ts-card-inset, 8px) * 2));
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
                 .ts-card-badge[data-kind="workflow-folder"] {
                     background: var(--ts-surface-overlay-soft);
                     max-width: calc(100% - (var(--ts-card-inset, 8px) * 2));

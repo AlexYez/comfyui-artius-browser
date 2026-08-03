@@ -9,6 +9,7 @@ import {
 import {
     tsOpenAssetInNewTab as tsOpenAssetInNewTabImpl,
     tsOpenDownload as tsOpenDownloadImpl,
+    tsResolveOpenableURL as tsResolveOpenableURLImpl,
 } from "./ts-artius-browser-api-open.js";
 import { tsBuildFolderTree as tsBuildFolderTreeImpl } from "./ts-artius-browser-api-tree.js";
 import {
@@ -352,6 +353,14 @@ export function tsOpenDownload(tsAsset) {
 
 export function tsOpenAssetInNewTab(tsAsset) {
     return tsOpenAssetInNewTabImpl(tsAsset, { document, apiURL: tsApiURL });
+}
+
+// A fetchable address for an asset's own file. Used where something other
+// than the browser has to read the bytes — external asset actions, which get
+// a plain descriptor and no access to this module's URL rules.
+// [AI agent] Added for the TS Image Studio session-restore action.
+export function tsAssetFileURL(tsAsset) {
+    return tsResolveOpenableURLImpl(tsAsset?.file_url, tsApiURL);
 }
 export function tsEnsureSidebarIconStyle() {
     if (document.getElementById("ts-artius-sidebar-icon-style")) {

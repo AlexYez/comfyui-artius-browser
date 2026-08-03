@@ -2,6 +2,7 @@
 import {
     tsApiURL,
     tsAssetDragMime,
+    tsAssetFileURL,
     tsBuildFolderTree,
     tsClamp,
     tsConsoleWarn,
@@ -2532,6 +2533,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 ? String(tsItem.folder_path || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "")
                 : "";
             const tsBadges = tsWorkflowSection ? [] : [tsItem.type.toUpperCase()];
+            // [AI agent] Renders only for assets carrying a studio session tag.
+            const tsStudioBadge = tsWorkflowSection ? null : this.tsStudioBadge(tsItem);
             const tsResolutionBadge = Number(tsItem.width) > 0 && Number(tsItem.height) > 0
                 ? `${tsItem.width}x${tsItem.height}`
                 : "";
@@ -2594,6 +2597,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                             </div>
                         ` : ""}
                         <div class="ts-card-badges">
+                            ${tsStudioBadge ? `
+                                <div class="ts-card-badge" data-kind="studio" title="${this.tsEscapeAttribute(tsStudioBadge.tsTitle)}">${this.tsEscapeHTML(tsStudioBadge.tsText)}</div>
+                            ` : ""}
                             ${tsWorkflowFolderBadge ? `
                                 <div class="ts-card-badge" data-kind="workflow-folder" title="${this.tsEscapeAttribute(tsWorkflowFolderBadge)}">${this.tsEscapeHTML(tsWorkflowFolderBadge)}</div>
                             ` : ""}
@@ -2753,6 +2759,107 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefreshCardSelection();
     }
 
+    // [AI agent] Label for a render made in TS Image Studio: which mode
+    // produced it and with which model, plus the settings worth seeing on
+    // hover. Anything made elsewhere returns null and the card is unchanged.
+    tsStudioBadge(tsItem) {
+        const tsStudio = tsItem?.studio;
+        if (!tsStudio || typeof tsStudio !== "object" || !tsStudio.mode) {
+            return null;
+        }
+        const tsMode = String(tsStudio.mode);
+        const tsModeLabel = this.tsT(
+            `studio.mode.${tsMode}`,
+            tsMode.charAt(0).toUpperCase() + tsMode.slice(1),
+        );
+        const tsModel = String(tsStudio.family_label || tsStudio.family || "");
+        const tsDetails = [];
+        for (const tsKey of ["seed", "steps", "cfg", "denoise"]) {
+            if (tsStudio[tsKey] !== undefined && tsStudio[tsKey] !== "") {
+                tsDetails.push(`${tsKey} ${tsStudio[tsKey]}`);
+            }
+        }
+        if (Number(tsStudio.lora_count) > 0) {
+            tsDetails.push(`LoRA ×${tsStudio.lora_count}`);
+        }
+        const tsHeading = [this.tsT("studio.badge", "TS Image Studio"), tsModeLabel, tsModel]
+            .filter(Boolean)
+            .join(" · ");
+        return {
+            tsText: tsModel ? `${tsModeLabel} · ${tsModel}` : tsModeLabel,
+            tsTitle: tsDetails.length ? `${tsHeading}\n${tsDetails.join("  ")}` : tsHeading,
+        };
+    }
+
+    // ── external asset actions ──────────────────────────────────────────── //
+    // [AI agent] Other packs can offer commands on an asset by publishing them
+    // to `window.tsAssetActions` (TS Image Studio uses this to rebuild the
+    // session an image was made in). The browser stays unaware of what the
+    // action does: it passes a plain descriptor and shows whatever comes back.
+
+    tsExternalAssetPayload(tsAsset) {
+        return {
+            id: tsAsset?.id,
+            filename: tsAsset?.filename || "",
+            url: tsAssetFileURL(tsAsset),
+            type: tsAsset?.type || "",
+            extension: tsAsset?.extension || "",
+        };
+    }
+
+    tsExternalAssetActions(tsAsset) {
+        const tsRegistry = Array.isArray(window.tsAssetActions) ? window.tsAssetActions : [];
+        if (!tsRegistry.length) {
+            return [];
+        }
+        const tsPayload = this.tsExternalAssetPayload(tsAsset);
+        return tsRegistry.filter((tsAction) => {
+            if (!tsAction?.id || typeof tsAction.run !== "function") {
+                return false;
+            }
+            if (typeof tsAction.supports !== "function") {
+                return true;
+            }
+            try {
+                return Boolean(tsAction.supports(tsPayload));
+            } catch (tsError) {
+                // A third-party filter that throws costs that one entry, never
+                // the user's right-click.
+                tsConsoleWarn(`Timesaver Artius Browser asset action '${tsAction.id}' failed`, tsError);
+                return false;
+            }
+        });
+    }
+
+    tsExternalActionLabel(tsAction) {
+        const tsLabel = tsAction?.label;
+        if (typeof tsLabel === "string") {
+            return tsLabel;
+        }
+        const tsCode = tsResolveLocaleCode(this.tsState.tsLanguage, tsResolveComfyLocale());
+        return tsLabel?.[tsCode] || tsLabel?.en || tsAction?.id || "";
+    }
+
+    async tsRunExternalAction(tsActionId, tsAsset) {
+        const tsAction = this.tsExternalAssetActions(tsAsset)
+            .find((tsCandidate) => tsCandidate.id === tsActionId);
+        if (!tsAction) {
+            return;
+        }
+        const tsLabel = this.tsExternalActionLabel(tsAction);
+        try {
+            const tsResult = await tsAction.run(this.tsExternalAssetPayload(tsAsset));
+            if (tsResult && tsResult.ok === false) {
+                tsShowToast("info", tsLabel, String(tsResult.message || ""));
+            } else if (tsResult?.message) {
+                tsShowToast("success", tsLabel, String(tsResult.message));
+            }
+        } catch (tsError) {
+            tsConsoleWarn(`Timesaver Artius Browser asset action '${tsActionId}' failed`, tsError);
+            tsShowToast("error", tsLabel, String(tsError?.message || tsError || ""));
+        }
+    }
+
     tsBuildContextMenuItems(tsAsset) {
         // Larger, discoverable click targets that mirror the tiny hover buttons.
         if (this.tsIsWorkflowSection()) {
@@ -2774,6 +2881,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         if (tsAsset.type === "image" && String(tsAsset.extension || "").toLowerCase() === ".png" && tsAsset.has_workflow) {
             tsItems.push({ tsAction: "workflow", tsLabel: this.tsT("menu.copyWorkflow", "Copy workflow") });
+        }
+        // [AI agent] Published by other packs; sits above the plain file
+        // commands because it acts on what the asset IS, not on the file.
+        for (const tsExternal of this.tsExternalAssetActions(tsAsset)) {
+            tsItems.push({
+                tsAction: `ext:${tsExternal.id}`,
+                tsLabel: this.tsExternalActionLabel(tsExternal),
+            });
         }
         tsItems.push({ tsAction: "download", tsLabel: this.tsT("menu.download", "Download") });
         if (tsAsset.type !== "3d") {
@@ -2900,7 +3015,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return;
         }
         const tsAction = tsButton.dataset.menuAction;
-        if (tsAction === "favorite") {
+        if (tsAction.startsWith("ext:")) {
+            // [AI agent] Published by another pack — see tsExternalAssetActions.
+            void this.tsRunExternalAction(tsAction.slice(4), tsAsset);
+        } else if (tsAction === "favorite") {
             void this.tsToggleAssetFavorite(tsAsset.id);
         } else if (tsAction === "copy") {
             void this.tsCopyAssetPrompt(tsAsset.id);

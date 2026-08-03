@@ -103,8 +103,9 @@ TS_DEFAULT_PLACEHOLDER_WIDTH = TS_BACKEND_SETTINGS["preview"]["placeholder_width
 TS_DEFAULT_PLACEHOLDER_HEIGHT = TS_BACKEND_SETTINGS["preview"]["placeholder_height"]
 # Version stamp of the stored image prompt-metadata blob. Bumping it makes
 # TSEnsureMetadata re-extract older blobs once, on the next detail view.
-# 5 added seed + split positive/negative, 6 added the model/LoRA list.
-TS_PROMPT_PARTS_VERSION = 6
+# 5 added seed + split positive/negative, 6 added the model/LoRA list,
+# 7 added the TS Image Studio session tag. [AI agent]
+TS_PROMPT_PARTS_VERSION = 7
 
 # Decompression-bomb guard for the image thumbnail path: images above this
 # pixel count get a placeholder instead of a full decode. PIL's own default

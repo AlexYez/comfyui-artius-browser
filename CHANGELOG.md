@@ -14,6 +14,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Added 2026-08-02 by the AI agent building `comfyui-timesaver`'s
   TS Image Studio (its Library tab hosts the panel through this call);
   review alongside that project's `js/_studio/_assets.js`.
+- External asset actions: any pack may publish a command on an asset by
+  pushing `{id, label, order, supports(asset), run(asset)}` onto
+  `window.tsAssetActions`. Applicable entries appear in the asset context
+  menu, above the file commands; `run()` receives
+  `{id, filename, url, type, extension}` and may answer
+  `{ok, message}` to raise a toast. The browser never learns what an action
+  does, so neither side constrains the other's releases. First consumer:
+  TS Image Studio's "Restore studio session".
+  Added 2026-08-03 by the AI agent building `comfyui-timesaver`.
+- Studio session tag: PNGs written by TS Image Studio carry a `ts_studio`
+  text chunk, which the scanner now reads into the metadata blob and the
+  asset payload exposes as `studio` (`{app, mode, family, family_label,
+  backend, seed, steps, cfg, denoise, width, height, lora_count}`). Cards for
+  those renders show an accented badge — "Generate · Krea 2 Turbo" — with the
+  settings on hover, localised in all four UI languages. Assets from anywhere
+  else return `{}` and render exactly as before. `TS_PROMPT_PARTS_VERSION` is
+  bumped to 7 so stored blobs re-extract; images indexed earlier pick the tag
+  up on their next detail view or after Rebuild Cache.
+  Added 2026-08-03 by the AI agent building `comfyui-timesaver`.
 
 ## [1.11.0] - 2026-08-01
 
