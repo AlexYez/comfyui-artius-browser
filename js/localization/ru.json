@@ -46,6 +46,7 @@
     "tooltip.rebuildCache": "Очистить текущий кэш браузера и пересобрать его с нуля.",
     "button.loadWorkflow": "Загрузить воркфлоу",
     "button.copyPrompt": "Копировать промпт",
+    "button.recreate": "Восстановить сессию студии",
     "button.copyWorkflow": "Копировать воркфлоу",
     "button.copy": "Копировать",
     "button.download": "Скачать",

@@ -2560,6 +2560,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             const tsShowActions = true;
             const tsShowCopyAction = !tsWorkflowSection && tsItem.type !== "video" && tsItem.type !== "audio";
             const tsShowWorkflowAction = !tsWorkflowSection && tsItem.type === "image" && String(tsItem.extension || "").toLowerCase() === ".png" && Boolean(tsItem.has_workflow);
+            // [AI agent] Studio renders can be reopened in the session that
+            // made them; the button only exists where that is possible.
+            const tsShowRecreate = !tsWorkflowSection && Boolean(tsItem.studio?.mode)
+                && this.tsExternalAssetActions(tsItem)
+                       .some((tsAction) => tsAction.id === "ts-image-studio.recreate");
             const tsPreviewURL = this.tsResolveCardPreviewURL(tsItem);
             const tsMediaMarkup = this.tsBuildCardMediaMarkup(tsItem, tsPreviewURL);
             tsCards.push(`
@@ -2590,6 +2595,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         ${tsShowActions ? `
                             <div class="ts-card-actions">
                                 ${tsWorkflowSection ? `<button type="button" data-action="load-workflow" data-card-id="${tsItem.id}" title="${this.tsT("button.loadWorkflow", "Load Workflow")}">L</button>` : ""}
+                                ${tsShowRecreate ? `<button type="button" data-action="recreate" data-card-id="${tsItem.id}" title="${this.tsEscapeAttribute(this.tsT("button.recreate", "Restore studio session"))}">R</button>` : ""}
                                 ${tsShowCopyAction ? `<button type="button" data-action="copy" data-card-id="${tsItem.id}" title="${this.tsT("button.copyPrompt", "Copy Prompt")}">P</button>` : ""}
                                 ${tsShowWorkflowAction ? `<button type="button" data-action="workflow" data-card-id="${tsItem.id}" title="${this.tsT("button.copyWorkflow", "Copy Workflow")}">W</button>` : ""}
                                 <button type="button" data-action="download" data-card-id="${tsItem.id}" title="${this.tsT("button.download", "Download")}">D</button>
@@ -2715,7 +2721,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 return;
             }
             const tsAction = tsActionButton.dataset.action;
-            if (tsAction === "copy") {
+            if (tsAction === "recreate") {
+                // [AI agent] Same command the context menu offers.
+                void this.tsRunExternalAction("ts-image-studio.recreate", tsAsset);
+            } else if (tsAction === "copy") {
                 void this.tsCopyAssetPrompt(tsAsset.id);
             } else if (tsAction === "workflow") {
                 void this.tsCopyAssetWorkflow(tsAsset.id);

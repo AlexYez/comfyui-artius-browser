@@ -46,6 +46,7 @@
     "tooltip.rebuildCache": "Delete the current browser cache and rebuild it from scratch.",
     "button.loadWorkflow": "Load Workflow",
     "button.copyPrompt": "Copy Prompt",
+    "button.recreate": "Restore studio session",
     "button.copyWorkflow": "Copy Workflow",
     "button.copy": "Copy",
     "button.download": "Download",

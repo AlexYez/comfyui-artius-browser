@@ -46,6 +46,7 @@
     "tooltip.rebuildCache": "清除当前浏览器缓存并从头重建。",
     "button.loadWorkflow": "加载工作流",
     "button.copyPrompt": "复制提示词",
+    "button.recreate": "恢复工作室会话",
     "button.copyWorkflow": "复制工作流",
     "button.copy": "复制",
     "button.download": "下载",

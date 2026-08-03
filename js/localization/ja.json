@@ -46,6 +46,7 @@
     "tooltip.rebuildCache": "現在のブラウザキャッシュを消去して一から再構築します。",
     "button.loadWorkflow": "ワークフローを読み込む",
     "button.copyPrompt": "プロンプトをコピー",
+    "button.recreate": "スタジオセッションを復元",
     "button.copyWorkflow": "ワークフローをコピー",
     "button.copy": "コピー",
     "button.download": "ダウンロード",
