@@ -47,6 +47,7 @@
     "button.loadWorkflow": "Загрузить воркфлоу",
     "button.copyPrompt": "Копировать промпт",
     "button.recreate": "Восстановить сессию студии",
+    "button.useInStudio": "Использовать в студии",
     "button.copyWorkflow": "Копировать воркфлоу",
     "button.copy": "Копировать",
     "button.download": "Скачать",

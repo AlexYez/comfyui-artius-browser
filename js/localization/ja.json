@@ -47,6 +47,7 @@
     "button.loadWorkflow": "ワークフローを読み込む",
     "button.copyPrompt": "プロンプトをコピー",
     "button.recreate": "スタジオセッションを復元",
+    "button.useInStudio": "スタジオで使う",
     "button.copyWorkflow": "ワークフローをコピー",
     "button.copy": "コピー",
     "button.download": "ダウンロード",

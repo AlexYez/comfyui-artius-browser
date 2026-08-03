@@ -47,6 +47,7 @@
     "button.loadWorkflow": "Load Workflow",
     "button.copyPrompt": "Copy Prompt",
     "button.recreate": "Restore studio session",
+    "button.useInStudio": "Use in the studio",
     "button.copyWorkflow": "Copy Workflow",
     "button.copy": "Copy",
     "button.download": "Download",

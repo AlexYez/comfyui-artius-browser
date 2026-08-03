@@ -2562,9 +2562,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             const tsShowWorkflowAction = !tsWorkflowSection && tsItem.type === "image" && String(tsItem.extension || "").toLowerCase() === ".png" && Boolean(tsItem.has_workflow);
             // [AI agent] Studio renders can be reopened in the session that
             // made them; the button only exists where that is possible.
+            const tsExternalIds = new Set(
+                this.tsExternalAssetActions(tsItem).map((tsAction) => tsAction.id));
             const tsShowRecreate = !tsWorkflowSection && Boolean(tsItem.studio?.mode)
-                && this.tsExternalAssetActions(tsItem)
-                       .some((tsAction) => tsAction.id === "ts-image-studio.recreate");
+                && tsExternalIds.has("ts-image-studio.recreate");
+            // [AI agent] Send the picture into the studio's current mode —
+            // the same thing a drag does, for when dragging is not an option.
+            const tsShowUseInStudio = !tsWorkflowSection
+                && tsExternalIds.has("ts-image-studio.use-source");
             const tsPreviewURL = this.tsResolveCardPreviewURL(tsItem);
             const tsMediaMarkup = this.tsBuildCardMediaMarkup(tsItem, tsPreviewURL);
             tsCards.push(`
@@ -2595,6 +2600,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         ${tsShowActions ? `
                             <div class="ts-card-actions">
                                 ${tsWorkflowSection ? `<button type="button" data-action="load-workflow" data-card-id="${tsItem.id}" title="${this.tsT("button.loadWorkflow", "Load Workflow")}">L</button>` : ""}
+                                ${tsShowUseInStudio ? `<button type="button" data-action="use-in-studio" data-card-id="${tsItem.id}" title="${this.tsEscapeAttribute(this.tsT("button.useInStudio", "Use in the studio"))}">S</button>` : ""}
                                 ${tsShowRecreate ? `<button type="button" data-action="recreate" data-card-id="${tsItem.id}" title="${this.tsEscapeAttribute(this.tsT("button.recreate", "Restore studio session"))}">R</button>` : ""}
                                 ${tsShowCopyAction ? `<button type="button" data-action="copy" data-card-id="${tsItem.id}" title="${this.tsT("button.copyPrompt", "Copy Prompt")}">P</button>` : ""}
                                 ${tsShowWorkflowAction ? `<button type="button" data-action="workflow" data-card-id="${tsItem.id}" title="${this.tsT("button.copyWorkflow", "Copy Workflow")}">W</button>` : ""}
@@ -2724,6 +2730,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             if (tsAction === "recreate") {
                 // [AI agent] Same command the context menu offers.
                 void this.tsRunExternalAction("ts-image-studio.recreate", tsAsset);
+            } else if (tsAction === "use-in-studio") {
+                void this.tsRunExternalAction("ts-image-studio.use-source", tsAsset);
             } else if (tsAction === "copy") {
                 void this.tsCopyAssetPrompt(tsAsset.id);
             } else if (tsAction === "workflow") {

@@ -47,6 +47,7 @@
     "button.loadWorkflow": "加载工作流",
     "button.copyPrompt": "复制提示词",
     "button.recreate": "恢复工作室会话",
+    "button.useInStudio": "在工作室中使用",
     "button.copyWorkflow": "复制工作流",
     "button.copy": "复制",
     "button.download": "下载",
