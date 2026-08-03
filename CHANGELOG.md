@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Added 2026-08-02 by the AI agent building `comfyui-timesaver`'s
   TS Image Studio (its Library tab hosts the panel through this call);
   review alongside that project's `js/_studio/_assets.js`.
+- `INTEGRATION.md` — the three seams other packs plug into (embed API,
+  external asset actions, the studio tag), with contracts and the rules the
+  browser follows. Added 2026-08-03 by the AI agent building `comfyui-timesaver`.
 - External asset actions: any pack may publish a command on an asset by
   pushing `{id, label, order, supports(asset), run(asset)}` onto
   `window.tsAssetActions`. Applicable entries appear in the asset context
