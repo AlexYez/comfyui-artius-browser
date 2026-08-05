@@ -62,8 +62,26 @@ Where they surface:
 
   | Button | Action id | Shown when |
   |---|---|---|
-  | `S` | `ts-image-studio.use-source` | the action is published |
+  | `S` | `ts-image-studio.use-source` | the action is published — **nobody publishes it today** |
   | `R` | `ts-image-studio.recreate` | published **and** the asset has a studio tag |
+
+  **Про `S` — чтобы не искать причину заново (2026-08-05).** Кнопка исчезла с
+  карточек не потому, что здесь что-то сломалось: студия перестала публиковать
+  действие `ts-image-studio.use-source`. Владелец: кнопка обещала больше, чем
+  делала (казалось, что кладёт картинку в любой раздел, а по факту попадала в
+  инпэйнт), а перетаскивания достаточно.
+
+  Ветка кода здесь оставлена нарочно и мертва ровно до тех пор, пока действие
+  снова кто-нибудь не опубликует: механизм общий, и завтра его может занять
+  другой пак. Проверить, что публикуется сейчас, можно одной строкой в консоли
+  страницы:
+
+  ```js
+  window.tsAssetActions.map(a => a.id)   // сейчас: ["ts-image-studio.recreate"]
+  ```
+
+  Со стороны студии это `publishAssetAction(...)` в
+  `js/image/studio/ts-image-studio.js`.
 
 Rules the browser follows:
 
