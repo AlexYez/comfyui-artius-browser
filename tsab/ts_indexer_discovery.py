@@ -28,6 +28,34 @@ __all__ = [
 TS_COMPANION_MEDIA_EXTENSIONS = TS_VIDEO_EXTENSIONS | TS_AUDIO_EXTENSIONS | TS_3D_EXTENSIONS
 TS_IGNORED_DIRECTORY_NAMES = {TS_STORAGE_DIRECTORY_NAME.lower(), *(ts_name.lower() for ts_name in TS_LEGACY_STORAGE_DIRECTORY_NAMES)}
 
+# AppleDouble sidecars. macOS writes "._<name>" next to every file it copies to
+# a volume that cannot hold resource forks and extended attributes (exFAT/FAT32
+# sticks, most SMB/NAS shares). "._render.png" has a .png suffix, so without
+# this it is indexed as an image, fails to decode, and keeps a placeholder
+# forever - one ghost card per real asset.
+TS_APPLEDOUBLE_PREFIX = "._"
+
+# macOS packages: directories the Finder presents as single documents. Walking
+# into them indexes an application's icons or a Photos library's internal
+# masters. Matched by suffix because the names themselves are arbitrary.
+TS_IGNORED_DIRECTORY_SUFFIXES = (
+    ".app",
+    ".photoslibrary",
+    ".fcpbundle",
+    ".imovielibrary",
+    ".tvlibrary",
+    ".framework",
+)
+
+
+def TSIsIgnoredDirectory(ts_name: str) -> bool:
+    ts_lowered = ts_name.lower()
+    return ts_lowered in TS_IGNORED_DIRECTORY_NAMES or ts_lowered.endswith(TS_IGNORED_DIRECTORY_SUFFIXES)
+
+
+def TSIsIgnoredFileName(ts_name: str) -> bool:
+    return ts_name.startswith(TS_APPLEDOUBLE_PREFIX)
+
 
 def TSFilterCompanionEntries(ts_file_entries: Iterable[os.DirEntry[str]]) -> list[os.DirEntry[str]]:
     # Match the DB's companion definition exactly (_TSRecomputeCompanionFlags
@@ -72,13 +100,16 @@ def TSScanDirectory(
                         ts_resolved_path = ts_entry_path.resolve()
                     except OSError:
                         continue
-                    if ts_entry_path.name.lower() in TS_IGNORED_DIRECTORY_NAMES:
+                    if TSIsIgnoredDirectory(ts_entry_path.name):
                         TSLogVerbose("indexer.path.ignored", path=str(ts_entry_path), reason="technical_directory")
                         continue
                     if ts_resolved_path in ts_ignored_paths:
                         TSLogVerbose("indexer.path.ignored", path=str(ts_entry_path))
                         continue
                     ts_subdirectories.append(ts_resolved_path)
+                    continue
+                if TSIsIgnoredFileName(ts_entry.name):
+                    TSLogVerbose("indexer.path.ignored", path=str(ts_entry_path), reason="appledouble_sidecar")
                     continue
                 if ts_entry_path.suffix.lower() in TS_SUPPORTED_EXTENSIONS:
                     ts_file_entries.append(ts_entry)

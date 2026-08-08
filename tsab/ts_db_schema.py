@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-TS_DB_SCHEMA_VERSION = 12
+TS_DB_SCHEMA_VERSION = 13
 
-# The schema version that last changed the FTS table layout (v11 added
-# prompt_text, v12 added model_text). Databases below it keep the older column
-# set (CREATE VIRTUAL TABLE IF NOT EXISTS won't recreate it), so they need a
-# one-time FTS rebuild — repopulated from existing rows, no re-scan required.
-# Gated on a fixed constant so future schema bumps don't needlessly re-run it.
-TS_DB_FTS_PROMPT_SCHEMA_VERSION = 12
+# The schema version that last changed the FTS table layout OR the way its rows
+# are written (v11 added prompt_text, v12 added model_text, v13 normalizes the
+# indexed text to NFC so macOS's decomposed filenames stay searchable).
+# Databases below it hold an index that no longer matches how queries are
+# built, so they need a one-time FTS rebuild — repopulated from existing rows,
+# no re-scan required. Gated on a fixed constant so future schema bumps don't
+# needlessly re-run it. Bump BOTH constants together: the gate compares against
+# user_version, which is set to TS_DB_SCHEMA_VERSION.
+TS_DB_FTS_PROMPT_SCHEMA_VERSION = 13
 
 # Used ONLY by _TSRebuildSchema, the corruption fallback. Every table that
 # assets_view depends on has to be listed here: a dependency left outside this
@@ -174,8 +177,15 @@ CREATE VIRTUAL TABLE assets_fts USING fts5(
     model_text,
     tokenize = 'unicode61'
 );
+-- ts_nfc() is registered on every connection (see TSGetConnection). The
+-- indexed text has to be normalized here exactly as _TSSyncFTSRow does it, or
+-- a rebuild would undo it for every row that already existed.
 INSERT INTO assets_fts(rowid, filename, prompt_text, model_text)
-SELECT assets.id, assets.filename, COALESCE(asset_metadata.prompt_text, ''), COALESCE(asset_metadata.model_text, '')
+SELECT
+    assets.id,
+    ts_nfc(assets.filename),
+    ts_nfc(COALESCE(asset_metadata.prompt_text, '')),
+    ts_nfc(COALESCE(asset_metadata.model_text, ''))
 FROM assets
 LEFT JOIN asset_metadata ON asset_metadata.asset_id = assets.id;
 """

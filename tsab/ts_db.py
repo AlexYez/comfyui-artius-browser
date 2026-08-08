@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .ts_companion import TSComputeCompanionStemFromFilename
+from .ts_utils import TSNormalizeSearchText
 from .ts_db_payload import TSBuildUpdatedAssetPayload, TSComputeAssetStatus, TSPayloadFromAssetRow
 from .ts_db_query import TS_SORT_KEY_MAP, TSBuildAssetQueryParts, TSResolveSortKey
 from .ts_db_schema import (
@@ -46,6 +47,10 @@ class TSDatabase:
             ts_connection.execute("PRAGMA cache_size=-8000")
             ts_connection.execute("PRAGMA mmap_size=268435456")
             ts_connection.execute("PRAGMA foreign_keys=ON")
+            # Lets the set-based FTS rebuild normalize exactly like the
+            # per-row write path does; without it a rebuild would put macOS's
+            # decomposed filenames back into the index.
+            ts_connection.create_function("ts_nfc", 1, TSNormalizeSearchText, deterministic=True)
             self.ts_thread_local.ts_connection = ts_connection
             TSLogVerbose("db.connection.opened", database=str(self.ts_database_path))
         return ts_connection
@@ -592,9 +597,18 @@ class TSDatabase:
     ) -> None:
         ts_connection = self.TSGetConnection()
         ts_connection.execute("DELETE FROM assets_fts WHERE rowid = ?", (ts_asset_id,))
+        # Indexed text is normalized to NFC because macOS hands us decomposed
+        # filenames while every query arrives composed - see
+        # TSNormalizeSearchText. Only the search index is normalized; `path`
+        # and `filename` keep the exact bytes the filesystem reported.
         ts_connection.execute(
             "INSERT INTO assets_fts(rowid, filename, prompt_text, model_text) VALUES (?, ?, ?, ?)",
-            (ts_asset_id, ts_filename, ts_prompt_text or "", ts_model_text or ""),
+            (
+                ts_asset_id,
+                TSNormalizeSearchText(ts_filename),
+                TSNormalizeSearchText(ts_prompt_text),
+                TSNormalizeSearchText(ts_model_text),
+            ),
         )
 
     def TSSetAssetFavorite(self, ts_asset_id: int, ts_is_favorite: bool) -> sqlite3.Row | None:

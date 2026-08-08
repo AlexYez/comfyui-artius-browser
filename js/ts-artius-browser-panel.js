@@ -3226,6 +3226,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (this.tsViewer?.tsIsViewerOpen?.()) {
             return;
         }
+        // A modified arrow is somebody else's shortcut. On macOS Cmd+Left /
+        // Cmd+Right are Back / Forward, and this handler preventDefault()s the
+        // arrows — so without this guard the grid silently swallows them.
+        // (Windows uses Alt+Left, which is why it never showed up there.)
+        if (tsEvent.metaKey || tsEvent.ctrlKey || tsEvent.altKey) {
+            return;
+        }
         // "?" toggles the shortcut help; Escape closes it. Handled before the
         // empty-list guard so help works even with no assets loaded.
         if (tsEvent.key === "?") {

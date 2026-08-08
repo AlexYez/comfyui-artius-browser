@@ -5,10 +5,25 @@ import math
 import os
 import re
 import threading
+import unicodedata
 from contextlib import AbstractContextManager, contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
+
+
+def TSNormalizeSearchText(ts_value: str | None) -> str:
+    """Put text into NFC so a search matches what the filesystem handed us.
+
+    macOS stores filenames decomposed (NFD): "мой" arrives from os.scandir as
+    "мо" + "и" + a combining breve, while any keyboard produces the composed
+    form. FTS5's unicode61 strips LATIN diacritics, so cafe/grun match either
+    way, but it leaves Cyrillic combining marks alone - so "мой" or "ёлка"
+    found nothing at all on a Mac. Normalizing both the indexed text and the
+    query to NFC makes the two sides comparable; on Windows and Linux, where
+    names are already composed, this is a no-op.
+    """
+    return unicodedata.normalize("NFC", str(ts_value or ""))
 
 
 def TSNormalizePathString(ts_path_value: str | os.PathLike[str]) -> str:
@@ -126,7 +141,8 @@ def TSParseMaybeInt(ts_value: Any) -> int | None:
 
 
 def TSBuildFTSQuery(ts_text: str) -> str:
-    ts_tokens = [ts_token for ts_token in re.split(r"\s+", ts_text.strip()) if ts_token]
+    # NFC on the query side; _TSSyncFTSRow does the same for the indexed text.
+    ts_tokens = [ts_token for ts_token in re.split(r"\s+", TSNormalizeSearchText(ts_text).strip()) if ts_token]
     ts_query_parts: list[str] = []
     for ts_token in ts_tokens:
         ts_clean = ts_token.replace('"', "").replace("'", "")

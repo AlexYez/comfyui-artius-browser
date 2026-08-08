@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,18 @@ from .ts_types import TSHealthIssue
 # ffmpeg/ffprobe spawn without this flag flashes a console window that steals
 # focus. Zero on non-Windows platforms where the flag does not exist.
 TS_SUBPROCESS_CREATIONFLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+
+# macOS only. A ComfyUI started from Finder, a .app bundle or a launch agent
+# does NOT inherit the shell's PATH - a GUI process gets the bare
+# /usr/bin:/bin:/usr/sbin:/sbin - so shutil.which() cannot see a Homebrew or
+# MacPorts ffmpeg even though the user installed one. Without these absolute
+# fallbacks video/audio previews silently stay disabled for anyone who does not
+# launch ComfyUI from a terminal.
+TS_MACOS_TOOL_DIRECTORIES = (
+    "/opt/homebrew/bin",  # Homebrew on Apple Silicon
+    "/usr/local/bin",     # Homebrew on Intel / manual installs
+    "/opt/local/bin",     # MacPorts
+)
 
 
 class TSToolLocator:
@@ -57,6 +70,12 @@ class TSToolLocator:
         for ts_root in self.ts_portable_roots:
             for ts_relative_path in ts_relative_map.get(ts_tool_name, []):
                 ts_candidates.append((ts_root / ts_relative_path).resolve())
+        if sys.platform == "darwin":
+            # Checked after the portable copy: a build that ships its own
+            # ffmpeg should keep using it, and only then do we fall back to
+            # whatever the system package manager installed.
+            for ts_directory in TS_MACOS_TOOL_DIRECTORIES:
+                ts_candidates.append(Path(ts_directory) / ts_tool_name)
         return ts_candidates
 
     def TSInvalidateMissingTools(self) -> None:

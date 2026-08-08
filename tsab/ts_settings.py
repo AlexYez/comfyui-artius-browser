@@ -101,6 +101,14 @@ TS_DEFAULT_PREVIEW_FORMAT = TS_BACKEND_SETTINGS["preview"]["image_format"]
 TS_DEFAULT_PREVIEW_QUALITY = TS_BACKEND_SETTINGS["preview"]["image_quality"]
 TS_DEFAULT_PLACEHOLDER_WIDTH = TS_BACKEND_SETTINGS["preview"]["placeholder_width"]
 TS_DEFAULT_PLACEHOLDER_HEIGHT = TS_BACKEND_SETTINGS["preview"]["placeholder_height"]
+# Characters that make a workflow path unsafe or unusable. ":" is rejected only
+# on Windows: there it opens an NTFS alternate data stream
+# ("foo.json:alt.json" would otherwise pass the ".json" check), while on macOS
+# and Linux it is an ordinary, legal filename character - refusing it there
+# would block deleting a workflow the user can legitimately create. Lives here
+# rather than in ts_workflows so the policy is testable without aiohttp.
+TS_WORKFLOW_PATH_FORBIDDEN_CHARACTERS = frozenset('<>|"?*') | (frozenset(":") if os.name == "nt" else frozenset())
+
 # Version stamp of the stored image prompt-metadata blob. Bumping it makes
 # TSEnsureMetadata re-extract older blobs once, on the next detail view.
 # 5 added seed + split positive/negative, 6 added the model/LoRA list,

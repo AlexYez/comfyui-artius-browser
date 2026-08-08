@@ -6,6 +6,8 @@ from typing import Any, Callable
 from aiohttp import web as TSWeb
 from send2trash import send2trash as TSSendToTrash
 
+from .ts_settings import TS_WORKFLOW_PATH_FORBIDDEN_CHARACTERS
+
 TS_WORKFLOW_PREVIEW_EXTENSIONS = {
     ".png",
     ".jpg",
@@ -26,9 +28,9 @@ def TSGetPromptServerInstance():
     return getattr(PromptServer, "instance", None)
 
 
-# Windows-reserved characters. ":" additionally blocks NTFS alternate data
-# stream names ("foo.json:alt.json" would otherwise pass the ".json" check).
-TS_WORKFLOW_PATH_FORBIDDEN_CHARACTERS = set(':<>|"?*')
+# TS_WORKFLOW_PATH_FORBIDDEN_CHARACTERS is imported from ts_settings: the set
+# is platform-dependent (":" only bites on Windows) and lives there so it can be
+# tested without pulling in aiohttp.
 
 
 def TSNormalizeWorkflowRelativePath(ts_relative_path: str) -> str:

@@ -50,6 +50,22 @@ class TSStoragePaths:
         return (ts_base_directory / ts_path).resolve()
 
     @staticmethod
+    def _TSFindSameDirectoryRoot(ts_roots: list[TSRootDefinition], ts_candidate: Path) -> TSRootDefinition | None:
+        """The already-registered root pointing at the same directory, if any.
+
+        samefile() compares inode identity, so it sees through a differing
+        spelling on a case-insensitive volume and through a symlinked path -
+        neither of which a string comparison catches.
+        """
+        for ts_root in ts_roots:
+            try:
+                if ts_candidate.samefile(ts_root.ts_path):
+                    return ts_root
+            except OSError:
+                continue
+        return None
+
+    @staticmethod
     def _TSStableCustomRootId(ts_custom_path: Path) -> str:
         ts_path_key = TSNormalizePathString(ts_custom_path).encode("utf-8")
         return f"custom_{hashlib.blake2b(ts_path_key, digest_size=8).hexdigest()}"
@@ -137,6 +153,18 @@ class TSStoragePaths:
                 TSLogVerbose(
                     "storage.root.custom.skipped",
                     reason="path_missing",
+                    path=str(ts_custom_path),
+                )
+                continue
+            if self._TSFindSameDirectoryRoot(ts_roots, ts_custom_path) is not None:
+                # macOS and Windows compare filenames case-insensitively, so
+                # "/Users/x/Photos" and "/Users/x/photos" are one directory but
+                # two different strings - and the id is derived from the
+                # string. Indexing it twice would duplicate every card and
+                # split favorites between the two spellings.
+                TSLogVerbose(
+                    "storage.root.custom.skipped",
+                    reason="duplicate_directory",
                     path=str(ts_custom_path),
                 )
                 continue

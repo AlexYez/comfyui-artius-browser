@@ -54,6 +54,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sections; `INTEGRATION.md` is now single-language like the rest of the
   public docs.
 
+### Fixed (macOS)
+
+- **Search found nothing for names with `й` or `ё`.** macOS stores filenames
+  decomposed, so `мой` on disk is `и` + a combining mark while the search box
+  sends the composed form; SQLite's tokenizer folds Latin accents but not
+  Cyrillic ones. Indexed text and queries are both normalized now. Existing
+  libraries rebuild their search index once at startup (schema 13, ~0.3 s for
+  6 000 assets, no re-scan, favorites untouched).
+- **Video and audio previews stayed disabled for Homebrew installs.** ComfyUI
+  started from Finder or a `.app` does not inherit the shell `PATH`, so ffmpeg
+  in `/opt/homebrew/bin` was invisible. Those locations (plus `/usr/local/bin`
+  and MacPorts) are now checked directly.
+- **Ghost cards from external drives.** macOS writes an `._name` sidecar beside
+  every file copied to exFAT/FAT32/SMB volumes; `._render.png` was indexed as a
+  broken image. Those sidecars are skipped, as are macOS packages (`.app`,
+  `.photoslibrary`, `.fcpbundle`, …) which a walker sees as ordinary folders.
+- Workflows whose name contains `:` — legal on macOS — could not be deleted.
+  That character is only rejected on Windows now, where it opens an NTFS
+  alternate data stream.
+- `Cmd`+`←`/`→` (Back/Forward) no longer gets swallowed by the asset grid.
+- The same folder added twice as a custom root under different capitalisation
+  is recognised as one directory instead of indexing everything twice.
+
 ### Fixed
 
 - `check_release.py` failed on the integration commits: the `studio.mode.*`
