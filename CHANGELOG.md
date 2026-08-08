@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-08-08
+
+Two independent lines of work. The browser gained a public integration surface
+— other ComfyUI packs can now embed the panel, publish their own commands on an
+asset, and tag the renders they produce — all of it optional in both
+directions: installed alone, the browser behaves exactly as in 1.11.0. And a
+macOS compatibility audit fixed three defects that made the extension quietly
+worse on a Mac (search blind to Cyrillic filenames, previews disabled when
+ffmpeg came from Homebrew, ghost cards from external drives).
+
+Existing libraries rebuild their search index once at startup (schema 13). No
+re-scan, no lost favorites, about 0.3 s for 6 000 assets.
+
 ### Added
 
 - `window.tsArtiusBrowser.mountPanel(host)` — embed API that mounts the
