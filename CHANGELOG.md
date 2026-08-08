@@ -36,6 +36,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bumped to 7 so stored blobs re-extract; images indexed earlier pick the tag
   up on their next detail view or after Rebuild Cache.
   Added 2026-08-03 by the AI agent building `comfyui-timesaver`.
+- Card buttons for external actions: `R` restores the studio session that made
+  a render, `S` sends a picture into the studio's current mode. Each renders
+  only while a pack publishes the matching action id (`R` additionally needs
+  the asset to carry a studio tag), so with the browser installed alone the
+  card is unchanged. `S` is dormant today — the studio withdrew
+  `ts-image-studio.use-source`; the branch stays for the next publisher.
+
+### Documentation
+
+- `CLAUDE.md` now covers the integration: §36 states the rules for the three
+  seams, §4 lists them among the contracts that may not change silently
+  (they live in another repository's code path, where a rename fails without
+  an import error), §15 documents the `ts_studio` chunk, §21 the conditional
+  `S`/`R` buttons, §9 the runtime-built `studio.mode.*` keys, plus rows in
+  both appendices. The README documents the two buttons in all ten language
+  sections; `INTEGRATION.md` is now single-language like the rest of the
+  public docs.
+
+### Fixed
+
+- `check_release.py` failed on the integration commits: the `studio.mode.*`
+  keys are built at runtime, so the used-key regex could not see them and
+  called them unused. They are allowlisted now, the way the `type.*` chips
+  already were.
+- The `studio` card field is part of the asset-card contract check, so the
+  backend can no longer drop a key the grid reads.
+- Documented-version parity now also covers `TS_PROMPT_PARTS_VERSION` and
+  scans `INTEGRATION.md`.
 
 ## [1.11.0] - 2026-08-01
 

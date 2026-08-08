@@ -123,6 +123,7 @@ Then **restart ComfyUI** and **hard refresh** the browser with `Ctrl+F5`.
 | `W` | Copy workflow *(only when the PNG actually has workflow data)* |
 | `D` | Download |
 | `X` | Send to system trash *(only where the root allows deletion)* |
+| `S` `R` | Appear only when another installed pack publishes an action for the asset (e.g. TS Image Studio: *use in the studio* / *restore the session that made it*) |
 
 #### Workflow card buttons
 
@@ -355,6 +356,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | `W` | Скопировать workflow *(только если PNG реально содержит workflow)* |
 | `D` | Скачать |
 | `X` | В системную корзину *(только там, где root разрешает удаление)* |
+| `S` `R` | Появляются, только если другой установленный пак публикует действие для ассета (например, TS Image Studio: *использовать в студии* / *восстановить сессию, в которой он сделан*) |
 
 #### Кнопки на карточке workflow
 
@@ -508,6 +510,7 @@ Luego **reinicia ComfyUI** y haz un **hard refresh** del navegador con `Ctrl+F5`
 | `W` | Copiar workflow *(solo cuando el PNG realmente contiene datos de workflow)* |
 | `D` | Descargar |
 | `X` | Enviar a la papelera *(solo donde el root permite borrado)* |
+| `S` `R` | Aparecen solo cuando otro pack instalado publica una acción para el asset (p. ej. TS Image Studio: *usar en el estudio* / *restaurar la sesión que lo creó*) |
 
 #### Botones de la tarjeta de workflow
 
@@ -737,6 +740,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | `W` | 复制 workflow *(仅当 PNG 真正包含 workflow 数据时)* |
 | `D` | 下载 |
 | `X` | 移至系统回收站 *(仅在 root 允许删除的位置)* |
+| `S` `R` | 仅当另一个已安装的扩展为该素材发布动作时出现（例如 TS Image Studio：*在工作室中使用* / *恢复生成它的会话*） |
 
 #### Workflow 卡片按钮
 
@@ -967,6 +971,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | `W` | workflow をコピー *(PNG が実際に workflow データを持っている場合のみ)* |
 | `D` | ダウンロード |
 | `X` | システムのゴミ箱へ *(root が削除を許可している場所のみ)* |
+| `S` `R` | 別の導入済みパックがそのアセット向けのアクションを公開している場合のみ表示（例: TS Image Studio の *スタジオで使う* / *作成時のセッションを復元*） |
 
 #### Workflow カードのボタン
 
@@ -1197,6 +1202,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | `W` | workflow 복사 *(PNG 에 실제로 workflow 데이터가 있을 때만)* |
 | `D` | 다운로드 |
 | `X` | 시스템 휴지통으로 *(root 가 삭제를 허용하는 경우에만)* |
+| `S` `R` | 설치된 다른 팩이 해당 에셋용 동작을 게시한 경우에만 표시됩니다 (예: TS Image Studio 의 *스튜디오에서 사용* / *생성 세션 복원*) |
 
 #### Workflow 카드 버튼
 
@@ -1427,6 +1433,7 @@ Danach **ComfyUI neu starten** und im Browser mit `Ctrl+F5` einen **Hard Refresh
 | `W` | Workflow kopieren *(nur wenn das PNG tatsächlich Workflow-Daten enthält)* |
 | `D` | Herunterladen |
 | `X` | In den Systempapierkorb *(nur dort, wo das Root das Löschen erlaubt)* |
+| `S` `R` | Erscheinen nur, wenn ein anderes installiertes Pack eine Aktion für das Asset veröffentlicht (z. B. TS Image Studio: *im Studio verwenden* / *die erzeugende Sitzung wiederherstellen*) |
 
 #### Buttons auf Workflow-Karten
 
@@ -1657,6 +1664,7 @@ Poi **riavvia ComfyUI** e fai un **hard refresh** del browser con `Ctrl+F5`.
 | `W` | Copia workflow *(solo quando il PNG contiene davvero dati di workflow)* |
 | `D` | Scarica |
 | `X` | Invia al cestino di sistema *(solo dove il root permette l'eliminazione)* |
+| `S` `R` | Compaiono solo quando un altro pack installato pubblica un'azione per l'asset (es. TS Image Studio: *usa nello studio* / *ripristina la sessione che l'ha creato*) |
 
 #### Pulsanti della card workflow
 
@@ -1888,6 +1896,7 @@ Puis **redémarrez ComfyUI** et faites un **rafraîchissement forcé** du naviga
 | `W` | Copier le workflow *(uniquement quand le PNG contient vraiment des données de workflow)* |
 | `D` | Télécharger |
 | `X` | Envoyer à la corbeille système *(uniquement là où le root autorise la suppression)* |
+| `S` `R` | N'apparaissent que si un autre pack installé publie une action pour l'asset (par ex. TS Image Studio : *utiliser dans le studio* / *restaurer la session d'origine*) |
 
 #### Boutons de la carte workflow
 
@@ -2119,6 +2128,7 @@ Depois **reinicia o ComfyUI** e faz um **hard refresh** no browser com `Ctrl+F5`
 | `W` | Copiar workflow *(só quando o PNG realmente contém dados de workflow)* |
 | `D` | Transferir |
 | `X` | Enviar para o lixo do sistema *(só onde o root permite eliminação)* |
+| `S` `R` | Aparecem apenas quando outro pack instalado publica uma ação para o asset (ex.: TS Image Studio: *usar no estúdio* / *restaurar a sessão que o criou*) |
 
 #### Botões do card de workflow
 

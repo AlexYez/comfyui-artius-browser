@@ -65,22 +65,22 @@ Where they surface:
   | `S` | `ts-image-studio.use-source` | the action is published — **nobody publishes it today** |
   | `R` | `ts-image-studio.recreate` | published **and** the asset has a studio tag |
 
-  **Про `S` — чтобы не искать причину заново (2026-08-05).** Кнопка исчезла с
-  карточек не потому, что здесь что-то сломалось: студия перестала публиковать
-  действие `ts-image-studio.use-source`. Владелец: кнопка обещала больше, чем
-  делала (казалось, что кладёт картинку в любой раздел, а по факту попадала в
-  инпэйнт), а перетаскивания достаточно.
+  **Why `S` is gone from the cards — so nobody re-investigates (2026-08-05).**
+  It did not break here: the studio simply stopped publishing
+  `ts-image-studio.use-source`. Its owner's reasoning: the button promised more
+  than it delivered (it looked as if it dropped the picture into any section
+  while it always landed in inpaint), and dragging already covers the need.
 
-  Ветка кода здесь оставлена нарочно и мертва ровно до тех пор, пока действие
-  снова кто-нибудь не опубликует: механизм общий, и завтра его может занять
-  другой пак. Проверить, что публикуется сейчас, можно одной строкой в консоли
-  страницы:
+  The branch on this side is kept deliberately and stays dormant exactly until
+  someone publishes that id again — the mechanism is generic, and another pack
+  may claim it tomorrow. Check what is published right now with one line in the
+  page console:
 
   ```js
-  window.tsAssetActions.map(a => a.id)   // сейчас: ["ts-image-studio.recreate"]
+  window.tsAssetActions.map(a => a.id)   // today: ["ts-image-studio.recreate"]
   ```
 
-  Со стороны студии это `publishAssetAction(...)` в
+  On the studio's side this is `publishAssetAction(...)` in
   `js/image/studio/ts-image-studio.js`.
 
 Rules the browser follows:
