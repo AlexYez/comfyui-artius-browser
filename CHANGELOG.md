@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-08-09
+
+Synchronised video compare, rebuilt. Selecting two, three or four clips now
+plays them against one shared clock that holds them within a few hundredths of
+a second of each other, waits together when one has to buffer, and steps frame
+by frame exactly. The mode is also findable now: a Compare button sits in the
+toolbar instead of the feature hiding behind a double-click.
+
+### Added
+
+- Compare now takes **three** clips as well as two or four, and a **Compare**
+  button sits in the toolbar next to Delete Selected. It stays visible while
+  the selection is too small — disabled, with a tooltip explaining that 2-4
+  images or videos can be compared — because the feature was previously
+  reachable only by knowing to double-click one of several selected cards.
+  Three clips are laid out in a single row so all three keep the same width.
+
+### Fixed
+
+- **Videos in compare mode drifted apart and appeared to freeze.** Three
+  separate causes, all fixed:
+  - The correction loop ran on `requestAnimationFrame`, which a browser stops
+    entirely once its tab is not in the foreground. The clips kept decoding
+    while nothing was correcting them, so they drifted for as long as you were
+    looking elsewhere and then jumped when you came back. It runs on a timer
+    now, and re-aligns once when the tab becomes visible again.
+  - Any drift at all was corrected by seeking, and a seek on a playing video
+    flushes its decoder — the "freeze" was often the fix, not the fault. Drift
+    under 350 ms is now absorbed by nudging playback rate, which is invisible;
+    seeking is reserved for drift no viewer would miss anyway.
+  - A clip that had to buffer was left behind by the others. The group now
+    waits together (with a "Syncing clips..." note) and restarts together. A
+    clip that is shorter than the rest, or that the browser cannot decode at
+    all, is parked instead of holding everyone up.
+- **Frame stepping could stall or skip.** Stepping added ±1/fps to the raw
+  playback position, and rounding could land back inside the frame it started
+  on. Steps are now computed from the frame index, so each click moves exactly
+  one frame, in both directions, and every clip lands on the same timestamp.
+  Pausing or scrubbing snaps the group to an exact common position.
+
+### Changed
+
+- Importing the package no longer does anything. The runtime — storage
+  directories, the SQLite connection, the route table, the scan service — is
+  now built in `ComfyExtension.on_load()`, ComfyUI's designated one-time
+  initialization hook, which the host awaits immediately after
+  `comfy_entrypoint()` and still before the HTTP server starts serving. A
+  failure during startup is now reported against this extension instead of
+  surfacing as an unrelated import error.
+- Declared frontend compatibility: `comfyui-frontend-package>=1.42.10`, the
+  version ComfyUI 0.19.0 ships (matching the `requires-comfyui` floor), tested
+  up to 1.48.7. A lower bound only — the frontend can be switched
+  independently of the backend, and an upper bound would let installing this
+  pack downgrade a whole ComfyUI frontend.
+- `.comfyignore` is tracked, so it finally applies. Being itself gitignored, it
+  never reached the checkout the registry archive is built from and had no
+  effect; it now lists the one dev-only path that IS tracked (`.github/`)
+  instead of paths that were never published in the first place.
+
 ## [1.12.0] - 2026-08-08
 
 Two independent lines of work. The browser gained a public integration surface

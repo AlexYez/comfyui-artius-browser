@@ -7,6 +7,7 @@
 ![Version](https://img.shields.io/github/v/release/AlexYez/comfyui-artius-browser?style=flat-square&label=version&color=5fa14f)
 ![License](https://img.shields.io/github/license/AlexYez/comfyui-artius-browser?style=flat-square&color=8a7fc8)
 ![ComfyUI](https://img.shields.io/badge/ComfyUI-%E2%89%A50.19.0-blue?style=flat-square)
+![Frontend](https://img.shields.io/badge/frontend-1.42.10%20%E2%80%93%201.48.7-blue?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)
 
@@ -41,7 +42,7 @@
 | | |
 |---|---|
 | 🖼️ **Images** | Cached thumbnails, PNG prompt + workflow extraction, lightbox with wipe / 2×2 grid compare |
-| 🎬 **Videos** | Frame-stepping, codec / FPS / duration / audio info, sync compare for 2 or 4 clips |
+| 🎬 **Videos** | Frame-stepping, codec / FPS / duration / audio info, sync compare for 2-4 clips |
 | 🎵 **Audio** | Waveform preview, transport controls, channel layout |
 | 🎲 **3D** | Native ComfyUI 3D viewer in the lightbox, captured 3D thumbnails |
 | 📜 **Workflows** | Reads ComfyUI's native workflow folder, sidecar previews, drag-to-load |
@@ -169,7 +170,7 @@ exactly like files picked from the node UI. The `Workflows` tab reads
 - Inline playback with current-frame display
 - ⬅️ / ➡️ frame-stepping
 - Codec, FPS, duration, bitrate, format, audio-track info
-- Sync compare for 2 or 4 selected videos with one shared transport
+- Sync compare for 2, 3 or 4 selected videos with one shared transport (**Compare** button in the toolbar)
 
 </details>
 
@@ -282,7 +283,7 @@ See [CHANGELOG.md](CHANGELOG.md). Format: [Keep a Changelog](https://keepachange
 | | |
 |---|---|
 | 🖼️ **Картинки** | Кэш-превью, чтение PNG `Prompt` + `Workflow`, лайтбокс с wipe / 2×2 grid сравнением |
-| 🎬 **Видео** | Покадровая навигация, кодек / FPS / длительность / инфо аудиодорожки, синхронное сравнение 2 или 4 клипов |
+| 🎬 **Видео** | Покадровая навигация, кодек / FPS / длительность / инфо аудиодорожки, синхронное сравнение 2-4 клипов |
 | 🎵 **Аудио** | Waveform-превью, плеер, channel layout |
 | 🎲 **3D** | Нативный 3D viewer в лайтбоксе, фронтенд-сгенерированные 3D-thumbnail'ы |
 | 📜 **Workflows** | Читает нативную папку workflow, sidecar-превью, drag-to-load |
@@ -431,7 +432,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | | |
 |---|---|
 | 🖼️ **Imágenes** | Miniaturas cacheadas, extracción de `Prompt` + `Workflow` del PNG, lightbox con comparación wipe / 2×2 |
-| 🎬 **Vídeos** | Navegación cuadro a cuadro, info de códec / FPS / duración / audio, comparación sincronizada de 2 o 4 clips |
+| 🎬 **Vídeos** | Navegación cuadro a cuadro, info de códec / FPS / duración / audio, comparación sincronizada de 2-4 clips |
 | 🎵 **Audio** | Previsualización de forma de onda, controles de transporte, layout de canales |
 | 🎲 **3D** | Viewer 3D nativo de ComfyUI dentro del lightbox, miniaturas 3D capturadas |
 | 📜 **Workflows** | Lee la carpeta de workflows nativa de ComfyUI, previews sidecar, drag-to-load |
@@ -554,7 +555,7 @@ Los archivos 3D se preparan automáticamente en el almacenamiento de input de Co
 - Reproducción inline con visualización del cuadro actual
 - ⬅️ / ➡️ navegación cuadro a cuadro
 - Códec, FPS, duración, bitrate, formato, info de pista de audio
-- Comparación sincronizada de 2 o 4 vídeos seleccionados con un transporte compartido
+- Comparación sincronizada de 2, 3 o 4 vídeos seleccionados con un transporte compartido (botón **Compare**)
 
 </details>
 
@@ -661,7 +662,7 @@ Consulta [CHANGELOG.md](CHANGELOG.md). Formato: [Keep a Changelog](https://keepa
 | | |
 |---|---|
 | 🖼️ **图片** | 缩略图缓存、提取 PNG 中的 `Prompt` 与 `Workflow`、灯箱支持 wipe / 2×2 网格对比 |
-| 🎬 **视频** | 逐帧导航、显示编码器 / FPS / 时长 / 音频信息、2 或 4 个剪辑的同步对比 |
+| 🎬 **视频** | 逐帧导航、显示编码器 / FPS / 时长 / 音频信息、2-4 个剪辑的同步对比 |
 | 🎵 **音频** | 波形预览、播放控制、声道布局 |
 | 🎲 **3D** | 灯箱中嵌入 ComfyUI 原生 3D 查看器、自动捕获 3D 缩略图 |
 | 📜 **Workflows** | 直接读取 ComfyUI 原生 workflow 文件夹、sidecar 预览、拖拽即可加载 |
@@ -784,7 +785,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 - 内联播放并显示当前帧
 - ⬅️ / ➡️ 逐帧导航
 - 编码器、FPS、时长、比特率、格式、音轨信息
-- 选中的 2 或 4 个视频可同步对比,共享一个传输控件
+- 选中的 2、3 或 4 个视频可同步对比,共享一个传输控件(工具栏 **Compare** 按钮)
 
 </details>
 
@@ -892,7 +893,7 @@ ComfyUI/output/.ts_artius_browser/
 | | |
 |---|---|
 | 🖼️ **画像** | キャッシュ済みサムネイル、PNG の `Prompt` + `Workflow` 抽出、ライトボックスでの wipe / 2×2 グリッド比較 |
-| 🎬 **動画** | フレーム単位のナビゲーション、コーデック / FPS / 長さ / オーディオ情報、2 または 4 クリップの同期比較 |
+| 🎬 **動画** | フレーム単位のナビゲーション、コーデック / FPS / 長さ / オーディオ情報、2〜4 クリップの同期比較 |
 | 🎵 **音声** | 波形プレビュー、再生コントロール、チャンネルレイアウト |
 | 🎲 **3D** | ライトボックス内でネイティブ ComfyUI 3D ビューアー、キャプチャした 3D サムネイル |
 | 📜 **Workflows** | ComfyUI ネイティブの workflow フォルダを直接読み込み、サイドカープレビュー、ドラッグで読み込み |
@@ -1015,7 +1016,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 - インライン再生、現在のフレーム表示付き
 - ⬅️ / ➡️ フレーム単位のナビゲーション
 - コーデック、FPS、長さ、ビットレート、フォーマット、音声トラック情報
-- 選択した 2 または 4 個の動画を、共有トランスポートで同期比較
+- 選択した 2〜4 個の動画を、共有トランスポートで同期比較(ツールバーの **Compare** ボタン)
 
 </details>
 
@@ -1123,7 +1124,7 @@ ComfyUI/output/.ts_artius_browser/
 | | |
 |---|---|
 | 🖼️ **이미지** | 캐시된 썸네일, PNG `Prompt` + `Workflow` 추출, 라이트박스의 wipe / 2×2 그리드 비교 |
-| 🎬 **비디오** | 프레임 단위 탐색, 코덱 / FPS / 길이 / 오디오 정보, 2 또는 4 개 클립의 동기화 비교 |
+| 🎬 **비디오** | 프레임 단위 탐색, 코덱 / FPS / 길이 / 오디오 정보, 2-4 개 클립의 동기화 비교 |
 | 🎵 **오디오** | 파형 미리보기, 재생 컨트롤, 채널 레이아웃 |
 | 🎲 **3D** | 라이트박스 내 ComfyUI 네이티브 3D 뷰어, 캡처된 3D 썸네일 |
 | 📜 **Workflows** | ComfyUI 네이티브 workflow 폴더를 직접 읽음, sidecar 미리보기, 드래그로 로드 |
@@ -1246,7 +1247,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 - 인라인 재생 + 현재 프레임 표시
 - ⬅️ / ➡️ 프레임 단위 탐색
 - 코덱, FPS, 길이, 비트레이트, 형식, 오디오 트랙 정보
-- 선택된 2 또는 4 개의 비디오를 공유 transport 로 동기화 비교
+- 선택된 2-4 개의 비디오를 공유 transport 로 동기화 비교 (툴바 **Compare** 버튼)
 
 </details>
 
@@ -1354,7 +1355,7 @@ ComfyUI/output/.ts_artius_browser/
 | | |
 |---|---|
 | 🖼️ **Bilder** | Gecachte Thumbnails, Extraktion von PNG `Prompt` + `Workflow`, Lightbox mit Wipe / 2×2-Grid-Vergleich |
-| 🎬 **Videos** | Frame-genaue Navigation, Codec- / FPS- / Dauer- / Audio-Infos, synchroner Vergleich von 2 oder 4 Clips |
+| 🎬 **Videos** | Frame-genaue Navigation, Codec- / FPS- / Dauer- / Audio-Infos, synchroner Vergleich von 2-4 Clips |
 | 🎵 **Audio** | Waveform-Vorschau, Transport-Steuerung, Channel-Layout |
 | 🎲 **3D** | Nativer ComfyUI 3D-Viewer in der Lightbox, automatisch erfasste 3D-Thumbnails |
 | 📜 **Workflows** | Liest den nativen Workflow-Ordner von ComfyUI direkt, Sidecar-Previews, Drag-to-Load |
@@ -1477,7 +1478,7 @@ Dieses Pack erfindet keine Loader neu — es leitet Drag-and-Drop an die nativen
 - Inline-Wiedergabe mit Anzeige des aktuellen Frames
 - ⬅️ / ➡️ Frame-für-Frame-Navigation
 - Codec, FPS, Dauer, Bitrate, Format, Audio-Track-Infos
-- Synchroner Vergleich von 2 oder 4 ausgewählten Videos mit einer gemeinsamen Transport-Steuerung
+- Synchroner Vergleich von 2, 3 oder 4 ausgewählten Videos mit einer gemeinsamen Transport-Steuerung (**Compare**-Schaltflache)
 
 </details>
 
@@ -1585,7 +1586,7 @@ Siehe [CHANGELOG.md](CHANGELOG.md). Format: [Keep a Changelog](https://keepachan
 | | |
 |---|---|
 | 🖼️ **Immagini** | Miniature in cache, estrazione di `Prompt` + `Workflow` dal PNG, lightbox con confronto wipe / 2×2 |
-| 🎬 **Video** | Navigazione frame per frame, info su codec / FPS / durata / audio, confronto sincronizzato di 2 o 4 clip |
+| 🎬 **Video** | Navigazione frame per frame, info su codec / FPS / durata / audio, confronto sincronizzato di 2-4 clip |
 | 🎵 **Audio** | Anteprima della forma d'onda, controlli di riproduzione, layout dei canali |
 | 🎲 **3D** | Viewer 3D nativo di ComfyUI nel lightbox, miniature 3D catturate |
 | 📜 **Workflows** | Legge la cartella di workflow nativa di ComfyUI, anteprime sidecar, drag-to-load |
@@ -1708,7 +1709,7 @@ I file 3D vengono automaticamente messi in staging nello storage di input di Com
 - Riproduzione inline con visualizzazione del frame corrente
 - ⬅️ / ➡️ navigazione frame per frame
 - Codec, FPS, durata, bitrate, formato, info traccia audio
-- Confronto sincronizzato di 2 o 4 video selezionati con un transport condiviso
+- Confronto sincronizzato di 2, 3 o 4 video selezionati con un transport condiviso (pulsante **Compare**)
 
 </details>
 
@@ -1817,7 +1818,7 @@ Vedi [CHANGELOG.md](CHANGELOG.md). Formato: [Keep a Changelog](https://keepachan
 | | |
 |---|---|
 | 🖼️ **Images** | Miniatures en cache, extraction de `Prompt` + `Workflow` du PNG, lightbox avec comparaison wipe / 2×2 |
-| 🎬 **Vidéos** | Navigation image par image, infos codec / FPS / durée / audio, comparaison synchronisée de 2 ou 4 clips |
+| 🎬 **Vidéos** | Navigation image par image, infos codec / FPS / durée / audio, comparaison synchronisée de 2-4 clips |
 | 🎵 **Audio** | Aperçu de la forme d'onde, contrôles de transport, layout des canaux |
 | 🎲 **3D** | Viewer 3D natif de ComfyUI dans la lightbox, miniatures 3D capturées |
 | 📜 **Workflows** | Lit le dossier de workflows natif de ComfyUI, aperçus sidecar, drag-to-load |
@@ -1940,7 +1941,7 @@ Les fichiers 3D sont automatiquement préparés dans le stockage d'input de Comf
 - Lecture inline avec affichage de l'image courante
 - ⬅️ / ➡️ navigation image par image
 - Codec, FPS, durée, débit, format, infos piste audio
-- Comparaison synchronisée de 2 ou 4 vidéos sélectionnées avec un transport partagé
+- Comparaison synchronisée de 2, 3 ou 4 vidéos sélectionnées avec un transport partagé (bouton **Compare**)
 
 </details>
 
@@ -2049,7 +2050,7 @@ Voir [CHANGELOG.md](CHANGELOG.md). Format : [Keep a Changelog](https://keepachan
 | | |
 |---|---|
 | 🖼️ **Imagens** | Thumbnails em cache, extracção de `Prompt` + `Workflow` do PNG, lightbox com comparação wipe / 2×2 |
-| 🎬 **Vídeos** | Navegação frame a frame, info de codec / FPS / duração / áudio, comparação sincronizada de 2 ou 4 clips |
+| 🎬 **Vídeos** | Navegação frame a frame, info de codec / FPS / duração / áudio, comparação sincronizada de 2-4 clips |
 | 🎵 **Áudio** | Pré-visualização de forma de onda, controlos de reprodução, layout de canais |
 | 🎲 **3D** | Viewer 3D nativo do ComfyUI no lightbox, thumbnails 3D capturados |
 | 📜 **Workflows** | Lê directamente a pasta nativa de workflows do ComfyUI, previews sidecar, drag-to-load |
@@ -2172,7 +2173,7 @@ Os ficheiros 3D são automaticamente preparados no armazenamento de input do Com
 - Reprodução inline com display do frame actual
 - ⬅️ / ➡️ navegação frame a frame
 - Codec, FPS, duração, bitrate, formato, info da pista de áudio
-- Comparação sincronizada de 2 ou 4 vídeos seleccionados com um transport partilhado
+- Comparação sincronizada de 2, 3 ou 4 vídeos seleccionados com um transport partilhado (botão **Compare**)
 
 </details>
 

@@ -1,0 +1,14 @@
+# Excluded from the archive published to the Comfy Registry.
+# comfy-cli respects this file (gitwildmatch syntax, like .gitignore).
+#
+# The registry archive is built by .github/workflows/publish_action.yml from a
+# clean checkout of the PUBLIC repository, so it only ever contains tracked
+# files. Development-only assets (tests/, scripts/, doc/, CLAUDE.md,
+# project_memory/, .pre-commit-config.yaml) are untracked and therefore never
+# reach that checkout — listing them here would have no effect and would only
+# suggest the archive is filtered more than it is.
+#
+# That leaves one tracked path that end users have no use for:
+
+# CI and release automation.
+.github/

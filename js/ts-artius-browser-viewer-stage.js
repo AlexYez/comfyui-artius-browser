@@ -48,7 +48,7 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                             return `
                                 <div class="ts-video-compare-card" data-primary="${String(tsPrimary)}">
                                     <div class="ts-video-compare-label" title="${tsDeps.escapeAttribute(tsCompareItem.filename || tsVideoLabel)}">${tsDeps.escapeHTML(tsCompareItem.filename || tsVideoLabel)}</div>
-                                    <video class="ts-video-compare-video ts-compare-video" data-primary="${String(tsPrimary)}" src="${tsCompareURL}" ${tsPrimary ? "" : "muted"} playsinline preload="metadata"></video>
+                                    <video class="ts-video-compare-video ts-compare-video" data-primary="${String(tsPrimary)}" src="${tsCompareURL}" ${tsPrimary ? "" : "muted"} playsinline preload="auto"></video>
                                 </div>
                             `;
                         }).join("")}
@@ -59,6 +59,7 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                             <input class="ts-video-seek" type="range" min="0" max="0" step="0.001" value="0">
                             <div class="ts-video-time">0:00 / 0:00</div>
                         </div>
+                        <div class="ts-video-compare-status" data-active="false" role="status"></div>
                         <div class="ts-video-stepper">
                             <button class="ts-video-step ts-video-prev-frame" type="button">${tsDeps.t("button.prevFrame", "Previous Frame")}</button>
                             <div class="ts-video-frame">${tsDeps.t("label.currentFrame", "Frame")} 0</div>

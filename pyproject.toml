@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-artius-browser"
 description = "Timesaver Artius Browser: lightweight asset browser for modern ComfyUI workflows."
-version = "1.12.0"
+version = "1.13.0"
 requires-python = ">=3.10"
 license = { file = "LICENSE.txt" }
 readme = "README.md"
@@ -9,6 +9,15 @@ dependencies = [
     "blake3>=1.0.5",
     "send2trash>=1.8.3",
     "typing_extensions>=4.8.0",
+    # Frontend compatibility, declared the way the Comfy Registry reads it. The
+    # frontend can be switched independently of the ComfyUI backend, so state
+    # the floor explicitly: 1.42.10 is what ComfyUI 0.19.0 ships, matching the
+    # requires-comfyui floor below. Tested up to 1.48.7 (ComfyUI 0.31.1).
+    # A LOWER BOUND ONLY, deliberately — an upper bound would let an install
+    # downgrade the user's whole ComfyUI frontend. Intentionally absent from
+    # requirements.txt for the same reason: that file is what pip actually
+    # installs, and this pack must never move a user's frontend.
+    "comfyui-frontend-package>=1.42.10",
 ]
 
 [project.urls]

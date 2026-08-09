@@ -26,6 +26,9 @@ import {
 } from "./ts-artius-browser-viewer-meta.js";
 import {
     tsIsViewerTypedCompareMode,
+    tsResolveCompareSyncCorrection,
+    tsResolveVideoFrameIndex,
+    tsResolveVideoFrameTime,
     tsSyncViewerItemsFromSource,
 } from "./ts-artius-browser-viewer-state.js";
 import { tsBuildStageMarkup } from "./ts-artius-browser-viewer-stage.js";
@@ -523,6 +526,11 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     min-width: 0;
                     min-height: 0;
                 }
+                /* Same reason as the video grid: 2+1 would render the odd
+                   image at twice the width of the other two. */
+                .ts-image-compare-grid[data-count="3"] {
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
+                }
                 .ts-image-compare-card {
                     min-width: 0;
                     min-height: 0;
@@ -549,6 +557,12 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 }
                 .ts-video-compare-shell[data-count="2"] .ts-video-compare-grid {
                     grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+                /* Three clips sit in one row: a 2+1 grid would give the odd
+                   clip twice the width of the other two and make the sizes
+                   incomparable, which is the whole point of the mode. */
+                .ts-video-compare-shell[data-count="3"] .ts-video-compare-grid {
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
                 }
                 .ts-video-compare-shell[data-count="4"] .ts-video-compare-grid {
                     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -584,8 +598,20 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 .ts-video-compare-shell[data-count="2"] .ts-video-compare-video {
                     max-height: min(78vh, calc(100dvh - 120px));
                 }
+                .ts-video-compare-shell[data-count="3"] .ts-video-compare-video {
+                    max-height: min(70vh, calc(100dvh - 140px));
+                }
                 .ts-video-compare-shell[data-count="4"] .ts-video-compare-video {
                     max-height: min(35vh, calc((100dvh - 160px) / 2));
+                }
+                .ts-video-compare-status {
+                    min-height: 14px;
+                    text-align: center;
+                    color: var(--ts-text-muted);
+                    font: 500 11px/1.3 inherit;
+                }
+                .ts-video-compare-status[data-active="false"] {
+                    visibility: hidden;
                 }
                 .ts-video-compare-controls {
                     width: min(100%, 1040px);
@@ -721,10 +747,17 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     display: none;
                 }
                 @media (max-width: 1080px) {
-                    .ts-video-compare-grid {
+                    /* The per-count rules above win on specificity, so the
+                       narrow layout has to restate them or a 3-up row would
+                       survive on a phone. */
+                    .ts-video-compare-grid,
+                    .ts-video-compare-shell[data-count="2"] .ts-video-compare-grid,
+                    .ts-video-compare-shell[data-count="3"] .ts-video-compare-grid,
+                    .ts-video-compare-shell[data-count="4"] .ts-video-compare-grid {
                         grid-template-columns: minmax(0, 1fr);
                     }
                     .ts-video-compare-video,
+                    .ts-video-compare-shell[data-count="3"] .ts-video-compare-video,
                     .ts-video-compare-shell[data-count="4"] .ts-video-compare-video {
                         max-height: min(32vh, calc(100dvh - 320px));
                     }
@@ -1272,8 +1305,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return Number.isFinite(tsFPS) && tsFPS > 0 ? tsFPS : 30;
         };
         const tsFormatFrameText = () => {
-            const tsFPS = tsResolveFPS();
-            const tsFrameIndex = Math.max(0, Math.round(Number(tsVideo.currentTime || 0) * tsFPS));
+            const tsFrameIndex = tsResolveVideoFrameIndex(tsVideo.currentTime, tsResolveFPS());
             return `${this.tsT("label.currentFrame", "Frame")} ${tsFrameIndex}`;
         };
         const tsUpdateFrameLabel = () => {
@@ -1300,14 +1332,13 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             }
         };
         const tsStepFrame = (tsDirection) => {
-            const tsFPS = tsResolveFPS();
-            const tsFrameDuration = 1 / tsFPS;
-            const tsDuration = Number(tsVideo.duration || 0);
-            const tsMaxTime = Number.isFinite(tsDuration) && tsDuration > 0 ? Math.max(0, tsDuration - (tsFrameDuration / 2)) : Number.MAX_SAFE_INTEGER;
             tsVideo.pause();
-            const tsDelta = tsDirection >= 0 ? tsFrameDuration : -tsFrameDuration;
-            const tsTargetTime = Math.max(0, Math.min(tsMaxTime, Number(tsVideo.currentTime || 0) + tsDelta));
-            tsVideo.currentTime = tsTargetTime;
+            tsVideo.currentTime = tsResolveVideoFrameTime(
+                tsVideo.currentTime,
+                tsResolveFPS(),
+                tsDirection,
+                Number(tsVideo.duration || 0),
+            );
             tsUpdateFrameLabel();
         };
 
@@ -1374,12 +1405,32 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return null;
         }
 
+        const tsStatusLabel = tsStage?.querySelector(".ts-video-compare-status");
         const tsPrimaryVideo = tsVideos.find((tsVideo) => tsVideo.dataset.primary === "true") || tsVideos[0];
-        const tsSyncThreshold = 0.05;
-        let tsAnimationFrameId = 0;
+        // How far ahead a clip must be buffered before playback resumes. The
+        // stall threshold (readyState < HAVE_FUTURE_DATA) and this one are
+        // deliberately different: with a single threshold the group would
+        // oscillate between running and re-stalling at the boundary.
+        const tsResumeBufferSeconds = 0.25;
+        // The correction loop runs on a timer, NOT on requestAnimationFrame.
+        // rAF stops dead the moment the tab is not the foreground one, while
+        // the clips keep decoding and playing — so the group drifted apart
+        // unwatched and only "froze" (a large catch-up seek) once you came
+        // back. A timer is merely throttled in the background, so the group
+        // stays corrected. 100 ms is far below the 350 ms seek threshold and
+        // still cheap.
+        const tsTickIntervalMs = 100;
+        let tsTickerId = 0;
         let tsSyncing = false;
         let tsSeekDragging = false;
         let tsResumeAfterSeek = false;
+        // What the USER asked for, which is not the same as "the master
+        // element is playing": while the group waits for a slow clip every
+        // element is paused, yet the transport must still read Pause and the
+        // ticker must keep running so playback can resume by itself.
+        let tsDesiredPlaying = false;
+        let tsBuffering = false;
+        let tsTransportKey = "";
 
         tsVideos.forEach((tsVideo) => {
             tsVideo.controls = false;
@@ -1391,8 +1442,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return Number.isFinite(tsFPS) && tsFPS > 0 ? tsFPS : 30;
         };
         const tsFormatFrameText = (tsCurrentTime = Number(tsPrimaryVideo.currentTime || 0)) => {
-            const tsFPS = tsResolveFPS();
-            const tsFrameIndex = Math.max(0, Math.round(Math.max(0, Number(tsCurrentTime) || 0) * tsFPS));
+            const tsFrameIndex = tsResolveVideoFrameIndex(tsCurrentTime, tsResolveFPS());
             return `${this.tsT("label.currentFrame", "Frame")} ${tsFrameIndex}`;
         };
         const tsGetDuration = () => {
@@ -1421,24 +1471,87 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 tsSyncing = false;
             }
         };
-        const tsSyncOtherVideos = (tsForce = false) => {
+        const tsIsAtEnd = (tsVideo) => {
+            const tsDuration = Number(tsVideo.duration || 0);
+            return Number.isFinite(tsDuration)
+                && tsDuration > 0
+                && Number(tsVideo.currentTime || 0) >= tsDuration - 0.001;
+        };
+        const tsBufferedAhead = (tsVideo) => {
+            const tsCurrentTime = Number(tsVideo.currentTime || 0);
+            const tsRanges = tsVideo.buffered;
+            if (!tsRanges) {
+                return 0;
+            }
+            for (let tsIndex = 0; tsIndex < tsRanges.length; tsIndex += 1) {
+                if (tsCurrentTime >= tsRanges.start(tsIndex) - 0.05 && tsCurrentTime <= tsRanges.end(tsIndex)) {
+                    return Math.max(0, tsRanges.end(tsIndex) - tsCurrentTime);
+                }
+            }
+            return 0;
+        };
+        // A clip that failed to load, or that is simply shorter than the rest,
+        // must never hold the group hostage: it counts as ready and is left
+        // parked on its last frame.
+        const tsIsSettled = (tsVideo) => Boolean(tsVideo.error) || tsVideo.ended || tsIsAtEnd(tsVideo);
+        const tsIsVideoReady = (tsVideo) => tsIsSettled(tsVideo)
+            || (tsVideo.readyState >= 3 && tsBufferedAhead(tsVideo) >= tsResumeBufferSeconds);
+        // A clip in the middle of a seek reports readyState 2 for a frame or
+        // two. Counting that as a stall makes the group hold, re-align, seek
+        // again and hold again — an infinite loop that looks exactly like the
+        // freeze this engine exists to prevent.
+        const tsIsVideoStalled = (tsVideo) => !tsIsSettled(tsVideo) && !tsVideo.seeking && tsVideo.readyState < 3;
+        const tsAllVideosReady = () => tsVideos.every(tsIsVideoReady);
+        const tsAnyVideoStalled = () => tsVideos.some(tsIsVideoStalled);
+        // Three ways to converge, because a seek costs nothing while paused and
+        // a lot while playing:
+        //   "auto"   - during playback: nudge with playbackRate, seek only past
+        //              the hard limit.
+        //   "resume" - about to start playing: seek anything outside the
+        //              tolerance, but leave already-aligned clips alone. A
+        //              redundant seek here stalls the decoder and drops the
+        //              group straight back into buffering.
+        //   "align"  - paused (pause, scrub, frame step): snap every clip to
+        //              the exact same timestamp. Nothing is decoding, so this
+        //              is free, and a paused comparison has to be exact.
+        const tsExactAlignSeconds = 0.001;
+        const tsApplySync = (tsMode = "auto") => {
             if (tsSyncing) {
                 return;
             }
-            const tsCurrentTime = Math.max(0, Number(tsPrimaryVideo.currentTime || 0));
-            const tsPlaybackRate = Number(tsPrimaryVideo.playbackRate || 1) || 1;
+            const tsAligning = tsMode === "align";
+            const tsForce = tsAligning || tsMode === "resume";
+            const tsMasterTime = Math.max(0, Number(tsPrimaryVideo.currentTime || 0));
+            const tsMasterRate = Number(tsPrimaryVideo.playbackRate || 1) || 1;
             tsSyncing = true;
             try {
                 tsVideos.forEach((tsVideo) => {
-                    if (tsVideo === tsPrimaryVideo) {
+                    if (tsVideo === tsPrimaryVideo || tsVideo.error) {
                         return;
                     }
-                    if (Math.abs((Number(tsVideo.playbackRate || 1) || 1) - tsPlaybackRate) > 0.001) {
-                        tsVideo.playbackRate = tsPlaybackRate;
+                    if (tsIsAtEnd(tsVideo) && !tsForce) {
+                        return;
                     }
-                    if (tsForce || Math.abs(Number(tsVideo.currentTime || 0) - tsCurrentTime) > tsSyncThreshold) {
+                    const tsDrift = Number(tsVideo.currentTime || 0) - tsMasterTime;
+                    const tsCorrection = tsResolveCompareSyncCorrection(tsDrift, tsMasterRate);
+                    const tsNeedsSeek = tsAligning
+                        ? Math.abs(tsDrift) > tsExactAlignSeconds
+                        : (tsForce ? tsCorrection.tsAction !== "hold" : tsCorrection.tsAction === "seek");
+                    if (tsNeedsSeek) {
+                        // Never stack a seek on a seek — the second one cancels
+                        // the first and the clip visibly stutters in place.
+                        if (!tsVideo.seeking) {
+                            try {
+                                tsVideo.currentTime = tsClampVideoTime(tsVideo, tsMasterTime);
+                            } catch {
+                                // no-op
+                            }
+                        }
+                    }
+                    const tsNextRate = tsForce ? tsMasterRate : tsCorrection.tsPlaybackRate;
+                    if (Math.abs((Number(tsVideo.playbackRate || 1) || 1) - tsNextRate) > 0.001) {
                         try {
-                            tsVideo.currentTime = tsClampVideoTime(tsVideo, tsCurrentTime);
+                            tsVideo.playbackRate = tsNextRate;
                         } catch {
                             // no-op
                         }
@@ -1451,69 +1564,130 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsUpdateTransport = () => {
             const tsDuration = tsGetDuration();
             const tsCurrentTime = Math.max(0, Number(tsPrimaryVideo.currentTime || 0));
-            tsPlayToggleButton.textContent = tsPrimaryVideo.paused ? this.tsT("button.play", "Play") : this.tsT("button.pause", "Pause");
-            tsTimeLabel.textContent = `${tsFormatTime(tsCurrentTime)} / ${tsFormatTime(tsDuration)}`;
-            tsFrameLabel.textContent = tsFormatFrameText(tsCurrentTime);
-            tsSeekInput.max = String(Math.max(0, tsDuration));
-            tsSeekInput.disabled = tsDuration <= 0;
+            const tsTimeText = `${tsFormatTime(tsCurrentTime)} / ${tsFormatTime(tsDuration)}`;
+            const tsFrameText = tsFormatFrameText(tsCurrentTime);
+            const tsToggleText = tsDesiredPlaying ? this.tsT("button.pause", "Pause") : this.tsT("button.play", "Play");
+            const tsStatusText = tsBuffering ? this.tsT("status.compareBuffering", "Syncing clips...") : "";
+            // This runs on every animation frame, so nothing is written back
+            // unless it actually changed — four unconditional textContent
+            // writes per frame are enough to keep the compositor busy.
+            const tsNextKey = `${tsToggleText}|${tsTimeText}|${tsFrameText}|${tsStatusText}|${tsDuration}`;
+            if (tsNextKey !== tsTransportKey) {
+                tsTransportKey = tsNextKey;
+                tsPlayToggleButton.textContent = tsToggleText;
+                tsTimeLabel.textContent = tsTimeText;
+                tsFrameLabel.textContent = tsFrameText;
+                tsSeekInput.max = String(Math.max(0, tsDuration));
+                tsSeekInput.disabled = tsDuration <= 0;
+                if (tsStatusLabel) {
+                    tsStatusLabel.textContent = tsStatusText;
+                    tsStatusLabel.dataset.active = tsStatusText ? "true" : "false";
+                }
+            }
             if (!tsSeekDragging) {
                 tsSeekInput.value = String(tsDuration > 0 ? Math.min(tsDuration, tsCurrentTime) : 0);
             }
         };
         const tsStopTicker = () => {
-            if (tsAnimationFrameId) {
-                window.cancelAnimationFrame(tsAnimationFrameId);
-                tsAnimationFrameId = 0;
+            if (tsTickerId) {
+                window.clearInterval(tsTickerId);
+                tsTickerId = 0;
             }
+        };
+        const tsHoldForBuffering = () => {
+            if (!tsDesiredPlaying || tsBuffering) {
+                return;
+            }
+            tsBuffering = true;
+            // Everything stops together. Letting the healthy clips run on while
+            // one buffers is what produced the drift the old code then tried to
+            // seek away, one hitch at a time.
+            tsSyncing = true;
+            try {
+                tsVideos.forEach((tsVideo) => tsVideo.pause());
+            } finally {
+                tsSyncing = false;
+            }
+            tsUpdateTransport();
+        };
+        const tsStartPlayback = () => {
+            tsApplySync("resume");
+            const tsPlaybackRate = Number(tsPrimaryVideo.playbackRate || 1) || 1;
+            tsVideos.forEach((tsVideo) => {
+                if (tsVideo.error || (tsVideo !== tsPrimaryVideo && tsIsAtEnd(tsVideo))) {
+                    return;
+                }
+                try {
+                    tsVideo.playbackRate = tsPlaybackRate;
+                } catch {
+                    // no-op
+                }
+                const tsPlayPromise = tsVideo.play();
+                if (tsPlayPromise && typeof tsPlayPromise.catch === "function") {
+                    tsPlayPromise.catch(() => {});
+                }
+            });
+            tsUpdateTransport();
         };
         const tsTick = () => {
-            tsSyncOtherVideos(false);
-            tsUpdateTransport();
-            if (!tsPrimaryVideo.paused && !tsPrimaryVideo.ended) {
-                tsAnimationFrameId = window.requestAnimationFrame(tsTick);
-            } else {
-                tsAnimationFrameId = 0;
+            if (tsDesiredPlaying) {
+                if (tsBuffering) {
+                    if (tsAllVideosReady()) {
+                        tsBuffering = false;
+                        tsStartPlayback();
+                    }
+                } else if (tsAnyVideoStalled()) {
+                    tsHoldForBuffering();
+                } else {
+                    tsApplySync("auto");
+                }
             }
+            tsUpdateTransport();
         };
         const tsStartTicker = () => {
-            if (!tsAnimationFrameId) {
-                tsAnimationFrameId = window.requestAnimationFrame(tsTick);
+            if (!tsTickerId) {
+                tsTickerId = window.setInterval(tsTick, tsTickIntervalMs);
             }
         };
         const tsPauseAll = (tsForceSync = true) => {
-            tsVideos.forEach((tsVideo) => tsVideo.pause());
+            tsDesiredPlaying = false;
+            tsBuffering = false;
+            tsSyncing = true;
+            try {
+                tsVideos.forEach((tsVideo) => tsVideo.pause());
+            } finally {
+                tsSyncing = false;
+            }
             if (tsForceSync) {
-                tsSyncOtherVideos(true);
+                tsApplySync("align");
             }
             tsStopTicker();
             tsUpdateTransport();
         };
         const tsPlayAll = () => {
-            tsSyncOtherVideos(true);
-            const tsPlaybackRate = Number(tsPrimaryVideo.playbackRate || 1) || 1;
-            const tsPlayPromises = tsVideos.map((tsVideo) => {
-                tsVideo.playbackRate = tsPlaybackRate;
-                const tsPlayPromise = tsVideo.play();
-                if (tsPlayPromise && typeof tsPlayPromise.catch === "function") {
-                    return tsPlayPromise.catch(() => {});
-                }
-                return Promise.resolve();
-            });
+            if (tsPrimaryVideo.ended || tsIsAtEnd(tsPrimaryVideo)) {
+                // Play on a finished group means replay, not a no-op.
+                tsSetAllCurrentTimes(0);
+            }
+            tsDesiredPlaying = true;
+            tsBuffering = !tsAllVideosReady();
             tsStartTicker();
-            void Promise.all(tsPlayPromises).finally(() => {
+            if (tsBuffering) {
                 tsUpdateTransport();
-            });
-        };
-        const tsHandleTogglePlay = () => {
-            if (tsPrimaryVideo.paused) {
-                tsPlayAll();
                 return;
             }
-            tsPauseAll(true);
+            tsStartPlayback();
+        };
+        const tsHandleTogglePlay = () => {
+            if (tsDesiredPlaying) {
+                tsPauseAll(true);
+                return;
+            }
+            tsPlayAll();
         };
         const tsHandleSeekPointerDown = () => {
             tsSeekDragging = true;
-            tsResumeAfterSeek = !tsPrimaryVideo.paused;
+            tsResumeAfterSeek = tsDesiredPlaying;
             if (tsResumeAfterSeek) {
                 tsPauseAll(false);
             }
@@ -1525,7 +1699,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         };
         const tsHandleSeekCommit = () => {
             tsSeekDragging = false;
-            tsSyncOtherVideos(true);
+            tsApplySync("align");
             tsUpdateTransport();
             if (tsResumeAfterSeek) {
                 tsResumeAfterSeek = false;
@@ -1534,50 +1708,60 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         };
         const tsStepFrame = (tsDirection) => {
             const tsFPS = tsResolveFPS();
-            const tsFrameDuration = 1 / tsFPS;
-            const tsTargetTime = Math.max(
-                0,
-                tsClampVideoTime(
-                    tsPrimaryVideo,
-                    Number(tsPrimaryVideo.currentTime || 0) + (tsDirection >= 0 ? tsFrameDuration : -tsFrameDuration),
-                    tsFrameDuration,
-                ),
+            const tsTargetTime = tsResolveVideoFrameTime(
+                Number(tsPrimaryVideo.currentTime || 0),
+                tsFPS,
+                tsDirection,
+                tsGetDuration(),
             );
             tsPauseAll(false);
-            tsSetAllCurrentTimes(tsTargetTime, tsFrameDuration);
+            tsSetAllCurrentTimes(tsTargetTime, 1 / tsFPS);
             tsUpdateTransport();
         };
         const tsHandlePrimaryLoadedMetadata = () => tsUpdateTransport();
         const tsHandlePrimaryDurationChange = () => tsUpdateTransport();
-        const tsHandlePrimaryTimeUpdate = () => {
-            if (!tsSeekDragging) {
-                tsSyncOtherVideos(false);
-            }
-            tsUpdateTransport();
-        };
+        const tsHandlePrimaryTimeUpdate = () => tsUpdateTransport();
         const tsHandlePrimarySeeked = () => {
-            if (!tsSeekDragging) {
-                tsSyncOtherVideos(true);
+            if (!tsSeekDragging && !tsDesiredPlaying) {
+                tsApplySync("align");
             }
-            tsUpdateTransport();
-        };
-        const tsHandlePrimaryPlay = () => {
-            tsStartTicker();
             tsUpdateTransport();
         };
         const tsHandlePrimaryPause = () => {
-            if (!tsSeekDragging) {
-                tsSyncOtherVideos(true);
+            // A pause the engine issued itself (buffering hold) must not be
+            // read as the user stopping playback.
+            if (!tsDesiredPlaying) {
+                tsStopTicker();
             }
-            tsStopTicker();
             tsUpdateTransport();
         };
         const tsHandlePrimaryEnded = () => {
             tsPauseAll(true);
         };
         const tsHandlePrimaryRateChange = () => {
-            tsSyncOtherVideos(true);
+            tsApplySync("resume");
             tsUpdateTransport();
+        };
+        // Readiness is a property of the GROUP, so every clip reports in — the
+        // one that stalls is rarely the master.
+        const tsHandleVideoStall = () => {
+            if (tsDesiredPlaying && !tsBuffering) {
+                tsHoldForBuffering();
+            }
+        };
+        const tsHandleVideoReady = () => {
+            if (tsDesiredPlaying && tsBuffering && tsAllVideosReady()) {
+                tsBuffering = false;
+                tsStartPlayback();
+            }
+        };
+        const tsHandleVisibilityChange = () => {
+            // Background timers are throttled to about once a second, so the
+            // group can come back noticeably apart. Re-align once on return
+            // instead of waiting for the drift to cross the seek threshold.
+            if (!document.hidden && tsDesiredPlaying && !tsBuffering) {
+                tsApplySync("resume");
+            }
         };
         const tsHandlePrevFrame = () => tsStepFrame(-1);
         const tsHandleNextFrame = () => tsStepFrame(1);
@@ -1595,18 +1779,24 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         tsPrimaryVideo.addEventListener("durationchange", tsHandlePrimaryDurationChange);
         tsPrimaryVideo.addEventListener("timeupdate", tsHandlePrimaryTimeUpdate);
         tsPrimaryVideo.addEventListener("seeked", tsHandlePrimarySeeked);
-        tsPrimaryVideo.addEventListener("play", tsHandlePrimaryPlay);
         tsPrimaryVideo.addEventListener("pause", tsHandlePrimaryPause);
         tsPrimaryVideo.addEventListener("ended", tsHandlePrimaryEnded);
         tsPrimaryVideo.addEventListener("ratechange", tsHandlePrimaryRateChange);
+        tsVideos.forEach((tsVideo) => {
+            tsVideo.addEventListener("waiting", tsHandleVideoStall);
+            tsVideo.addEventListener("stalled", tsHandleVideoStall);
+            tsVideo.addEventListener("canplay", tsHandleVideoReady);
+            tsVideo.addEventListener("canplaythrough", tsHandleVideoReady);
+            tsVideo.addEventListener("loadeddata", tsHandleVideoReady);
+            tsVideo.addEventListener("error", tsHandleVideoReady);
+        });
+        document.addEventListener("visibilitychange", tsHandleVisibilityChange);
         tsUpdateTransport();
-        if (!tsPrimaryVideo.paused && !tsPrimaryVideo.ended) {
-            tsStartTicker();
-        }
 
         return () => {
             tsStopTicker();
             this.tsVideoFrameStepper = null;
+            document.removeEventListener("visibilitychange", tsHandleVisibilityChange);
             tsPlayToggleButton.removeEventListener("click", tsHandleTogglePlay);
             tsSeekInput.removeEventListener("pointerdown", tsHandleSeekPointerDown);
             tsSeekInput.removeEventListener("pointerup", tsHandleSeekCommit);
@@ -1619,11 +1809,16 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsPrimaryVideo.removeEventListener("durationchange", tsHandlePrimaryDurationChange);
             tsPrimaryVideo.removeEventListener("timeupdate", tsHandlePrimaryTimeUpdate);
             tsPrimaryVideo.removeEventListener("seeked", tsHandlePrimarySeeked);
-            tsPrimaryVideo.removeEventListener("play", tsHandlePrimaryPlay);
             tsPrimaryVideo.removeEventListener("pause", tsHandlePrimaryPause);
             tsPrimaryVideo.removeEventListener("ended", tsHandlePrimaryEnded);
             tsPrimaryVideo.removeEventListener("ratechange", tsHandlePrimaryRateChange);
             tsVideos.forEach((tsVideo) => {
+                tsVideo.removeEventListener("waiting", tsHandleVideoStall);
+                tsVideo.removeEventListener("stalled", tsHandleVideoStall);
+                tsVideo.removeEventListener("canplay", tsHandleVideoReady);
+                tsVideo.removeEventListener("canplaythrough", tsHandleVideoReady);
+                tsVideo.removeEventListener("loadeddata", tsHandleVideoReady);
+                tsVideo.removeEventListener("error", tsHandleVideoReady);
                 tsReleaseMediaSource(tsVideo);
             });
         };

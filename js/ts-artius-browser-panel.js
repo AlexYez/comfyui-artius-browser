@@ -65,6 +65,7 @@ import {
     tsBuildWorkflowRootNodes,
 } from "./ts-artius-browser-panel-workflows.js";
 import { tsEnsureViewerElement, tsGetViewerSingleton } from "./ts-artius-browser-viewer.js";
+import { TS_COMPARE_MAX_ITEMS, TS_COMPARE_MIN_ITEMS } from "./ts-artius-browser-viewer-state.js";
 import { TS3DThumbnailQueue } from "./ts-artius-browser-panel-3d-queue.js";
 import { tsPanelSettings, tsProjectSettings } from "./ts-artius-browser-settings.js";
 import { tsPanelStyles } from "./ts-artius-browser-panel-styles.js";
@@ -843,6 +844,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                             <span class="ts-autoscan-label"></span>
                         </button>
                         <button class="ts-rescan" type="button"></button>
+                        <button class="ts-compare-selected" type="button"></button>
                         <button class="ts-delete-selected" type="button"></button>
                         <button class="ts-rebuild-cache" type="button"></button>
                     </div>
@@ -940,6 +942,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsFilterLabelWidth: this.shadowRoot.querySelector(".ts-filter-label-width"),
             tsFilterLabelHeight: this.shadowRoot.querySelector(".ts-filter-label-height"),
             tsRebuildCache: this.shadowRoot.querySelector(".ts-rebuild-cache"),
+            tsCompareSelected: this.shadowRoot.querySelector(".ts-compare-selected"),
             tsDeleteSelected: this.shadowRoot.querySelector(".ts-delete-selected"),
             tsProgress: this.shadowRoot.querySelector(".ts-progress"),
             tsProgressFill: this.shadowRoot.querySelector(".ts-progress-fill"),
@@ -1089,6 +1092,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsFilterClear.addEventListener("click", () => this.tsClearFilters());
         this.tsRefs.tsRescan.addEventListener("click", () => this.tsRequestRescan());
         this.tsRefs.tsRebuildCache.addEventListener("click", () => this.tsRequestRebuildCache());
+        this.tsRefs.tsCompareSelected.addEventListener("click", () => this.tsCompareSelected());
         this.tsRefs.tsDeleteSelected.addEventListener("click", () => this.tsDeleteSelected());
         this.tsBindToolbarResizer();
         this.tsRefs.tsGalleryScroll.addEventListener("scroll", () => this.tsHandleGalleryScroll(), { passive: true });
@@ -1334,6 +1338,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRebuildCache.title = this.tsT("tooltip.rebuildCache", "Delete the current browser cache and rebuild it from scratch.");
         this.tsRefs.tsDeleteSelected.textContent = this.tsT("button.deleteSelected", "Delete Selected");
         this.tsRefs.tsDeleteSelected.title = this.tsT("tooltip.deleteSelected", "Delete selected assets from allowed roots.");
+        this.tsRenderSelectionButtons();
         this.tsRefs.tsToolbarResizer.title = this.tsT("tooltip.toolbarResize", "Drag to resize the toolbar.");
         this.tsRefs.tsGalleryContent.setAttribute("aria-label", this.tsT("aria.gallery", "Asset grid"));
         this.tsRefs.tsSearchScope.textContent = this.tsT("button.searchPrompts", "Prompt");
@@ -1408,6 +1413,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsAutoscan.hidden = tsWorkflowSection;
         this.tsRefs.tsRescan.hidden = tsWorkflowSection;
         this.tsRefs.tsRebuildCache.hidden = tsWorkflowSection;
+        this.tsRefs.tsCompareSelected.hidden = tsWorkflowSection;
         this.tsRefs.tsDeleteSelected.hidden = tsWorkflowSection;
         this.tsRefs.tsSearchScope.hidden = tsWorkflowSection;
         this.tsRefs.tsSearchScope.style.display = tsWorkflowHiddenDisplay;
@@ -1420,6 +1426,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsAutoscan.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRescan.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRebuildCache.style.display = tsWorkflowHiddenDisplay;
+        this.tsRefs.tsCompareSelected.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsDeleteSelected.style.display = tsWorkflowHiddenDisplay;
         // Assets <-> Workflows toggles a large block of controls (root, type
         // chips, autoscan, rescan, rebuild, delete), which changes the
@@ -2653,6 +2660,51 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRescan.disabled = tsWorkflowSection || Boolean(this.tsState.tsScanStatus?.running);
         this.tsRefs.tsRebuildCache.disabled = tsWorkflowSection || Boolean(this.tsState.tsScanStatus?.running);
         this.tsRefs.tsDeleteSelected.disabled = !tsHasDeletable;
+        this.tsRenderCompareButton(tsSelectedItems, tsWorkflowSection);
+    }
+
+    tsRenderCompareButton(tsSelectedItems, tsWorkflowSection) {
+        const tsButton = this.tsRefs.tsCompareSelected;
+        if (!tsButton) {
+            return;
+        }
+        const tsCompareSelection = tsWorkflowSection ? [] : this.tsResolveCompareSelection(tsSelectedItems);
+        const tsLabel = this.tsT("button.compareSelected", "Compare");
+        // The button stays visible and merely disabled while the selection is
+        // too small: a control that only appears once you already know the
+        // trick teaches nobody. Disabled, with the tooltip, it IS the hint.
+        tsButton.textContent = tsCompareSelection.length >= TS_COMPARE_MIN_ITEMS
+            ? `${tsLabel} (${tsCompareSelection.length})`
+            : tsLabel;
+        tsButton.disabled = tsCompareSelection.length < TS_COMPARE_MIN_ITEMS;
+        tsButton.title = this.tsT(
+            "tooltip.compareSelected",
+            `Select ${TS_COMPARE_MIN_ITEMS}-${TS_COMPARE_MAX_ITEMS} images or videos, then compare them side by side. Videos share one transport and play in sync.`,
+        );
+    }
+
+    tsResolveCompareSelection(tsSelectedItems = this.tsGetSelectedItems()) {
+        // Compare needs one type: the first selected asset decides which, and
+        // anything else is ignored rather than refused, so a mixed selection
+        // still does something predictable.
+        const tsComparable = tsSelectedItems.filter((tsItem) => tsItem?.type === "image" || tsItem?.type === "video");
+        if (tsComparable.length < TS_COMPARE_MIN_ITEMS) {
+            return [];
+        }
+        const tsType = tsComparable[0].type;
+        const tsSameType = tsComparable.filter((tsItem) => tsItem.type === tsType);
+        if (tsSameType.length < TS_COMPARE_MIN_ITEMS) {
+            return [];
+        }
+        return tsSameType.slice(0, TS_COMPARE_MAX_ITEMS);
+    }
+
+    tsCompareSelected() {
+        const tsCompareSelection = this.tsResolveCompareSelection();
+        if (tsCompareSelection.length < TS_COMPARE_MIN_ITEMS) {
+            return;
+        }
+        this.tsOpenViewer(tsCompareSelection[0].id);
     }
 
     tsGetSelectedItems() {
@@ -3087,7 +3139,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             {
                 tsHeading: this.tsT("shortcuts.compareHeading", "Compare"),
                 tsRows: [
-                    [this.tsT("shortcuts.selectN", "Select 2 or 4"), this.tsT("shortcuts.compare", "Compare images or videos in the lightbox")],
+                    [this.tsT("shortcuts.selectN", "Select 2-4"), this.tsT("shortcuts.compare", "Compare images or videos in the lightbox")],
                 ],
             },
         ];
@@ -3307,7 +3359,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsSelectedCompareItems = tsCompareTypes.has(tsAsset?.type)
             ? this.tsState.tsItems.filter((tsItem) => this.tsState.tsSelection.has(tsItem.id) && tsItem?.type === tsAsset.type)
             : [];
-        const tsCompareCount = tsSelectedCompareItems.length >= 4 ? 4 : (tsSelectedCompareItems.length === 2 ? 2 : 0);
+        // 2, 3 or 4 items share one compare stage; a fifth would make every
+        // tile too small to compare, so the extra selection is simply ignored.
+        const tsCompareCount = tsSelectedCompareItems.length >= TS_COMPARE_MIN_ITEMS
+            ? Math.min(TS_COMPARE_MAX_ITEMS, tsSelectedCompareItems.length)
+            : 0;
         const tsCompareItems = tsCompareCount > 0 && tsSelectedCompareItems.some((tsItem) => tsItem.id === tsAssetId)
             ? tsSelectedCompareItems.slice(0, tsCompareCount)
             : [];

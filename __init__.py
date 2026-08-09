@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 from .tsab.ts_nodes import TSArtiusBrowserExtension
-from .tsab.ts_runtime import TSGetRuntime
 
 WEB_DIRECTORY = "./js"
 
-TSRuntime = TSGetRuntime()
-TSRuntime.TSBootstrap()
-
 
 async def comfy_entrypoint():
-    TSRuntime.TSStart()
+    # Importing this package must stay side-effect free: the runtime (storage
+    # directories, SQLite connection, route table, scan service) is built in
+    # TSArtiusBrowserExtension.on_load(), which ComfyUI awaits right after this
+    # function returns.
     return TSArtiusBrowserExtension()
 
 
