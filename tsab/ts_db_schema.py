@@ -18,6 +18,18 @@ TS_DB_FTS_PROMPT_SCHEMA_VERSION = 13
 # start and the extension would never load. asset_favorites is user data rather
 # than cache, so _TSRebuildSchema salvages its rows before running this script
 # and restores them afterwards.
+# Crash-safe holding table for the ONE user-owned table. _TSRebuildSchema
+# cannot wrap its drop/create/restore in a transaction (executescript commits),
+# so favorites are copied here first: this table is in neither the drop script
+# nor the reset script, so it survives the rebuild AND a process killed halfway
+# through it. TSMigrate drains it on the next open.
+TS_DB_FAVORITES_SALVAGE_SQL = """
+CREATE TABLE IF NOT EXISTS asset_favorites_salvage (
+    path TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL DEFAULT 0
+);
+"""
+
 TS_DB_DROP_SCHEMA_SQL = """
 DROP VIEW IF EXISTS assets_view;
 DROP TABLE IF EXISTS assets_fts;

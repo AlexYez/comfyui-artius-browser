@@ -19,6 +19,7 @@ from .ts_settings import (
     TS_EVENT_INDEX_COMPLETE,
     TS_EVENT_INDEX_PROGRESS,
     TS_EVENT_INDEX_START,
+    TS_MAX_PENDING_SCAN_REQUESTS,
     TS_PROGRESS_EVENT_CANDIDATE_STEP,
     TS_PROGRESS_EVENT_FILE_STEP,
     TS_PROGRESS_LOG_PERCENT_STEP,
@@ -90,14 +91,49 @@ class TSIndexer:
                 # Keep every distinct queued request: a single pending slot
                 # silently dropped an earlier "rescan root A" when "rescan
                 # root B" arrived while a scan was running.
-                ts_pending_request = {"scope": ts_scope, "root_id": ts_root_id}
-                if ts_pending_request not in self.ts_pending_requests:
-                    self.ts_pending_requests.append(ts_pending_request)
-                TSLogVerbose("indexer.scan.queued", scope=ts_scope, root_id=ts_root_id)
+                self._TSQueuePendingRequest(ts_scope, ts_root_id)
                 return False
             self.ts_scan_task = asyncio.create_task(self._TSRunScanAsync(ts_scope, ts_root_id))
             TSLogVerbose("indexer.scan.started_async", scope=ts_scope, root_id=ts_root_id)
             return True
+
+    def _TSQueuePendingRequest(self, ts_scope: str | None, ts_root_id: str | None) -> None:
+        ts_request = {"scope": ts_scope, "root_id": ts_root_id}
+        if ts_request in self.ts_pending_requests:
+            TSLogVerbose("indexer.scan.queue.duplicate", scope=ts_scope, root_id=ts_root_id)
+            return
+        if ts_scope is None and ts_root_id is None:
+            # A full scan covers every narrower pending request, so it replaces
+            # the whole queue instead of joining the back of it. Without this a
+            # burst of per-root requests followed by "rescan everything" ran the
+            # same files several times over.
+            ts_superseded = len(self.ts_pending_requests)
+            self.ts_pending_requests.clear()
+            self.ts_pending_requests.append(ts_request)
+            TSLogVerbose("indexer.scan.queued", scope=None, root_id=None, superseded=ts_superseded)
+            return
+        if any(
+            ts_pending.get("scope") is None and ts_pending.get("root_id") is None
+            for ts_pending in self.ts_pending_requests
+        ):
+            # A full scan is already queued; it will cover this one.
+            TSLogVerbose("indexer.scan.queue.absorbed", scope=ts_scope, root_id=ts_root_id)
+            return
+        if len(self.ts_pending_requests) >= TS_MAX_PENDING_SCAN_REQUESTS:
+            # Bounded on purpose: the queue is drained one scan at a time, so an
+            # unbounded list of unique requests is both memory growth and a long
+            # tail of pointless scans. Collapsing to a single full scan covers
+            # everything that was asked for, and more.
+            TSLogVerbose(
+                "indexer.scan.queue.saturated",
+                pending=len(self.ts_pending_requests),
+                limit=TS_MAX_PENDING_SCAN_REQUESTS,
+            )
+            self.ts_pending_requests.clear()
+            self.ts_pending_requests.append({"scope": None, "root_id": None})
+            return
+        self.ts_pending_requests.append(ts_request)
+        TSLogVerbose("indexer.scan.queued", scope=ts_scope, root_id=ts_root_id)
 
     async def _TSRunScanAsync(self, ts_scope: str | None, ts_root_id: str | None) -> None:
         await asyncio.to_thread(self.TSRunScanSync, ts_scope, ts_root_id)

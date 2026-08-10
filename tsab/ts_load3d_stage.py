@@ -67,9 +67,14 @@ def _TSCollectOBJMaterialLibraries(ts_source_path: Path) -> list[Path]:
                 ts_material_libraries.extend(_TSResolveReferenceCandidates(ts_source_path.parent, ts_line[7:].strip()))
     except OSError as ts_error:
         TSLogVerbose("load3d_stage.obj.read.failed", source_path=str(ts_source_path), error=str(ts_error))
-    ts_default_mtl = ts_source_path.with_suffix(".mtl")
-    if not ts_material_libraries and ts_default_mtl.exists():
-        ts_material_libraries.append(ts_default_mtl.resolve())
+    if not ts_material_libraries:
+        # The same-stem fallback goes through the same resolver as an explicit
+        # mtllib line. Resolving it directly skipped the containment check, so
+        # a "model.mtl" SYMLINK pointing anywhere on disk was staged into
+        # ComfyUI's input folder - the one hole in an otherwise closed path.
+        ts_material_libraries.extend(
+            _TSResolveReferenceCandidates(ts_source_path.parent, ts_source_path.with_suffix(".mtl").name)
+        )
     return _TSUniquePaths(ts_material_libraries)
 
 
@@ -106,8 +111,8 @@ def _TSCopyOrLinkFile(ts_source_path: Path, ts_target_path: Path) -> None:
         shutil.copy2(ts_source_path, ts_target_path)
 
 
-def _TSStage3DAsset(ts_input_directory: Path, ts_row) -> str:
-    ts_source_path = Path(str(ts_row["path"])).resolve()
+def _TSStage3DAsset(ts_input_directory: Path, ts_source_path: Path) -> str:
+    ts_source_path = ts_source_path.resolve()
     if not ts_source_path.exists():
         raise FileNotFoundError(str(ts_source_path))
     try:
@@ -145,13 +150,25 @@ def _TSStage3DAsset(ts_input_directory: Path, ts_row) -> str:
 
     return (ts_stage_root / ts_source_path.name).relative_to(ts_input_directory).as_posix()
 
-def TSPrepare3DAssetForLoad3D(ts_database, ts_get_asset_lock, ts_input_directory: Path, ts_asset_id: int) -> dict[str, Any]:
+def TSPrepare3DAssetForLoad3D(
+    ts_database,
+    ts_get_asset_lock,
+    ts_authorize_asset_path,
+    ts_input_directory: Path,
+    ts_asset_id: int,
+) -> dict[str, Any]:
     ts_row = ts_database.TSGetAssetById(ts_asset_id)
     if ts_row is None or str(ts_row["type"] or "") != "3d":
         raise TSWeb.HTTPNotFound()
+    # Staging COPIES a file into ComfyUI's input folder, so it has to clear the
+    # same bar as serving one: the row must still resolve inside a configured
+    # root. A row outlives its root (custom root removed or disabled) until the
+    # next full scan prunes it, and until then this route was the one way to
+    # pull a file out of a root the user had already revoked.
+    ts_source_path = ts_authorize_asset_path(ts_row)
     with ts_get_asset_lock(ts_asset_id):
         try:
-            ts_model_file = _TSStage3DAsset(ts_input_directory, ts_row)
+            ts_model_file = _TSStage3DAsset(ts_input_directory, ts_source_path)
         except FileNotFoundError:
             # The row is stale: the user moved or deleted the model since the
             # last scan. That is a 404, not a server fault - letting the

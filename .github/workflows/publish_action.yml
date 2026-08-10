@@ -7,9 +7,100 @@ on:
     paths:
       - "pyproject.toml"
 
+permissions:
+  contents: read
+
 jobs:
+  # Nothing reaches the registry without passing this first. The maintainer's
+  # full gate (scripts/check_release.py, the unit suite, the frontend
+  # characterization harnesses) lives outside the public repository, so this is
+  # deliberately a re-implementation of the parts that can run against a clean
+  # public checkout — not a link to CI, which is a separate workflow whose
+  # result the publish job could not observe. A publish that skipped every
+  # check, including a manual workflow_dispatch, was the actual gap.
+  gate:
+    name: Release gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Byte-compile the backend
+        run: python -m compileall -q tsab __init__.py
+
+      - name: Lint (ruff)
+        # Pinned: an unpinned "latest" turns a new upstream rule into a failed
+        # release with no change of ours behind it.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "ruff==0.15.12"
+          python -m ruff check tsab __init__.py
+
+      - name: Syntax-check every frontend module
+        run: |
+          set -e
+          for tsFile in js/*.js; do
+            node --check "$tsFile"
+          done
+
+      - name: Verify localization files
+        # en.json is the canonical key set. A locale carrying a key en.json does
+        # not have is a typo that renders as a raw key for that language only,
+        # which is exactly the class of defect a release must not ship.
+        run: |
+          python - <<'TS_EOF'
+          import json
+          import pathlib
+          import sys
+
+          ts_directory = pathlib.Path("js/localization")
+          ts_english = json.loads((ts_directory / "en.json").read_text(encoding="utf-8"))
+          ts_failures = []
+          for ts_path in sorted(ts_directory.glob("*.json")):
+              ts_data = json.loads(ts_path.read_text(encoding="utf-8"))
+              if not isinstance(ts_data, dict):
+                  ts_failures.append(f"{ts_path.name}: not a JSON object")
+                  continue
+              ts_unknown = sorted(set(ts_data) - set(ts_english))
+              if ts_unknown:
+                  ts_failures.append(f"{ts_path.name}: keys absent from en.json: {', '.join(ts_unknown)}")
+          if ts_failures:
+              print("\n".join(ts_failures))
+              sys.exit(1)
+          print(f"localization: OK ({len(ts_english)} canonical keys)")
+          TS_EOF
+
+      - name: Verify the package metadata a publish depends on
+        run: |
+          python - <<'TS_EOF'
+          import pathlib
+          import re
+          import sys
+
+          ts_text = pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
+          ts_failures = []
+          ts_version = re.search(r'^version\s*=\s*"([^"]+)"', ts_text, re.MULTILINE)
+          if not ts_version or not re.fullmatch(r"\d+\.\d+\.\d+", ts_version.group(1)):
+              ts_failures.append("project.version is missing or not X.Y.Z")
+          for ts_key in ('PublisherId = "timesaver"', 'name = "comfyui-artius-browser"'):
+              if ts_key not in ts_text:
+                  ts_failures.append(f"registry identity changed: expected {ts_key}")
+          if not pathlib.Path("js").is_dir() or not pathlib.Path("tsab").is_dir():
+              ts_failures.append("the published tree is missing js/ or tsab/")
+          if ts_failures:
+              print("\n".join(ts_failures))
+              sys.exit(1)
+          print(f"metadata: OK (version {ts_version.group(1)})")
+          TS_EOF
+
   publish-node:
     name: Publish Custom Node to registry
+    needs: gate
     runs-on: ubuntu-latest
     steps:
       - name: Check out code

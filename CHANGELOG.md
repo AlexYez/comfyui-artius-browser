@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-08-10
+
+A hardening release, from a full audit of the pack. Two boundary defects are
+closed — 3D staging could copy a file out of a root the user had already
+revoked, and an OBJ's fallback material file was the one path that skipped
+containment — and the release pipeline no longer allows anything to reach the
+Comfy Registry without passing a gate first. The rest is durability: deleting
+an asset can no longer be undone by work already in flight, favorites survive a
+cache repair that is interrupted, a hand-edited config.json cannot stop the
+browser from loading, and a burst of rescan requests cannot grow unbounded.
+
+No schema, config or API change: existing libraries start straight up.
+
+### Security
+
+- **3D staging no longer bypasses the root boundary.** Serving a file
+  re-checked that its database row still resolved inside a configured root;
+  staging a 3D model for the native Load3D node did not, even though it
+  *copies* the file into ComfyUI's input folder. A row outlives its root — a
+  custom root removed or disabled stays in the index until the next full scan —
+  so that route could still pull a file out of a location the user had already
+  revoked. Both paths now go through one authorization helper.
+- **An OBJ's same-stem `model.mtl` fallback is contained like every other
+  dependency.** Explicit `mtllib` lines were always resolved and checked
+  against the model's own folder; the fallback was resolved directly, so a
+  symlink of that name pointed anywhere on disk and was staged into the input
+  folder alongside the model.
+
+### Fixed
+
+- **Deleting an asset could not be undone by work already in flight.** Detail
+  view, preview generation and thumbnail capture read a row, work for as long
+  as ffmpeg or a decoder takes, then write it back. Delete took no lock, so a
+  delete landing inside that window was overwritten and the card came back for
+  a file already in the trash. Delete now holds the same per-asset lock.
+- **A failed workflow deletion no longer takes the previews with it.** The
+  workflow JSON and its sidecars were trashed in one best-effort loop, so a
+  workflow that could not be deleted still lost its preview images. The JSON
+  goes first and its failure aborts the operation.
+- **Favorites survive a cache-database repair that is interrupted.** The
+  corruption fallback carried starred paths in memory across drop → create →
+  restore; a disk error or a killed process in that window lost them for good.
+  They now cross through a holding table the rebuild does not drop, restored on
+  the next start.
+- **A hand-edited config.json can no longer stop the browser from loading.**
+  Section shape was validated, the values inside were not, so
+  `"ffprobe_workers": "fast"` raised while the extension was being constructed
+  and ComfyUI started without the browser at all. Every runtime number and flag
+  is now coerced and clamped in one place, including `"false"` — a string
+  Python considers true.
+- **Rescan requests are validated and the queue is bounded.** `scope` and
+  `root_id` are checked against what can actually exist, and a burst of
+  distinct requests during a long scan collapses into a single full scan
+  instead of growing a list and running a long tail of scans nobody waited for.
+
+### Changed
+
+- Nothing reaches the Comfy Registry without passing a gate. Publishing ran in
+  its own workflow with no dependency on CI, so a manual run — or any push that
+  changed the version — could publish unverified code. `publish_action.yml` now
+  carries a release-gate job (byte-compile, ruff, `node --check` on every
+  frontend module, locale-key parity, registry metadata) and the publish job
+  runs only after it passes.
+- Ruff is pinned in both workflows: an unpinned "latest" turns a new upstream
+  rule into a failed release with no change of ours behind it.
+
+### Documentation
+
+- The feature table claimed English and Russian; the pack ships English,
+  Russian, Chinese and Japanese, all complete. Corrected in all ten language
+  sections.
+
 ## [1.13.0] - 2026-08-09
 
 Synchronised video compare, rebuilt. Selecting two, three or four clips now

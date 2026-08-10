@@ -6,6 +6,7 @@ from typing import Any, Callable
 from aiohttp import web as TSWeb
 from send2trash import send2trash as TSSendToTrash
 
+from .ts_logging import TSLogVerbose
 from .ts_settings import TS_WORKFLOW_PATH_FORBIDDEN_CHARACTERS
 
 TS_WORKFLOW_PREVIEW_EXTENSIONS = {
@@ -105,7 +106,24 @@ class TSWorkflowService:
             raise TSWeb.HTTPNotFound()
         ts_deleted_paths: list[str] = []
         ts_failed_paths: list[dict[str, str]] = []
-        for ts_target_path in [ts_workflow_path, *self.TSFindPreviewSidecars(ts_workflow_path)]:
+        ts_sidecars = self.TSFindPreviewSidecars(ts_workflow_path)
+        # The workflow JSON goes first and its failure ABORTS the operation.
+        # Treating it as just another entry in one best-effort loop meant a
+        # workflow that could not be trashed still lost its preview sidecars -
+        # the user kept the file they wanted gone and lost the pictures they
+        # did not, recoverable only by hand from the trash.
+        try:
+            self.ts_send_to_trash(str(ts_workflow_path))
+        except Exception as ts_error:
+            TSLogVerbose("workflow.delete.aborted", path=str(ts_workflow_path), error=str(ts_error))
+            return {
+                "deleted": [],
+                "failed": [{"name": ts_workflow_path.name, "error": str(ts_error)}],
+            }
+        ts_deleted_paths.append(ts_workflow_path.name)
+        # Sidecars stay best-effort: the workflow itself is already gone, so a
+        # stubborn preview must not turn the whole call into a failure.
+        for ts_target_path in ts_sidecars:
             if not ts_target_path.exists():
                 continue
             try:

@@ -54,6 +54,7 @@ class TSAssetBrowserRuntime:
             ts_preview_cache=self.ts_preview_cache,
             ts_get_roots=self.TSGetRoots,
             ts_emit_event=self.TSEmitEvent,
+            ts_get_asset_lock=self._TSGetAssetLock,
         )
         self.ts_workflow_service = TSWorkflowService()
         self.ts_asset_processing = TSAssetProcessingService(
@@ -379,20 +380,29 @@ class TSAssetBrowserRuntime:
             ts_row = self.ts_database.TSGetAssetByPath(TSNormalizePathString(ts_path))
         if ts_row is None:
             raise TSWeb.HTTPNotFound()
+        ts_file_path = self._TSAuthorizeAssetPath(ts_row)
+        if not ts_file_path.exists():
+            raise TSWeb.HTTPNotFound()
+        return self._TSApplyNoStoreHeaders(TSWeb.FileResponse(ts_file_path))
+
+    def _TSAuthorizeAssetPath(self, ts_row) -> Path:
+        # The single gate every route that hands a stored asset file to the
+        # caller must pass. A DB row can outlive its root (custom root removed
+        # or disabled) until the next full scan prunes it, so the row alone
+        # proves nothing: containment is re-checked against the roots that are
+        # configured RIGHT NOW. Raises 404 rather than 403 - a revoked root
+        # should look like it never existed.
         ts_file_path = Path(str(ts_row["path"]))
-        # Re-check containment against the currently configured roots: a DB row
-        # can outlive its root (custom root removed/disabled) until the next
-        # scan prunes it, and stale rows must not keep files readable.
         ts_root = self._TSBuildRootMap().get(str(ts_row["root_id"]))
         if ts_root is None:
+            TSLogVerbose("runtime.asset.unauthorized", root_id=str(ts_row["root_id"]), reason="root_not_configured")
             raise TSWeb.HTTPNotFound()
         try:
             ts_file_path.resolve().relative_to(Path(ts_root.ts_path).resolve())
         except (OSError, ValueError):
+            TSLogVerbose("runtime.asset.unauthorized", root_id=str(ts_row["root_id"]), reason="outside_root")
             raise TSWeb.HTTPNotFound() from None
-        if not ts_file_path.exists():
-            raise TSWeb.HTTPNotFound()
-        return self._TSApplyNoStoreHeaders(TSWeb.FileResponse(ts_file_path))
+        return ts_file_path
 
     def TSSetAssetFavorite(self, ts_asset_id: int, ts_is_favorite: bool) -> dict[str, Any] | None:
         ts_row = self.ts_database.TSSetAssetFavorite(ts_asset_id, ts_is_favorite)
@@ -417,12 +427,14 @@ class TSAssetBrowserRuntime:
             ts_preview_cache=self.ts_preview_cache,
             ts_get_roots=self.TSGetRoots,
             ts_emit_asset_upsert=self._TSEmitAssetUpsert,
+            ts_get_asset_lock=self._TSGetAssetLock,
         )
 
     def TSPrepare3DAssetForLoad3D(self, ts_asset_id: int) -> dict[str, Any]:
         return TSPrepare3DAssetForLoad3D(
             ts_database=self.ts_database,
             ts_get_asset_lock=self._TSGetAssetLock,
+            ts_authorize_asset_path=self._TSAuthorizeAssetPath,
             ts_input_directory=self.ts_storage_paths.ts_input_directory,
             ts_asset_id=ts_asset_id,
         )

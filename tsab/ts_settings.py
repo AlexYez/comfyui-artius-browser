@@ -155,6 +155,43 @@ TS_EVENT_ASSET_UPSERT = f"{TS_EVENT_PREFIX}:asset-upsert"
 TS_EVENT_ASSET_REMOVE = f"{TS_EVENT_PREFIX}:asset-remove"
 TS_EVENT_HEALTH = f"{TS_EVENT_PREFIX}:health"
 
+# Bounds for every RUNTIME numeric in config.json. The config is a file the
+# user can hand-edit, and a valid-JSON-but-wrong-type value used to reach
+# int() unguarded: "ffprobe_workers": "fast" raised at TSToolLocator
+# construction, which is inside the runtime constructor, so the whole
+# extension failed to load with a ValueError and no hint of the cause. A huge
+# hash_workers was worse - it loaded fine and then spawned that many threads.
+# The ui section is deliberately absent: it has its own normalizer in
+# ts_ui_settings.py.
+# Upper bound on distinct queued rescan requests. The queue drains one scan at
+# a time, so an unbounded list of unique {scope, root_id} pairs is both memory
+# growth and a long tail of scans nobody is waiting for; past this many, the
+# indexer collapses the queue into a single full scan.
+TS_MAX_PENDING_SCAN_REQUESTS = 16
+
+TS_CONFIG_NUMERIC_BOUNDS = {
+    ("tools", "ffprobe_workers"): (1, 32),
+    ("tools", "ffmpeg_workers"): (1, 32),
+    ("indexing", "hash_workers"): (1, 64),
+    ("indexing", "batch_size"): (1, 20000),
+    ("preview", "thumbnail_size"): (TS_THUMBNAIL_SIZE_MIN, TS_THUMBNAIL_SIZE_MAX),
+    ("preview", "image_quality"): (1, 100),
+    ("preview", "waveform_width"): (TS_WAVEFORM_WIDTH_MIN, TS_WAVEFORM_WIDTH_MAX),
+    ("preview", "waveform_height"): (TS_WAVEFORM_HEIGHT_MIN, TS_WAVEFORM_HEIGHT_MAX),
+    ("preview", "placeholder_width"): (TS_PLACEHOLDER_WIDTH_MIN, TS_PLACEHOLDER_WIDTH_MAX),
+    ("preview", "placeholder_height"): (TS_PLACEHOLDER_HEIGHT_MIN, TS_PLACEHOLDER_HEIGHT_MAX),
+}
+
+# Same story for floats and booleans that runtime code consumes directly.
+TS_CONFIG_FLOAT_BOUNDS = {
+    ("preview", "video_frame_time"): (0.0, 3600.0),
+}
+
+TS_CONFIG_BOOLEAN_KEYS = (
+    ("logging", "enable_verbose"),
+    ("logging", "enable_progress_console"),
+)
+
 TS_DEFAULT_CONFIG = {
     "version": 20,
     "logging": {

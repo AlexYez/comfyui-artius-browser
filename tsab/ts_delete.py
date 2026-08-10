@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, Callable
 
@@ -16,16 +17,33 @@ class TSDeleteService:
         ts_preview_cache,
         ts_get_roots: Callable[[], list[dict[str, Any]]],
         ts_emit_event: Callable[[str, dict[str, Any]], None],
+        ts_get_asset_lock: Callable[[int], Any] | None = None,
         ts_send_to_trash: Callable[[str], None] = TSSendToTrash,
     ) -> None:
         self.ts_database = ts_database
         self.ts_preview_cache = ts_preview_cache
         self.ts_get_roots = ts_get_roots
         self.ts_emit_event = ts_emit_event
+        self.ts_get_asset_lock = ts_get_asset_lock
         self.ts_send_to_trash = ts_send_to_trash
 
     def TSDeleteAssets(self, ts_asset_ids: list[int]) -> dict[str, Any]:
         TSLogVerbose("runtime.assets.delete.request", asset_ids=ts_asset_ids)
+        # Hold the per-asset locks for the whole operation. On-demand
+        # processing (detail view, preview generation, 3D thumbnail) reads a
+        # row, works for as long as ffmpeg takes, and then upserts it back;
+        # without sharing this lock a delete landing inside that window was
+        # undone by the upsert and the asset reappeared as a card whose file
+        # was already in the trash. Sorting the ids keeps a fixed acquisition
+        # order - processing only ever holds one lock at a time, so nothing can
+        # deadlock, but a future multi-lock caller would.
+        with ExitStack() as ts_locks:
+            if self.ts_get_asset_lock is not None:
+                for ts_asset_id in sorted(set(int(ts_id) for ts_id in ts_asset_ids)):
+                    ts_locks.enter_context(self.ts_get_asset_lock(ts_asset_id))
+            return self._TSDeleteAssetsLocked(ts_asset_ids)
+
+    def _TSDeleteAssetsLocked(self, ts_asset_ids: list[int]) -> dict[str, Any]:
         ts_deleted_ids: list[int] = []
         ts_skipped_ids: list[int] = []
         ts_deleted_refs: list[tuple[int, str, str]] = []

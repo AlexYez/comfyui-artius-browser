@@ -232,10 +232,35 @@ async def TSHandleFile(ts_runtime, ts_request):
     return await asyncio.to_thread(ts_runtime.TSBuildFileResponse, ts_path=ts_path, ts_asset_id=ts_asset_id)
 
 
+# The only scopes a root can carry (see TSStoragePaths.TSBuildBaseRoots). A
+# rescan for anything else can never match a root, so it is a client error
+# rather than a scan nobody asked for.
+TS_RESCAN_SCOPES = ("output", "input", "custom")
+TS_MAX_ROOT_ID_LENGTH = 128
+
+
+def TSParseRescanScope(ts_value):
+    if ts_value is None or ts_value == "":
+        return None
+    if not isinstance(ts_value, str) or ts_value not in TS_RESCAN_SCOPES:
+        raise TSWeb.HTTPBadRequest(reason="Unsupported scope")
+    return ts_value
+
+
+def TSParseRescanRootId(ts_value):
+    if ts_value is None or ts_value == "":
+        return None
+    # Bounded and typed: the value is only ever compared against configured
+    # root ids, so an unbounded string is pure queue ballast.
+    if not isinstance(ts_value, str) or len(ts_value) > TS_MAX_ROOT_ID_LENGTH:
+        raise TSWeb.HTTPBadRequest(reason="Invalid root_id")
+    return ts_value
+
+
 async def TSHandleRescan(ts_runtime, ts_request):
     ts_payload = await TSReadJsonObject(ts_request)
-    ts_scope = ts_payload.get("scope")
-    ts_root_id = ts_payload.get("root_id")
+    ts_scope = TSParseRescanScope(ts_payload.get("scope"))
+    ts_root_id = TSParseRescanRootId(ts_payload.get("root_id"))
     TSLogVerbose("route.rescan.request", scope=ts_scope, root_id=ts_root_id, path=ts_request.path)
     ts_started = await ts_runtime.TSRequestScan(ts_scope=ts_scope, ts_root_id=ts_root_id)
     return TSWeb.json_response({"started": ts_started, "status": ts_runtime.TSGetScanStatus()})

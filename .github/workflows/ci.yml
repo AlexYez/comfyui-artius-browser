@@ -26,7 +26,9 @@ jobs:
       - name: Lint (ruff)
         run: |
           python -m pip install --upgrade pip
-          python -m pip install ruff
+          # Pinned: an unpinned "latest" turns a new upstream rule into a
+          # red build with no change of ours behind it.
+          python -m pip install "ruff==0.15.12"
           python -m ruff check tsab __init__.py
 
   frontend:

@@ -5,9 +5,45 @@ import json
 import threading
 from pathlib import Path
 
-from .ts_settings import TS_DEFAULT_CONFIG
+from .ts_settings import (
+    TS_CONFIG_BOOLEAN_KEYS,
+    TS_CONFIG_FLOAT_BOUNDS,
+    TS_CONFIG_NUMERIC_BOUNDS,
+    TS_DEFAULT_CONFIG,
+)
 from .ts_logging import TSLogVerbose
 from .ts_utils import TSJsonDumps
+
+
+def TSClampConfigNumber(ts_value, ts_default, ts_minimum, ts_maximum, ts_kind):
+    # Booleans are ints in Python and "8" is a perfectly sensible thing to find
+    # in a hand-edited JSON file, so both are accepted; anything that will not
+    # convert falls back to the shipped default rather than raising.
+    if isinstance(ts_value, bool) or ts_value is None:
+        ts_number = ts_default
+    else:
+        try:
+            ts_number = ts_kind(ts_value)
+        except (TypeError, ValueError):
+            ts_number = ts_default
+    if ts_number != ts_number or ts_number in (float("inf"), float("-inf")):  # NaN / inf
+        ts_number = ts_default
+    return max(ts_minimum, min(ts_maximum, ts_kind(ts_number)))
+
+
+def TSCoerceConfigBoolean(ts_value, ts_default: bool) -> bool:
+    if isinstance(ts_value, bool):
+        return ts_value
+    if isinstance(ts_value, (int, float)):
+        return bool(ts_value)
+    if isinstance(ts_value, str):
+        # "false" is truthy in Python, which is exactly the trap here.
+        ts_text = ts_value.strip().lower()
+        if ts_text in ("true", "1", "yes", "on"):
+            return True
+        if ts_text in ("false", "0", "no", "off", ""):
+            return False
+    return ts_default
 
 
 class TSConfigStore:
@@ -189,6 +225,7 @@ class TSConfigStore:
             ts_result.setdefault("ui", {}).setdefault("asset_favorites_only", False)
             ts_result["version"] = 20
         self._TSNormalizeTopLevelSections(ts_result, ts_default)
+        self._TSNormalizeScalarValues(ts_result, ts_default)
         return ts_result
 
     def _TSDeepMerge(self, ts_base: dict, ts_override: dict) -> dict:
@@ -213,6 +250,28 @@ class TSConfigStore:
             for ts_custom_root in ts_custom_roots
             if isinstance(ts_custom_root, dict)
         ]
+
+    def _TSNormalizeScalarValues(self, ts_config: dict, ts_default: dict) -> None:
+        # Section shape alone is not enough: the values inside a well-formed
+        # section reach int()/float() in the runtime constructor and in the
+        # scan loop, where a hand-edited string used to raise and a huge number
+        # used to be obeyed. Every runtime scalar is coerced and clamped here,
+        # once, so no consumer has to defend itself.
+        for (ts_section, ts_key), (ts_minimum, ts_maximum) in TS_CONFIG_NUMERIC_BOUNDS.items():
+            ts_default_value = int(ts_default.get(ts_section, {}).get(ts_key, ts_minimum))
+            ts_config[ts_section][ts_key] = TSClampConfigNumber(
+                ts_config.get(ts_section, {}).get(ts_key), ts_default_value, ts_minimum, ts_maximum, int
+            )
+        for (ts_section, ts_key), (ts_minimum, ts_maximum) in TS_CONFIG_FLOAT_BOUNDS.items():
+            ts_default_value = float(ts_default.get(ts_section, {}).get(ts_key, ts_minimum))
+            ts_config[ts_section][ts_key] = TSClampConfigNumber(
+                ts_config.get(ts_section, {}).get(ts_key), ts_default_value, ts_minimum, ts_maximum, float
+            )
+        for ts_section, ts_key in TS_CONFIG_BOOLEAN_KEYS:
+            ts_config[ts_section][ts_key] = TSCoerceConfigBoolean(
+                ts_config.get(ts_section, {}).get(ts_key),
+                bool(ts_default.get(ts_section, {}).get(ts_key, False)),
+            )
 
     def _TSWriteConfigAtomically(self, ts_config: dict) -> None:
         self.ts_config_path.parent.mkdir(parents=True, exist_ok=True)

@@ -16,6 +16,7 @@ from .ts_db_query import TS_SORT_KEY_MAP, TSBuildAssetQueryParts, TSResolveSortK
 from .ts_db_schema import (
     TS_DB_ADDITIVE_COLUMNS,
     TS_DB_DROP_SCHEMA_SQL,
+    TS_DB_FAVORITES_SALVAGE_SQL,
     TS_DB_FTS_PROMPT_SCHEMA_VERSION,
     TS_DB_FTS_REBUILD_SQL,
     TS_DB_RESET_INDEX_SQL,
@@ -108,6 +109,7 @@ class TSDatabase:
         else:
             self._TSMigrateFTSPromptColumn(ts_connection, ts_user_version)
         self._TSEnsureReadableSchema(ts_connection, ts_user_version)
+        self._TSDrainFavoritesSalvage(ts_connection)
         if ts_user_version != TS_DB_SCHEMA_VERSION:
             ts_connection.execute(f"PRAGMA user_version = {TS_DB_SCHEMA_VERSION}")
         TSLogVerbose("db.migrated", database=str(self.ts_database_path), schema_version=TS_DB_SCHEMA_VERSION)
@@ -158,29 +160,48 @@ class TSDatabase:
                 raise
             self._TSRebuildSchema(ts_connection, ts_user_version, "fts_prompt_migration_failed")
 
-    def _TSSalvageFavorites(self, ts_connection: sqlite3.Connection) -> list[tuple[str, int]]:
-        # Best-effort read of the one user-owned table before a destructive
-        # rebuild. A failure here is expected when that table is the corrupt
-        # one - losing stars is bad, never starting again is worse.
+    def _TSSalvageFavorites(self, ts_connection: sqlite3.Connection) -> int:
+        # Copies the one user-owned table into a holding table that the rebuild
+        # does NOT drop, and that a crash cannot take with it. Keeping the rows
+        # only in a Python list meant a disk error or a killed process between
+        # the DROP and the restore destroyed them for good - and executescript
+        # commits, so a single enclosing transaction was never an option.
+        # A failure here is expected when asset_favorites is itself the corrupt
+        # table: losing stars is bad, never starting again is worse.
         try:
-            ts_rows = ts_connection.execute("SELECT path, created_at FROM asset_favorites").fetchall()
-        except sqlite3.DatabaseError as ts_error:
-            TSLogVerbose("db.favorites.salvage_failed", error=str(ts_error))
-            return []
-        return [(str(ts_row["path"]), int(ts_row["created_at"] or 0)) for ts_row in ts_rows if ts_row["path"]]
-
-    def _TSRestoreFavorites(self, ts_connection: sqlite3.Connection, ts_favorites: list[tuple[str, int]]) -> None:
-        if not ts_favorites:
-            return
-        try:
-            ts_connection.executemany(
-                "INSERT OR IGNORE INTO asset_favorites(path, created_at) VALUES (?, ?)",
-                ts_favorites,
+            ts_connection.executescript(TS_DB_FAVORITES_SALVAGE_SQL)
+            ts_cursor = ts_connection.execute(
+                "INSERT OR REPLACE INTO asset_favorites_salvage(path, created_at) "
+                "SELECT path, created_at FROM asset_favorites WHERE path IS NOT NULL"
             )
         except sqlite3.DatabaseError as ts_error:
-            TSLogVerbose("db.favorites.restore_failed", count=len(ts_favorites), error=str(ts_error))
+            TSLogVerbose("db.favorites.salvage_failed", error=str(ts_error))
+            return 0
+        ts_count = int(ts_cursor.rowcount or 0)
+        TSLogVerbose("db.favorites.salvaged", count=ts_count)
+        return ts_count
+
+    def _TSDrainFavoritesSalvage(self, ts_connection: sqlite3.Connection) -> None:
+        # Runs on EVERY open, not just after a rebuild: if the process died
+        # between the drop and the restore, this is what gives the stars back.
+        try:
+            ts_present = ts_connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='asset_favorites_salvage'"
+            ).fetchone()
+            if ts_present is None:
+                return
+            ts_cursor = ts_connection.execute(
+                "INSERT OR IGNORE INTO asset_favorites(path, created_at) "
+                "SELECT path, created_at FROM asset_favorites_salvage"
+            )
+            ts_restored = int(ts_cursor.rowcount or 0)
+            ts_connection.execute("DROP TABLE asset_favorites_salvage")
+        except sqlite3.DatabaseError as ts_error:
+            # Leave the holding table in place so the next open can retry.
+            TSLogVerbose("db.favorites.restore_failed", error=str(ts_error))
             return
-        TSLogVerbose("db.favorites.restored", count=len(ts_favorites))
+        if ts_restored:
+            TSLogVerbose("db.favorites.restored", count=ts_restored)
 
     def _TSRebuildSchema(
         self,
@@ -191,7 +212,7 @@ class TSDatabase:
         # The index tables are a rebuildable cache, but asset_favorites is not:
         # carry its rows across the drop so a corruption recovery costs the user
         # a re-scan, never their starred assets.
-        ts_favorites = self._TSSalvageFavorites(ts_connection)
+        ts_favorite_count = self._TSSalvageFavorites(ts_connection)
         try:
             ts_connection.executescript(TS_DB_DROP_SCHEMA_SQL)
             ts_connection.executescript(TS_DB_SCHEMA_SQL)
@@ -204,10 +225,10 @@ class TSDatabase:
                 "Close ComfyUI and delete %s, then start again - it will be rebuilt "
                 "(indexed assets are re-scanned; %d favorite(s) will be lost).",
                 self.ts_database_path,
-                len(ts_favorites),
+                ts_favorite_count,
             )
             raise
-        self._TSRestoreFavorites(ts_connection, ts_favorites)
+        self._TSDrainFavoritesSalvage(ts_connection)
         TSLogVerbose(
             "db.migration.rebuilt",
             database=str(self.ts_database_path),
