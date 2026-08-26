@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-08-26
+
+ComfyUI writes the prompt and the workflow into a generated video exactly as it
+writes them into a PNG. The browser had only ever looked at the PNG, so a clip
+it produced itself looked like footage from a phone. It reads both now, and a
+video card offers the same copy actions a picture does.
+
+### Added
+
+- **Videos carry their workflow too, and now the browser reads it.** ComfyUI
+  embeds the prompt and the workflow in a video exactly as it does in a PNG —
+  as container tags — but the browser ignored them, so a generated clip looked
+  like one dragged in from a phone. Video cards now show the same **P** and
+  **W** buttons a picture does when the file actually carries that data, the
+  context menu offers the same two entries, and the lightbox shows the prompt,
+  the seed and the model list above the technical panel. A clip that carries
+  nothing shows nothing, exactly as before.
+- Existing libraries pick this up on the next **Rescan**, not only after a full
+  Rebuild Cache: a video whose stored metadata predates the change is treated
+  as needing a re-read. It runs once per file — extraction stamps the version
+  back, including for videos that turn out to have no tags at all.
+
 ## [1.15.0] - 2026-08-26
 
 Comparing two renders usually comes down to one detail somewhere in the middle

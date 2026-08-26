@@ -135,7 +135,7 @@
     "shortcuts.trash": "В системную корзину",
     "shortcuts.cardButtons": "Кнопки карточки (при наведении)",
     "shortcuts.copyPrompt": "Копировать промпт",
-    "shortcuts.copyWorkflow": "Копировать воркфлоу (PNG)",
+    "shortcuts.copyWorkflow": "Копировать встроенный workflow",
     "shortcuts.download": "Скачать",
     "shortcuts.delete": "В корзину",
     "shortcuts.loadWorkflow": "Загрузить воркфлоу",

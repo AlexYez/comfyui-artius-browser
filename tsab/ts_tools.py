@@ -292,6 +292,44 @@ class TSToolLocator:
             )
         return ts_probe_dict, ts_frame_success
 
+    def TSProbeContainerTags(self, ts_source_path: Path) -> dict[str, str]:
+        """Container-level metadata tags, which is where ComfyUI puts a video's
+        workflow.
+
+        SaveVideo / SaveWEBM write the API prompt and the UI graph as container
+        tags ("prompt" and "workflow", JSON strings) - MP4 through
+        movflags=use_metadata_tags, WebM/MKV as Matroska tags. Only the tag
+        block is requested: -show_format alone reads the header, where a
+        faststart MP4 already keeps its moov, so this stays far cheaper than the
+        full stream probe the poster pass runs.
+        """
+        ts_ffprobe_path = self.TSResolveTool("ffprobe")
+        if not ts_ffprobe_path:
+            return {}
+        ts_results = self.TSRunCommandsParallel([(
+            self.ts_ffprobe_semaphore,
+            [
+                ts_ffprobe_path,
+                "-v", "error",
+                "-print_format", "json",
+                "-show_entries", "format_tags",
+                str(ts_source_path),
+            ],
+            60,
+        )])
+        ts_probe = self._TSParseProbeJson(ts_results[0] if ts_results else None, ts_source_path)
+        ts_tags = (ts_probe.get("format") or {}).get("tags") if isinstance(ts_probe.get("format"), dict) else None
+        if not isinstance(ts_tags, dict):
+            return {}
+        # Matroska upper-cases tag keys on write while MP4 keeps them as given,
+        # so the keys are folded here and every caller looks them up in lower
+        # case.
+        return {
+            str(ts_key).lower(): str(ts_value)
+            for ts_key, ts_value in ts_tags.items()
+            if isinstance(ts_value, str) and ts_value
+        }
+
     def TSRunFFProbeAndExtractWaveformParallel(
         self,
         ts_source_path: Path,

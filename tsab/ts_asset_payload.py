@@ -125,6 +125,11 @@ def TSBuildAssetCard(ts_row, ts_roots: dict[str, dict[str, Any]], ts_preview_cac
         "has_preview": bool(ts_row["has_preview"]),
         "has_metadata": bool(ts_row["has_metadata"]),
         "has_workflow": bool(str(ts_row["workflow_text"] or "")),
+        # Videos carry an embedded prompt as often as they carry a
+        # workflow, and as often as they carry neither - so the copy
+        # action on a video card is offered only when there is something
+        # to copy, rather than always, the way it is for an image.
+        "has_prompt": bool(str(ts_row["prompt_text"] or "")),
         # [AI agent] Empty for every asset not made in TS Image Studio.
         "studio": TSResolveStudioTag(ts_row),
         "codec_name": str(ts_technical_info.get("codec_name") or ""),

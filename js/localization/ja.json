@@ -135,7 +135,7 @@
     "shortcuts.trash": "システムのゴミ箱へ",
     "shortcuts.cardButtons": "カードのボタン(ホバー)",
     "shortcuts.copyPrompt": "プロンプトをコピー",
-    "shortcuts.copyWorkflow": "ワークフローをコピー(PNG)",
+    "shortcuts.copyWorkflow": "埋め込まれたワークフローをコピー",
     "shortcuts.download": "ダウンロード",
     "shortcuts.delete": "ゴミ箱へ",
     "shortcuts.loadWorkflow": "ワークフローを読み込む",

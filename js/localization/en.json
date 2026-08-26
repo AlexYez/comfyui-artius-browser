@@ -135,7 +135,7 @@
     "shortcuts.trash": "Send to system trash",
     "shortcuts.cardButtons": "Card buttons (hover)",
     "shortcuts.copyPrompt": "Copy prompt",
-    "shortcuts.copyWorkflow": "Copy workflow (PNG)",
+    "shortcuts.copyWorkflow": "Copy embedded workflow",
     "shortcuts.download": "Download",
     "shortcuts.delete": "Send to trash",
     "shortcuts.loadWorkflow": "Load workflow",

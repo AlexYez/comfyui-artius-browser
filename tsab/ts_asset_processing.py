@@ -4,8 +4,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
+from .ts_asset_metadata import TSNeedsPromptMetadataRefresh
 from .ts_hashing import TSComputeFileHash, TSDetectSupportedType
-from .ts_settings import TS_PROMPT_PARTS_VERSION
 from .ts_types import TSAssetStat
 from .ts_utils import TSJsonLoads
 
@@ -159,11 +159,10 @@ class TSAssetProcessingService:
             # treating that as stale re-opened the file, re-upserted the row and
             # re-emitted an asset-upsert event on every single detail view,
             # forever.
-            ts_needs_image_prompt_refresh = str(ts_fresh_row["type"] or "") == "image" and (
-                not isinstance(ts_metadata, dict)
-                or (bool(ts_metadata) and int(ts_metadata.get("prompt_parts_version") or 0) < TS_PROMPT_PARTS_VERSION)
+            ts_needs_prompt_refresh = TSNeedsPromptMetadataRefresh(
+                str(ts_fresh_row["type"] or ""), ts_metadata
             )
-            if bool(ts_fresh_row["has_metadata"]) and not ts_needs_image_prompt_refresh:
+            if bool(ts_fresh_row["has_metadata"]) and not ts_needs_prompt_refresh:
                 return ts_fresh_row
             ts_handler = self.ts_handler_registry.TSResolveHandler(str(ts_fresh_row["extension"] or ""), str(ts_fresh_row["type"] or ""))
             if ts_handler is None:

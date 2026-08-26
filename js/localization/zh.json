@@ -135,7 +135,7 @@
     "shortcuts.trash": "移至系统回收站",
     "shortcuts.cardButtons": "卡片按钮(悬停)",
     "shortcuts.copyPrompt": "复制提示词",
-    "shortcuts.copyWorkflow": "复制工作流(PNG)",
+    "shortcuts.copyWorkflow": "复制内嵌的工作流",
     "shortcuts.download": "下载",
     "shortcuts.delete": "移至回收站",
     "shortcuts.loadWorkflow": "加载工作流",

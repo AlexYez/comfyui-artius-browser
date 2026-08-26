@@ -2565,8 +2565,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 tsBadges.push(tsDurationBadge);
             }
             const tsShowActions = true;
-            const tsShowCopyAction = !tsWorkflowSection && tsItem.type !== "video" && tsItem.type !== "audio";
-            const tsShowWorkflowAction = !tsWorkflowSection && tsItem.type === "image" && String(tsItem.extension || "").toLowerCase() === ".png" && Boolean(tsItem.has_workflow);
+            // ComfyUI embeds the prompt and the workflow in videos as well as
+            // in PNGs, so both actions follow the payload flags rather than the
+            // asset type. Video and audio without an embedded prompt show
+            // nothing, which is why the copy action is flag-gated for them and
+            // still unconditional for a picture.
+            const tsShowCopyAction = !tsWorkflowSection
+                && (tsItem.type === "video" || tsItem.type === "audio" ? Boolean(tsItem.has_prompt) : true);
+            const tsShowWorkflowAction = !tsWorkflowSection && Boolean(tsItem.has_workflow);
             // [AI agent] Studio renders can be reopened in the session that
             // made them; the button only exists where that is possible.
             const tsExternalIds = new Set(
@@ -2945,10 +2951,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 ? this.tsT("menu.unfavorite", "Remove from favorites")
                 : this.tsT("menu.favorite", "Add to favorites"),
         });
-        if (tsAsset.type !== "video" && tsAsset.type !== "audio") {
+        if (tsAsset.type === "video" || tsAsset.type === "audio" ? Boolean(tsAsset.has_prompt) : true) {
             tsItems.push({ tsAction: "copy", tsLabel: this.tsT("menu.copyPrompt", "Copy prompt") });
         }
-        if (tsAsset.type === "image" && String(tsAsset.extension || "").toLowerCase() === ".png" && tsAsset.has_workflow) {
+        if (tsAsset.has_workflow) {
             tsItems.push({ tsAction: "workflow", tsLabel: this.tsT("menu.copyWorkflow", "Copy workflow") });
         }
         // [AI agent] Published by other packs; sits above the plain file
@@ -3130,7 +3136,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 tsHeading: this.tsT("shortcuts.cardButtons", "Card buttons (hover)"),
                 tsRows: [
                     ["P", this.tsT("shortcuts.copyPrompt", "Copy prompt")],
-                    ["W", this.tsT("shortcuts.copyWorkflow", "Copy workflow (PNG)")],
+                    ["W", this.tsT("shortcuts.copyWorkflow", "Copy embedded workflow")],
                     ["D", this.tsT("shortcuts.download", "Download")],
                     ["X", this.tsT("shortcuts.delete", "Send to trash")],
                     ["L", this.tsT("shortcuts.loadWorkflow", "Load workflow")],

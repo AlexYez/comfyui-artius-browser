@@ -24,8 +24,9 @@ from .ts_settings import (
     TS_PROGRESS_EVENT_FILE_STEP,
     TS_PROGRESS_LOG_PERCENT_STEP,
 )
+from .ts_asset_metadata import TSNeedsPromptMetadataRefresh
 from .ts_types import TSAssetPayload, TSAssetStat, TSRootDefinition, TSScanStatus
-from .ts_utils import TSNormalizePathString
+from .ts_utils import TSJsonLoads, TSNormalizePathString
 
 TSLogger = logging.getLogger("TSArtiusBrowser")
 
@@ -261,6 +262,20 @@ class TSIndexer:
                                 or not bool(ts_effective_row["is_indexed"])
                                 or not bool(ts_effective_row["has_preview"])
                                 or not bool(ts_effective_row["has_metadata"])
+                                # An unchanged file whose STORED prompt/workflow
+                                # blob predates the current extraction rules. It
+                                # is what lets a plain Rescan backfill a library
+                                # indexed before videos were read for embedded
+                                # workflows, instead of demanding a full Rebuild
+                                # Cache. Self-limiting: extraction writes the
+                                # version stamp back, so the next scan skips it.
+                                or (
+                                    ts_effective_row is not None
+                                    and TSNeedsPromptMetadataRefresh(
+                                        str(ts_effective_row["type"] or ""),
+                                        TSJsonLoads(ts_effective_row["metadata"], {}),
+                                    )
+                                )
                             )
                             if ts_needs_index:
                                 ts_candidate_stats.append((ts_asset_stat, ts_effective_row))

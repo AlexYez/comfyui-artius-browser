@@ -42,7 +42,7 @@
 | | |
 |---|---|
 | 🖼️ **Images** | Cached thumbnails, PNG prompt + workflow extraction, lightbox with wipe / 2×2 grid compare, zoomed in step |
-| 🎬 **Videos** | Frame-stepping, codec / FPS / duration / audio info, sync compare for 2-4 clips |
+| 🎬 **Videos** | Frame-stepping, codec / FPS / duration / audio info, embedded prompt + workflow, sync compare for 2-4 clips |
 | 🎵 **Audio** | Waveform preview, transport controls, channel layout |
 | 🎲 **3D** | Native ComfyUI 3D viewer in the lightbox, captured 3D thumbnails |
 | 📜 **Workflows** | Reads ComfyUI's native workflow folder, sidecar previews, drag-to-load |
@@ -283,7 +283,7 @@ See [CHANGELOG.md](CHANGELOG.md). Format: [Keep a Changelog](https://keepachange
 | | |
 |---|---|
 | 🖼️ **Картинки** | Кэш-превью, чтение PNG `Prompt` + `Workflow`, лайтбокс с wipe / 2×2 grid сравнением и синхронным зумом |
-| 🎬 **Видео** | Покадровая навигация, кодек / FPS / длительность / инфо аудиодорожки, синхронное сравнение 2-4 клипов |
+| 🎬 **Видео** | Покадровая навигация, кодек / FPS / длительность / инфо аудиодорожки, встроенные prompt + workflow, синхронное сравнение 2-4 клипов |
 | 🎵 **Аудио** | Waveform-превью, плеер, channel layout |
 | 🎲 **3D** | Нативный 3D viewer в лайтбоксе, фронтенд-сгенерированные 3D-thumbnail'ы |
 | 📜 **Workflows** | Читает нативную папку workflow, sidecar-превью, drag-to-load |
@@ -432,7 +432,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | | |
 |---|---|
 | 🖼️ **Imágenes** | Miniaturas cacheadas, extracción de `Prompt` + `Workflow` del PNG, lightbox con comparación wipe / 2×2 y zoom sincronizado |
-| 🎬 **Vídeos** | Navegación cuadro a cuadro, info de códec / FPS / duración / audio, comparación sincronizada de 2-4 clips |
+| 🎬 **Vídeos** | Navegación cuadro a cuadro, info de códec / FPS / duración / audio, prompt + workflow incrustados, comparación sincronizada de 2-4 clips |
 | 🎵 **Audio** | Previsualización de forma de onda, controles de transporte, layout de canales |
 | 🎲 **3D** | Viewer 3D nativo de ComfyUI dentro del lightbox, miniaturas 3D capturadas |
 | 📜 **Workflows** | Lee la carpeta de workflows nativa de ComfyUI, previews sidecar, drag-to-load |
@@ -662,7 +662,7 @@ Consulta [CHANGELOG.md](CHANGELOG.md). Formato: [Keep a Changelog](https://keepa
 | | |
 |---|---|
 | 🖼️ **图片** | 缩略图缓存、提取 PNG 中的 `Prompt` 与 `Workflow`、灯箱支持 wipe / 2×2 网格对比与同步缩放 |
-| 🎬 **视频** | 逐帧导航、显示编码器 / FPS / 时长 / 音频信息、2-4 个剪辑的同步对比 |
+| 🎬 **视频** | 逐帧导航、显示编码器 / FPS / 时长 / 音频信息、内嵌的 prompt 与 workflow、2-4 个剪辑的同步对比 |
 | 🎵 **音频** | 波形预览、播放控制、声道布局 |
 | 🎲 **3D** | 灯箱中嵌入 ComfyUI 原生 3D 查看器、自动捕获 3D 缩略图 |
 | 📜 **Workflows** | 直接读取 ComfyUI 原生 workflow 文件夹、sidecar 预览、拖拽即可加载 |
@@ -893,7 +893,7 @@ ComfyUI/output/.ts_artius_browser/
 | | |
 |---|---|
 | 🖼️ **画像** | キャッシュ済みサムネイル、PNG の `Prompt` + `Workflow` 抽出、ライトボックスでの wipe / 2×2 グリッド比較と同期ズーム |
-| 🎬 **動画** | フレーム単位のナビゲーション、コーデック / FPS / 長さ / オーディオ情報、2〜4 クリップの同期比較 |
+| 🎬 **動画** | フレーム単位のナビゲーション、コーデック / FPS / 長さ / オーディオ情報、埋め込まれた prompt と workflow、2〜4 クリップの同期比較 |
 | 🎵 **音声** | 波形プレビュー、再生コントロール、チャンネルレイアウト |
 | 🎲 **3D** | ライトボックス内でネイティブ ComfyUI 3D ビューアー、キャプチャした 3D サムネイル |
 | 📜 **Workflows** | ComfyUI ネイティブの workflow フォルダを直接読み込み、サイドカープレビュー、ドラッグで読み込み |
@@ -1124,7 +1124,7 @@ ComfyUI/output/.ts_artius_browser/
 | | |
 |---|---|
 | 🖼️ **이미지** | 캐시된 썸네일, PNG `Prompt` + `Workflow` 추출, 라이트박스의 wipe / 2×2 그리드 비교와 동기 확대 |
-| 🎬 **비디오** | 프레임 단위 탐색, 코덱 / FPS / 길이 / 오디오 정보, 2-4 개 클립의 동기화 비교 |
+| 🎬 **비디오** | 프레임 단위 탐색, 코덱 / FPS / 길이 / 오디오 정보, 내장된 prompt + workflow, 2-4 개 클립의 동기화 비교 |
 | 🎵 **오디오** | 파형 미리보기, 재생 컨트롤, 채널 레이아웃 |
 | 🎲 **3D** | 라이트박스 내 ComfyUI 네이티브 3D 뷰어, 캡처된 3D 썸네일 |
 | 📜 **Workflows** | ComfyUI 네이티브 workflow 폴더를 직접 읽음, sidecar 미리보기, 드래그로 로드 |
@@ -1355,7 +1355,7 @@ ComfyUI/output/.ts_artius_browser/
 | | |
 |---|---|
 | 🖼️ **Bilder** | Gecachte Thumbnails, Extraktion von PNG `Prompt` + `Workflow`, Lightbox mit Wipe / 2×2-Grid-Vergleich und synchronem Zoom |
-| 🎬 **Videos** | Frame-genaue Navigation, Codec- / FPS- / Dauer- / Audio-Infos, synchroner Vergleich von 2-4 Clips |
+| 🎬 **Videos** | Frame-genaue Navigation, Codec- / FPS- / Dauer- / Audio-Infos, eingebettete Prompt + Workflow, synchroner Vergleich von 2-4 Clips |
 | 🎵 **Audio** | Waveform-Vorschau, Transport-Steuerung, Channel-Layout |
 | 🎲 **3D** | Nativer ComfyUI 3D-Viewer in der Lightbox, automatisch erfasste 3D-Thumbnails |
 | 📜 **Workflows** | Liest den nativen Workflow-Ordner von ComfyUI direkt, Sidecar-Previews, Drag-to-Load |
@@ -1586,7 +1586,7 @@ Siehe [CHANGELOG.md](CHANGELOG.md). Format: [Keep a Changelog](https://keepachan
 | | |
 |---|---|
 | 🖼️ **Immagini** | Miniature in cache, estrazione di `Prompt` + `Workflow` dal PNG, lightbox con confronto wipe / 2×2 e zoom sincronizzato |
-| 🎬 **Video** | Navigazione frame per frame, info su codec / FPS / durata / audio, confronto sincronizzato di 2-4 clip |
+| 🎬 **Video** | Navigazione frame per frame, info su codec / FPS / durata / audio, prompt + workflow incorporati, confronto sincronizzato di 2-4 clip |
 | 🎵 **Audio** | Anteprima della forma d'onda, controlli di riproduzione, layout dei canali |
 | 🎲 **3D** | Viewer 3D nativo di ComfyUI nel lightbox, miniature 3D catturate |
 | 📜 **Workflows** | Legge la cartella di workflow nativa di ComfyUI, anteprime sidecar, drag-to-load |
@@ -1818,7 +1818,7 @@ Vedi [CHANGELOG.md](CHANGELOG.md). Formato: [Keep a Changelog](https://keepachan
 | | |
 |---|---|
 | 🖼️ **Images** | Miniatures en cache, extraction de `Prompt` + `Workflow` du PNG, lightbox avec comparaison wipe / 2×2 et zoom synchronisé |
-| 🎬 **Vidéos** | Navigation image par image, infos codec / FPS / durée / audio, comparaison synchronisée de 2-4 clips |
+| 🎬 **Vidéos** | Navigation image par image, infos codec / FPS / durée / audio, prompt + workflow embarqués, comparaison synchronisée de 2-4 clips |
 | 🎵 **Audio** | Aperçu de la forme d'onde, contrôles de transport, layout des canaux |
 | 🎲 **3D** | Viewer 3D natif de ComfyUI dans la lightbox, miniatures 3D capturées |
 | 📜 **Workflows** | Lit le dossier de workflows natif de ComfyUI, aperçus sidecar, drag-to-load |
@@ -2050,7 +2050,7 @@ Voir [CHANGELOG.md](CHANGELOG.md). Format : [Keep a Changelog](https://keepachan
 | | |
 |---|---|
 | 🖼️ **Imagens** | Thumbnails em cache, extracção de `Prompt` + `Workflow` do PNG, lightbox com comparação wipe / 2×2 e zoom sincronizado |
-| 🎬 **Vídeos** | Navegação frame a frame, info de codec / FPS / duração / áudio, comparação sincronizada de 2-4 clips |
+| 🎬 **Vídeos** | Navegação frame a frame, info de codec / FPS / duração / áudio, prompt + workflow embutidos, comparação sincronizada de 2-4 clips |
 | 🎵 **Áudio** | Pré-visualização de forma de onda, controlos de reprodução, layout de canais |
 | 🎲 **3D** | Viewer 3D nativo do ComfyUI no lightbox, thumbnails 3D capturados |
 | 📜 **Workflows** | Lê directamente a pasta nativa de workflows do ComfyUI, previews sidecar, drag-to-load |
