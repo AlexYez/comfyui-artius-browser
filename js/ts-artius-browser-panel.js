@@ -3140,6 +3140,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 tsHeading: this.tsT("shortcuts.compareHeading", "Compare"),
                 tsRows: [
                     [this.tsT("shortcuts.selectN", "Select 2-4"), this.tsT("shortcuts.compare", "Compare images or videos in the lightbox")],
+                    ["Wheel / + -", this.tsT("shortcuts.zoom", "Zoom both images at once")],
+                    ["1 / 0", this.tsT("shortcuts.zoomNative", "Actual pixels / fit to view")],
+                    ["← ↑ ↓ →", this.tsT("shortcuts.pan", "Pan the zoomed comparison")],
                 ],
             },
         ];

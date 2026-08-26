@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-08-26
+
+Comparing two renders usually comes down to one detail somewhere in the middle
+of the frame, and until now the compare view could only show them fit to the
+screen. Both compare layouts zoom together: the wheel zooms around the cursor,
+the keyboard zooms and pans, and one scale drives every image so the same
+region stays under inspection in all of them.
+
+### Added
+
+- **Zoomed image comparison.** The wipe and grid compare views now zoom: the
+  wheel zooms around the cursor, `+` / `-` zoom from the keyboard, `1` jumps to
+  actual pixels and `0` returns to fit, and the arrow keys pan (hold `Shift`
+  for a coarse step; in the grid a left drag pans too, and in the wipe view a
+  middle drag does, since the left button belongs to the divider). One scale
+  and one offset drive every image, because two renders inspected at different
+  zooms or different corners are not a comparison. A small readout shows the
+  real pixel ratio, so "100%" means one image pixel per screen pixel.
+- The wipe divider stays where the slider puts it at any zoom: the clip moved
+  from the image onto a layer around it, since a clip-path is resolved in the
+  element's own coordinate space and would otherwise slide with the zoom.
+
+### Fixed
+
+- The private test suite had been reporting nineteen skips as a pass. `aiohttp`
+  was missing from the development environment, so thirty-seven tests never
+  ran; several had drifted out of date behind that skip (a preview URL still
+  expecting the pre-mtime cache-busting token, a delegation test still passing
+  the offset parameter keyset pagination replaced, a workflow test unaware of
+  the symlink containment check). Those expectations are corrected, and the
+  aiohttp stubs now install only when the real package is genuinely absent, so
+  the suite no longer passes or fails by discovery order.
+
 ## [1.14.0] - 2026-08-10
 
 A hardening release, from a full audit of the pack. Two boundary defects are

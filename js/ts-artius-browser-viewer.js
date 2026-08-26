@@ -73,6 +73,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsMoreRequestPromise = null;
         this.tsStageCleanup = null;
         this.tsVideoFrameStepper = null;
+        this.tsImageZoomHandler = null;
         this.tsCompareItems = [];
         this.tsDetailRequestToken = 0;
         this.tsBoundKeydown = (tsEvent) => this.tsHandleKeydown(tsEvent);
@@ -478,9 +479,47 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     position: absolute;
                     inset: 0;
                 }
+                .ts-image-compare-layer {
+                    position: absolute;
+                    inset: 0;
+                }
+                /* The clip lives on the LAYER, never on the image: clip-path is
+                   resolved in the element's own coordinate space, so clipping a
+                   zoomed image would slide the split away from the divider. */
                 .ts-image-compare-after {
                     clip-path: inset(0 calc(100% - var(--ts-wipe)) 0 0);
                     z-index: 1;
+                }
+                .ts-compare-image {
+                    transform-origin: 50% 50%;
+                    will-change: transform;
+                }
+                .ts-image-compare-shell[data-zoomed="true"] .ts-image-compare-wipe {
+                    cursor: ew-resize;
+                }
+                .ts-image-compare-grid[data-zoomed="true"] .ts-image-compare-card {
+                    cursor: grab;
+                }
+                .ts-image-compare-grid[data-panning="true"] .ts-image-compare-card {
+                    cursor: grabbing;
+                }
+                .ts-image-compare-zoom {
+                    position: absolute;
+                    right: 10px;
+                    bottom: 10px;
+                    z-index: 4;
+                    padding: 3px 8px;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 999px;
+                    background: var(--ts-nav-surface);
+                    backdrop-filter: blur(8px);
+                    color: var(--ts-text-muted);
+                    font: 600 11px/1.3 inherit;
+                    pointer-events: none;
+                    white-space: nowrap;
+                }
+                .ts-image-compare-zoom[data-active="false"] {
+                    opacity: 0;
                 }
                 .ts-image-compare-divider {
                     position: absolute;
@@ -926,6 +965,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         }
         this.tsStageCleanup = null;
         this.tsVideoFrameStepper = null;
+        this.tsImageZoomHandler = null;
         // tsDetailRequestToken stays monotonic on purpose: a stale detail
         // fetch is rejected by the ++token guard, not by a reset here.
         // Resetting it let a concurrent tsRender() (e.g. prefetch) drop the
@@ -957,6 +997,51 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         }
         const tsCompareMode = this.tsIsCompareMode();
         const tsVideoCompareMode = this.tsIsVideoCompareMode();
+        const tsImageCompareMode = this.tsIsImageCompareMode();
+        const tsZoom = this.tsImageZoomHandler;
+        // Ctrl/Cmd +/-/0 is the browser's own page zoom and Alt belongs to the
+        // window manager: only the bare keys are ours.
+        if (tsZoom && !tsEvent.ctrlKey && !tsEvent.metaKey && !tsEvent.altKey) {
+            if (tsEvent.key === "+" || tsEvent.key === "=") {
+                tsEvent.preventDefault();
+                tsZoom.tsZoomBy(tsViewerSettings.imageZoom.stepIn);
+                return;
+            }
+            if (tsEvent.key === "-" || tsEvent.key === "_") {
+                tsEvent.preventDefault();
+                tsZoom.tsZoomBy(tsViewerSettings.imageZoom.stepOut);
+                return;
+            }
+            if (tsEvent.key === "0") {
+                tsEvent.preventDefault();
+                tsZoom.tsReset();
+                return;
+            }
+            if (tsEvent.key === "1") {
+                tsEvent.preventDefault();
+                tsZoom.tsZoomToNative();
+                return;
+            }
+        }
+        // Arrows pan only where they are otherwise idle: in image compare mode
+        // there is nothing to navigate to and no frame to step, so a zoomed-in
+        // comparison gets them. Single-image arrows stay asset navigation.
+        if (tsZoom && tsImageCompareMode && tsZoom.tsIsZoomed() && !tsEvent.ctrlKey && !tsEvent.metaKey) {
+            const tsPanStep = tsEvent.shiftKey
+                ? tsViewerSettings.imageZoom.panStepFast
+                : tsViewerSettings.imageZoom.panStep;
+            const tsPanOffsets = {
+                ArrowLeft: [tsPanStep, 0],
+                ArrowRight: [-tsPanStep, 0],
+                ArrowUp: [0, tsPanStep],
+                ArrowDown: [0, -tsPanStep],
+            };
+            const tsOffset = tsPanOffsets[tsEvent.key];
+            if (tsOffset && tsZoom.tsPanBy(tsOffset[0], tsOffset[1])) {
+                tsEvent.preventDefault();
+                return;
+            }
+        }
         if (tsEvent.key === "ArrowLeft") {
             if (this.tsItems[this.tsIndex]?.type === "video" && tsVideoCompareMode && typeof this.tsVideoFrameStepper === "function") {
                 tsEvent.preventDefault();
@@ -1286,6 +1371,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         }
         this.tsStageCleanup = null;
         this.tsVideoFrameStepper = null;
+        this.tsImageZoomHandler = null;
         this.tsCompareItems = [];
     }
 
@@ -1825,21 +1911,293 @@ export class TSArtiusBrowserViewer extends HTMLElement {
     }
 
     tsSetupImageCompareStage() {
-        const tsShell = this.tsRefs.tsStage?.querySelector(".ts-image-compare-shell");
-        const tsRange = tsShell?.querySelector(".ts-image-compare-range");
-        if (!tsShell || !tsRange) {
+        const tsStage = this.tsRefs.tsStage;
+        const tsShell = tsStage?.querySelector(".ts-image-compare-shell");
+        const tsImages = Array.from(tsShell?.querySelectorAll(".ts-compare-image") || []);
+        if (!tsShell || !tsImages.length) {
+            this.tsImageZoomHandler = null;
             return null;
         }
+        // Present only in the two-image wipe layout. Its absence is what marks
+        // the grid layout, where a left drag is free to pan because there is no
+        // divider to drag.
+        const tsRange = tsShell.querySelector(".ts-image-compare-range");
+        const tsWipe = tsShell.querySelector(".ts-image-compare-wipe");
+        const tsZoomLabel = tsShell.querySelector(".ts-image-compare-zoom");
+
         const tsApplyWipe = () => {
+            if (!tsRange) {
+                return;
+            }
             const tsValue = Math.max(0, Math.min(100, Number(tsRange.value || 50)));
             tsShell.style.setProperty("--ts-wipe", `${tsValue}%`);
         };
-        tsRange.addEventListener("input", tsApplyWipe);
-        tsRange.addEventListener("change", tsApplyWipe);
+
+        // One scale and one offset drive EVERY image: two renders compared at
+        // different zooms, or at different corners, are not a comparison.
+        const tsZoomLimits = tsViewerSettings.imageZoom;
+        let tsScale = 1;
+        let tsTranslateX = 0;
+        let tsTranslateY = 0;
+        let tsPanning = false;
+        let tsPointerId = null;
+        let tsPanStartX = 0;
+        let tsPanStartY = 0;
+        let tsPanOriginX = 0;
+        let tsPanOriginY = 0;
+
+        // The box one image is laid out in: the whole wipe area, or the card
+        // under the cursor in the grid layout.
+        const tsResolveFrame = (tsClientX = null, tsClientY = null) => {
+            if (tsWipe) {
+                return tsWipe;
+            }
+            if (tsClientX !== null && tsClientY !== null) {
+                for (const tsImage of tsImages) {
+                    const tsCard = tsImage.parentElement;
+                    const tsRect = tsCard?.getBoundingClientRect();
+                    if (tsRect
+                        && tsClientX >= tsRect.left && tsClientX <= tsRect.right
+                        && tsClientY >= tsRect.top && tsClientY <= tsRect.bottom) {
+                        return tsCard;
+                    }
+                }
+            }
+            return tsImages[0].parentElement || tsShell;
+        };
+
+        // object-fit: contain means the PICTURE is smaller than the box it sits
+        // in. Clamping against the box instead would let a pan wander off into
+        // the letterbox, and the zoom readout would lie.
+        // Measured from the FIRST image: one scale drives them all, so when the
+        // sources differ in size "100%" can only be exact for one of them, and
+        // the first is the one the user picked to compare against.
+        const tsGetRenderedSize = (tsFrame) => {
+            const tsBoxWidth = tsFrame?.clientWidth || 0;
+            const tsBoxHeight = tsFrame?.clientHeight || 0;
+            const tsNaturalWidth = Number(tsImages[0].naturalWidth) || 0;
+            const tsNaturalHeight = Number(tsImages[0].naturalHeight) || 0;
+            if (!tsBoxWidth || !tsBoxHeight || !tsNaturalWidth || !tsNaturalHeight) {
+                return { tsWidth: tsBoxWidth, tsHeight: tsBoxHeight, tsFit: 0 };
+            }
+            const tsFit = Math.min(tsBoxWidth / tsNaturalWidth, tsBoxHeight / tsNaturalHeight);
+            return { tsWidth: tsNaturalWidth * tsFit, tsHeight: tsNaturalHeight * tsFit, tsFit };
+        };
+
+        // "100%" means one image pixel per screen pixel, so it depends on how
+        // far the image was scaled down to fit in the first place.
+        const tsGetNativeScale = () => {
+            const tsFit = tsGetRenderedSize(tsResolveFrame()).tsFit;
+            return tsFit > 0 ? 1 / tsFit : 1;
+        };
+        const tsGetMaxScale = () => Math.max(tsZoomLimits.max, tsGetNativeScale());
+        const tsClampScale = (tsValue) => Math.max(tsZoomLimits.min, Math.min(tsGetMaxScale(), tsValue));
+
+        const tsClampTranslate = () => {
+            const tsFrame = tsResolveFrame();
+            const tsRendered = tsGetRenderedSize(tsFrame);
+            const tsMaxX = Math.max(0, ((tsRendered.tsWidth * tsScale) - (tsFrame?.clientWidth || 0)) / 2);
+            const tsMaxY = Math.max(0, ((tsRendered.tsHeight * tsScale) - (tsFrame?.clientHeight || 0)) / 2);
+            tsTranslateX = Math.max(-tsMaxX, Math.min(tsMaxX, tsTranslateX));
+            tsTranslateY = Math.max(-tsMaxY, Math.min(tsMaxY, tsTranslateY));
+        };
+
+        const tsApplyTransform = () => {
+            if (tsScale <= 1.001) {
+                tsScale = 1;
+                tsTranslateX = 0;
+                tsTranslateY = 0;
+            } else {
+                tsClampTranslate();
+            }
+            const tsTransform = tsScale === 1
+                ? ""
+                : `translate(${tsTranslateX}px, ${tsTranslateY}px) scale(${tsScale})`;
+            tsImages.forEach((tsImage) => {
+                tsImage.style.transform = tsTransform;
+            });
+            tsShell.dataset.zoomed = String(tsScale > 1);
+            tsShell.dataset.panning = String(tsPanning);
+            if (tsZoomLabel) {
+                const tsFit = tsGetRenderedSize(tsResolveFrame()).tsFit;
+                const tsPercent = Math.round(tsScale * (tsFit > 0 ? tsFit : 1) * 100);
+                tsZoomLabel.textContent = `${tsPercent}%`;
+                tsZoomLabel.dataset.active = String(tsScale > 1.001);
+            }
+        };
+
+        const tsZoomAround = (tsNextScale, tsClientX, tsClientY) => {
+            const tsFrame = tsResolveFrame(tsClientX, tsClientY);
+            const tsRect = tsFrame.getBoundingClientRect();
+            const tsPointX = tsClientX - (tsRect.left + (tsRect.width / 2));
+            const tsPointY = tsClientY - (tsRect.top + (tsRect.height / 2));
+            const tsLocalX = (tsPointX - tsTranslateX) / tsScale;
+            const tsLocalY = (tsPointY - tsTranslateY) / tsScale;
+            tsScale = tsNextScale;
+            tsTranslateX = tsPointX - (tsLocalX * tsScale);
+            tsTranslateY = tsPointY - (tsLocalY * tsScale);
+            tsApplyTransform();
+        };
+
+        const tsZoomTo = (tsNextScale, tsClientX = null, tsClientY = null) => {
+            const tsTarget = tsClampScale(tsNextScale);
+            if (Math.abs(tsTarget - tsScale) < 0.0001) {
+                return;
+            }
+            if (tsClientX === null || tsClientY === null) {
+                // Keyboard zoom has no cursor, so it holds the frame centre.
+                const tsRect = tsResolveFrame().getBoundingClientRect();
+                tsZoomAround(tsTarget, tsRect.left + (tsRect.width / 2), tsRect.top + (tsRect.height / 2));
+                return;
+            }
+            tsZoomAround(tsTarget, tsClientX, tsClientY);
+        };
+
+        const tsResetZoom = () => {
+            tsScale = 1;
+            tsTranslateX = 0;
+            tsTranslateY = 0;
+            tsPanning = false;
+            tsPointerId = null;
+            tsApplyTransform();
+        };
+
+        const tsHandleWheel = (tsEvent) => {
+            // Ctrl+wheel is the browser page zoom; leave it to the browser.
+            if (tsEvent.ctrlKey || tsEvent.metaKey) {
+                return;
+            }
+            tsEvent.preventDefault();
+            tsZoomTo(
+                tsScale * (tsEvent.deltaY < 0 ? tsZoomLimits.stepIn : tsZoomLimits.stepOut),
+                tsEvent.clientX,
+                tsEvent.clientY,
+            );
+        };
+
+        // In the wipe layout a left drag belongs to the divider, so panning is
+        // the middle button (and the arrow keys). In the grid layout there is
+        // nothing to drag, so the left button pans too.
+        const tsCanPanWithButton = (tsButton) => (tsRange ? tsButton === 1 : (tsButton === 0 || tsButton === 1));
+
+        const tsHandlePointerDown = (tsEvent) => {
+            if (tsScale <= 1 || !tsCanPanWithButton(tsEvent.button)) {
+                return;
+            }
+            tsEvent.preventDefault();
+            tsPanning = true;
+            tsPointerId = tsEvent.pointerId;
+            tsPanStartX = tsEvent.clientX;
+            tsPanStartY = tsEvent.clientY;
+            tsPanOriginX = tsTranslateX;
+            tsPanOriginY = tsTranslateY;
+            tsShell.setPointerCapture?.(tsPointerId);
+            tsApplyTransform();
+        };
+
+        const tsHandlePointerMove = (tsEvent) => {
+            if (!tsPanning || tsEvent.pointerId !== tsPointerId) {
+                return;
+            }
+            tsEvent.preventDefault();
+            tsTranslateX = tsPanOriginX + (tsEvent.clientX - tsPanStartX);
+            tsTranslateY = tsPanOriginY + (tsEvent.clientY - tsPanStartY);
+            tsApplyTransform();
+        };
+
+        const tsStopPanning = (tsEvent) => {
+            if (!tsPanning) {
+                return;
+            }
+            if (tsEvent && tsPointerId !== null && tsEvent.pointerId !== tsPointerId) {
+                return;
+            }
+            tsPanning = false;
+            if (tsEvent && tsPointerId !== null) {
+                try {
+                    tsShell.releasePointerCapture?.(tsPointerId);
+                } catch {
+                    // no-op
+                }
+            }
+            tsPointerId = null;
+            tsApplyTransform();
+        };
+
+        const tsPreventMiddleDefault = (tsEvent) => {
+            if (tsEvent.button === 1) {
+                tsEvent.preventDefault();
+            }
+        };
+
+        // A resize changes the fit scale under our feet, and every offset was
+        // computed against the old box.
+        const tsHandleResize = () => tsResetZoom();
+        const tsHandleImageLoad = () => tsApplyTransform();
+
+        this.tsImageZoomHandler = {
+            tsZoomBy: (tsFactor) => tsZoomTo(tsScale * tsFactor),
+            tsZoomToNative: () => {
+                const tsNativeScale = tsGetNativeScale();
+                // Already at native pixels: the useful second press is "back to
+                // fit", the same toggle the single-image stage does on click.
+                if (Math.abs(tsScale - tsNativeScale) < 0.01 || tsNativeScale <= 1.02) {
+                    tsResetZoom();
+                    return;
+                }
+                tsZoomTo(tsNativeScale);
+            },
+            tsReset: tsResetZoom,
+            tsIsZoomed: () => tsScale > 1.001,
+            tsPanBy: (tsDeltaX, tsDeltaY) => {
+                if (tsScale <= 1.001) {
+                    return false;
+                }
+                tsTranslateX += tsDeltaX;
+                tsTranslateY += tsDeltaY;
+                tsApplyTransform();
+                return true;
+            },
+        };
+
+        tsImages.forEach((tsImage) => {
+            tsImage.draggable = false;
+            tsImage.addEventListener("load", tsHandleImageLoad);
+        });
+        tsRange?.addEventListener("input", tsApplyWipe);
+        tsRange?.addEventListener("change", tsApplyWipe);
+        tsShell.addEventListener("wheel", tsHandleWheel, { passive: false });
+        tsShell.addEventListener("pointerdown", tsHandlePointerDown);
+        tsShell.addEventListener("pointermove", tsHandlePointerMove);
+        tsShell.addEventListener("pointerup", tsStopPanning);
+        tsShell.addEventListener("pointercancel", tsStopPanning);
+        tsShell.addEventListener("lostpointercapture", tsStopPanning);
+        tsShell.addEventListener("mousedown", tsPreventMiddleDefault);
+        tsShell.addEventListener("auxclick", tsPreventMiddleDefault);
+        window.addEventListener("resize", tsHandleResize);
         tsApplyWipe();
+        tsApplyTransform();
+
         return () => {
-            tsRange.removeEventListener("input", tsApplyWipe);
-            tsRange.removeEventListener("change", tsApplyWipe);
+            tsStopPanning();
+            this.tsImageZoomHandler = null;
+            tsImages.forEach((tsImage) => {
+                tsImage.removeEventListener("load", tsHandleImageLoad);
+                tsImage.style.transform = "";
+            });
+            tsRange?.removeEventListener("input", tsApplyWipe);
+            tsRange?.removeEventListener("change", tsApplyWipe);
+            tsShell.removeEventListener("wheel", tsHandleWheel);
+            tsShell.removeEventListener("pointerdown", tsHandlePointerDown);
+            tsShell.removeEventListener("pointermove", tsHandlePointerMove);
+            tsShell.removeEventListener("pointerup", tsStopPanning);
+            tsShell.removeEventListener("pointercancel", tsStopPanning);
+            tsShell.removeEventListener("lostpointercapture", tsStopPanning);
+            tsShell.removeEventListener("mousedown", tsPreventMiddleDefault);
+            tsShell.removeEventListener("auxclick", tsPreventMiddleDefault);
+            window.removeEventListener("resize", tsHandleResize);
+            delete tsShell.dataset.zoomed;
+            delete tsShell.dataset.panning;
         };
     }
 
@@ -2260,6 +2618,46 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsApplyTransform();
         };
 
+        // The same contract the compare stage publishes, so the viewer's zoom
+        // keys work on a single image without knowing which stage is up.
+        this.tsImageZoomHandler = {
+            tsZoomBy: (tsFactor) => {
+                const tsRect = tsStage.getBoundingClientRect();
+                const tsNextScale = Math.max(
+                    tsZoomLimits.tsMin,
+                    Math.min(tsGetMaxScale(), tsScale * tsFactor),
+                );
+                if (Math.abs(tsNextScale - tsScale) < 0.0001) {
+                    return;
+                }
+                tsZoomAroundPoint(tsNextScale, tsRect.left + (tsRect.width / 2), tsRect.top + (tsRect.height / 2));
+            },
+            tsZoomToNative: () => {
+                const tsNativeScale = tsGetNativeScale();
+                if (tsScale > 1.001 || tsNativeScale <= 1.02) {
+                    tsHandleReset();
+                    return;
+                }
+                const tsRect = tsStage.getBoundingClientRect();
+                tsZoomAroundPoint(
+                    Math.min(tsGetMaxScale(), tsNativeScale),
+                    tsRect.left + (tsRect.width / 2),
+                    tsRect.top + (tsRect.height / 2),
+                );
+            },
+            tsReset: tsHandleReset,
+            tsIsZoomed: () => tsScale > 1.001,
+            tsPanBy: (tsDeltaX, tsDeltaY) => {
+                if (tsScale <= 1.001) {
+                    return false;
+                }
+                tsTranslateX += tsDeltaX;
+                tsTranslateY += tsDeltaY;
+                tsApplyTransform();
+                return true;
+            },
+        };
+
         tsImage.draggable = false;
         tsStage.addEventListener("wheel", tsHandleWheel, { passive: false });
         tsStage.addEventListener("pointerdown", tsHandlePointerDown);
@@ -2280,6 +2678,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
 
         return () => {
             tsStopPanning();
+            this.tsImageZoomHandler = null;
             window.removeEventListener("resize", tsHandleReset);
             tsStage.removeEventListener("wheel", tsHandleWheel);
             tsStage.removeEventListener("pointerdown", tsHandlePointerDown);

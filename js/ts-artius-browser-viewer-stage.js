@@ -12,14 +12,24 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
             const tsImageLabel = tsDeps.t("type.image", "Image");
             if (tsCompareItems.length === 2) {
                 const [tsBeforeItem, tsAfterItem] = tsCompareItems;
+                // Each image sits in its own layer, and the wipe clips the
+                // LAYER rather than the image. clip-path is resolved in the
+                // element's own coordinate space, so clipping a zoomed image
+                // would drag the split away from the divider the moment the
+                // user zooms.
                 return `
                     <div class="ts-image-compare-shell" data-count="2">
                         <div class="ts-image-compare-wipe">
-                            <img class="ts-image-compare-before" src="${tsDeps.escapeAttribute(tsDeps.apiURL(tsBeforeItem.file_url))}" alt="${tsDeps.escapeAttribute(tsBeforeItem.filename || tsImageLabel)}">
-                            <img class="ts-image-compare-after" src="${tsDeps.escapeAttribute(tsDeps.apiURL(tsAfterItem.file_url))}" alt="${tsDeps.escapeAttribute(tsAfterItem.filename || tsImageLabel)}">
+                            <div class="ts-image-compare-layer ts-image-compare-before">
+                                <img class="ts-compare-image" src="${tsDeps.escapeAttribute(tsDeps.apiURL(tsBeforeItem.file_url))}" alt="${tsDeps.escapeAttribute(tsBeforeItem.filename || tsImageLabel)}">
+                            </div>
+                            <div class="ts-image-compare-layer ts-image-compare-after">
+                                <img class="ts-compare-image" src="${tsDeps.escapeAttribute(tsDeps.apiURL(tsAfterItem.file_url))}" alt="${tsDeps.escapeAttribute(tsAfterItem.filename || tsImageLabel)}">
+                            </div>
                             <div class="ts-image-compare-divider"></div>
                             <input class="ts-image-compare-range" type="range" min="0" max="100" value="50" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.imageCompareWipe", "Image comparison slider"))}">
                         </div>
+                        <div class="ts-image-compare-zoom" data-active="false"></div>
                     </div>
                 `;
             }
@@ -27,9 +37,10 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                 <div class="ts-image-compare-shell ts-image-compare-grid" data-count="${tsCompareItems.length}">
                     ${tsCompareItems.map((tsCompareItem) => `
                         <div class="ts-image-compare-card">
-                            <img src="${tsDeps.escapeAttribute(tsDeps.apiURL(tsCompareItem.file_url))}" alt="${tsDeps.escapeAttribute(tsCompareItem.filename || tsImageLabel)}">
+                            <img class="ts-compare-image" src="${tsDeps.escapeAttribute(tsDeps.apiURL(tsCompareItem.file_url))}" alt="${tsDeps.escapeAttribute(tsCompareItem.filename || tsImageLabel)}">
                         </div>
                     `).join("")}
+                    <div class="ts-image-compare-zoom" data-active="false"></div>
                 </div>
             `;
         }

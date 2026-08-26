@@ -108,6 +108,10 @@ export const tsViewerSettings = Object.freeze({
         max: 8,
         stepIn: 1.14,
         stepOut: 1 / 1.14,
+        // Keyboard pan step, in screen pixels. A wheel-free zoom is useless if
+        // the only way to reach the corner of the image is the mouse.
+        panStep: 60,
+        panStepFast: 240,
     },
     pagination: {
         prefetchThreshold: 6,
