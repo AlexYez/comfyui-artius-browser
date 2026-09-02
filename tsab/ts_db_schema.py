@@ -2,6 +2,16 @@ from __future__ import annotations
 
 TS_DB_SCHEMA_VERSION = 13
 
+# Per-connection page cache, in KiB. Deliberately small: connections are opened
+# per thread and never closed, so whatever is set here is multiplied by the size
+# of the asyncio executor. Measured to be worth nothing on this workload - see
+# the comment at the PRAGMA in ts_db.py for the numbers.
+TS_DB_CACHE_SIZE_KIB = 2000
+
+# Memory map window. This is what actually makes the queries fast, and being
+# file-backed it is shared per process rather than per connection.
+TS_DB_MMAP_BYTES = 268435456
+
 # The schema version that last changed the FTS table layout OR the way its rows
 # are written (v11 added prompt_text, v12 added model_text, v13 normalizes the
 # indexed text to NFC so macOS's decomposed filenames stay searchable).

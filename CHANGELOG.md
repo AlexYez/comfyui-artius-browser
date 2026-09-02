@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-08-26
+
+Users running ComfyUI and the browser on the same machine reported that a
+generation or two in, the next one slows down — and that viewing the library
+from a second computer makes the problem go away. An audit found no leak, but
+it did find memory this pack was reserving without ever using it, and work it
+was asking the server to do twice. Both are gone, and `/version` now reports
+the numbers needed to tell whether any of it mattered.
+
+### Changed
+
+- **The cache database no longer reserves memory it never used.** SQLite opens
+  one connection per thread and never closes it, and the HTTP routes run on
+  Python's default thread pool, so the 8 MB page cache each connection asked
+  for was multiplied by roughly 28 — about 220 MB of the ComfyUI process. It is
+  2 MB now. Measured on a copy of a real 168 MB, 6 500-asset library, the whole
+  panel workload (four pages of scrolling, filename and prompt search, type and
+  folder counts) takes the same 155 ms at 7.8 MB per connection as it does at
+  0.5 MB, and a 500-row write transaction is flat too. The memory map, which is
+  what actually makes those queries four times faster, is untouched.
+- **One rescan per browser after a generation, not one per open tab.** The
+  post-generation rescan is triggered by the page, so two ComfyUI tabs on one
+  machine asked the server to walk the output folder twice. Tabs now agree
+  through browser storage on which of them asks. Where storage is unavailable
+  every tab still asks, exactly as before.
+
+### Added
+
+- `/version` reports memory diagnostics: resident size of the ComfyUI process,
+  thread count, how many database connections are open, and the cache size on
+  disk. A "generation got slower" report can now carry numbers.
+
 ## [1.16.0] - 2026-08-26
 
 ComfyUI writes the prompt and the workflow into a generated video exactly as it

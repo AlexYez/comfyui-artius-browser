@@ -15,6 +15,11 @@ export const tsBrowserRuntimeSettings = Object.freeze({
     executionRescanMaxDeferralMs: 5000,
     executionRescanIdleRetryMs: 250,
     executionRescanRootId: "output",
+    // How long one tab's post-generation rescan claim suppresses the
+    // others. Comfortably longer than a scan of a large library takes to
+    // start, short enough that a tab closed mid-generation cannot mute
+    // the next one.
+    executionRescanClaimWindowMs: 8000,
     enableConsoleDebug: false,
 });
 

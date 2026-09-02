@@ -20,6 +20,7 @@ import {
 import { tsResolveLocaleCode } from "./ts-artius-browser-panel-state.js";
 import { tsEnsurePanelElement, tsGetPanelSingleton } from "./ts-artius-browser-panel.js";
 import { tsStartGlobal3DThumbnailWorker } from "./ts-artius-browser-3d-worker.js";
+import { tsClaimExecutionRescan } from "./ts-artius-browser-rescan-claim.js";
 
 let tsExecutionRescanTimer = 0;
 let tsExecutionRescanFirstEventAt = 0;
@@ -73,6 +74,12 @@ function tsAttemptRescanNow() {
         return;
     }
     tsExecutionRescanFirstEventAt = 0;
+    // One rescan per browser, not one per tab. Two ComfyUI tabs on the same
+    // machine used to ask the server for two full walks of the output root
+    // after every generation.
+    if (!tsClaimExecutionRescan({ tsWindowMs: tsBrowserRuntimeSettings.executionRescanClaimWindowMs })) {
+        return;
+    }
     tsPostJSON(`${tsApiSettings.routeBase}/rescan`, { root_id: tsBrowserRuntimeSettings.executionRescanRootId }).catch((tsError) => {
         tsConsoleWarn("Timesaver Artius Browser execution rescan failed", tsError);
     });

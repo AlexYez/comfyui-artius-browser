@@ -15,10 +15,12 @@ from .ts_db_payload import TSBuildUpdatedAssetPayload, TSComputeAssetStatus, TSP
 from .ts_db_query import TS_SORT_KEY_MAP, TSBuildAssetQueryParts, TSResolveSortKey
 from .ts_db_schema import (
     TS_DB_ADDITIVE_COLUMNS,
+    TS_DB_CACHE_SIZE_KIB,
     TS_DB_DROP_SCHEMA_SQL,
     TS_DB_FAVORITES_SALVAGE_SQL,
     TS_DB_FTS_PROMPT_SCHEMA_VERSION,
     TS_DB_FTS_REBUILD_SQL,
+    TS_DB_MMAP_BYTES,
     TS_DB_RESET_INDEX_SQL,
     TS_DB_SCHEMA_SQL,
     TS_DB_SCHEMA_VERSION,
@@ -35,6 +37,11 @@ class TSDatabase:
     def __init__(self, ts_database_path: Path) -> None:
         self.ts_database_path = ts_database_path
         self.ts_thread_local = threading.local()
+        # One connection per thread, never closed, so this counter is the
+        # multiplier every per-connection PRAGMA is paid at. Surfaced through
+        # /version so a slowdown report can carry the number instead of a guess.
+        self.ts_connection_count = 0
+        self.ts_connection_count_lock = threading.Lock()
         self.TSMigrate()
 
     def TSGetConnection(self) -> sqlite3.Connection:
@@ -45,15 +52,37 @@ class TSDatabase:
             ts_connection.execute("PRAGMA journal_mode=WAL")
             ts_connection.execute("PRAGMA synchronous=NORMAL")
             ts_connection.execute("PRAGMA temp_store=MEMORY")
-            ts_connection.execute("PRAGMA cache_size=-8000")
-            ts_connection.execute("PRAGMA mmap_size=268435456")
+            # 2 MB, not the 8 MB this used to reserve. A connection is opened
+            # PER THREAD and never closed, and the routes run on the default
+            # asyncio executor (min(32, cpu+4) threads), so this multiplies:
+            # 8 MB x 28 threads is ~220 MB of the ComfyUI process spent on page
+            # cache. Measured on a copy of a real 168 MB / 6.5k-asset database,
+            # cutting it changes nothing: the panel's whole query mix (four
+            # keyset pages, filename and prompt search, type and folder counts)
+            # ran 155 ms at 7.8 MB and 155 ms at 0.5 MB, and a 500-row upsert
+            # transaction was flat too. The memory bought no speed.
+            ts_connection.execute(f"PRAGMA cache_size=-{TS_DB_CACHE_SIZE_KIB}")
+            # This one DOES buy the speed - the same mix takes 4x longer with
+            # the map off (626 ms vs 155 ms), because reads come straight from
+            # the mapping instead of a private cache. Mapped pages are
+            # file-backed and shared by every connection in the process, so
+            # unlike cache_size this does not multiply per thread and the OS
+            # can evict it under pressure. Do not "save memory" by lowering it.
+            ts_connection.execute(f"PRAGMA mmap_size={TS_DB_MMAP_BYTES}")
             ts_connection.execute("PRAGMA foreign_keys=ON")
             # Lets the set-based FTS rebuild normalize exactly like the
             # per-row write path does; without it a rebuild would put macOS's
             # decomposed filenames back into the index.
             ts_connection.create_function("ts_nfc", 1, TSNormalizeSearchText, deterministic=True)
             self.ts_thread_local.ts_connection = ts_connection
-            TSLogVerbose("db.connection.opened", database=str(self.ts_database_path))
+            with self.ts_connection_count_lock:
+                self.ts_connection_count += 1
+                ts_opened = self.ts_connection_count
+            TSLogVerbose(
+                "db.connection.opened",
+                database=str(self.ts_database_path),
+                open_connections=ts_opened,
+            )
         return ts_connection
 
     def _TSChunkedValues(self, ts_values: list[Any], ts_chunk_size: int = 500) -> list[list[Any]]:

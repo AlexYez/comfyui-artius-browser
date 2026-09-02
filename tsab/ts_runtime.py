@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -147,7 +148,38 @@ class TSAssetBrowserRuntime:
             ts_diagnostics["client_errors"] = self.ts_client_error_log.TSSnapshot()
         except Exception:
             ts_diagnostics["client_errors"] = []
+        ts_diagnostics["memory"] = self._TSCollectMemoryDiagnostics()
         return ts_diagnostics
+
+    def _TSCollectMemoryDiagnostics(self) -> dict[str, Any]:
+        # Users report "generation gets slower once the browser is open", and
+        # the answer turns on numbers nobody currently has: how much resident
+        # memory this process holds, how many threads it runs, and how many
+        # SQLite connections those threads opened (every per-connection PRAGMA
+        # is paid once per connection). Reported here so a bug report can carry
+        # measurements instead of impressions.
+        ts_memory: dict[str, Any] = {
+            "thread_count": threading.active_count(),
+            "db_connections": getattr(self.ts_database, "ts_connection_count", None),
+        }
+        try:
+            # psutil ships with ComfyUI itself, so this is not a new dependency
+            # of ours - and if a build somehow lacks it, the field is simply
+            # absent rather than the whole diagnostics block failing.
+            import psutil
+
+            ts_process = psutil.Process()
+            ts_memory["process_rss_mb"] = round(ts_process.memory_info().rss / 1048576, 1)
+            ts_system = psutil.virtual_memory()
+            ts_memory["system_available_mb"] = round(ts_system.available / 1048576)
+            ts_memory["system_total_mb"] = round(ts_system.total / 1048576)
+        except Exception:
+            TSLogVerbose("runtime.diagnostics.memory_unavailable")
+        try:
+            ts_memory["cache_db_mb"] = round(self.ts_storage_paths.ts_database_path.stat().st_size / 1048576, 1)
+        except OSError:
+            ts_memory["cache_db_mb"] = None
+        return ts_memory
 
     def TSRecordClientErrors(self, ts_payload: dict[str, Any]) -> dict[str, Any]:
         ts_errors = ts_payload.get("errors") if isinstance(ts_payload, dict) else None
