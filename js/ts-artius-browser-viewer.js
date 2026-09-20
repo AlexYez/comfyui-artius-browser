@@ -76,6 +76,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsImageZoomHandler = null;
         this.tsCompareItems = [];
         this.tsDetailRequestToken = 0;
+        // Decoded-image warm set + the guard that keeps a slow decode from
+        // painting over a newer navigation (see tsWarmImage / tsNavigate).
+        this.tsImageWarmCache = new Map();
+        this.tsStageRenderToken = 0;
         this.tsBoundKeydown = (tsEvent) => this.tsHandleKeydown(tsEvent);
         this.attachShadow({ mode: "open" });
     }
@@ -937,6 +941,9 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsMoreRequestPromise = null;
         window.addEventListener("keydown", this.tsBoundKeydown);
         this.tsRender();
+        // Warm the neighbours right away, so the FIRST arrow press is as smooth
+        // as the ones after it.
+        this.tsPrefetchNeighbourImages();
         void this.tsEnsureAssetDetail(this.tsIndex);
         void this.tsMaybePrefetchMore(this.tsIndex);
     }
@@ -951,6 +958,11 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsCanLoadMore = null;
         this.tsMoreRequestPromise = null;
         this.tsCompareItems = [];
+        // Closing the lightbox is the moment those decoded copies stop being
+        // worth their memory (CLAUDE.md section 8 teardown contract).
+        this.tsImageWarmCache.clear();
+        // Any decode still in flight belongs to a stage that no longer exists.
+        this.tsStageRenderToken += 1;
         window.removeEventListener("keydown", this.tsBoundKeydown);
         this.tsRender();
     }
@@ -1128,6 +1140,79 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         return this.tsMoreRequestPromise;
     }
 
+    // The lightbox rebuilds its stage on every navigation, so the new <img>
+    // starts empty while the old picture is already gone. Decoding the file
+    // before the swap closes that gap; warming the neighbours makes the usual
+    // arrow press cost nothing.
+    tsWarmImage(tsImageURL) {
+        if (!tsImageURL) {
+            return Promise.resolve(false);
+        }
+        const tsCachedWarm = this.tsImageWarmCache.get(tsImageURL);
+        if (tsCachedWarm) {
+            return tsCachedWarm;
+        }
+        const tsWarmPromise = new Promise((tsResolve) => {
+            const tsImage = new Image();
+            tsImage.decoding = "async";
+            const tsFinish = () => tsResolve(true);
+            tsImage.onload = () => {
+                // decode() resolves when the bitmap is ready to PAINT; load
+                // alone only means the bytes arrived, and painting them is the
+                // part that was showing up as the flash.
+                if (typeof tsImage.decode === "function") {
+                    tsImage.decode().then(tsFinish, tsFinish);
+                    return;
+                }
+                tsFinish();
+            };
+            // A broken image resolves too: it must not hold navigation, and the
+            // stage shows the same failure it always did.
+            tsImage.onerror = tsFinish;
+            tsImage.src = tsImageURL;
+        });
+        this.tsImageWarmCache.set(tsImageURL, tsWarmPromise);
+        while (this.tsImageWarmCache.size > tsViewerSettings.imageSwap.cacheSize) {
+            this.tsImageWarmCache.delete(this.tsImageWarmCache.keys().next().value);
+        }
+        return tsWarmPromise;
+    }
+
+    tsResolveStageImageURL(tsAsset) {
+        // Single-image stages only. Compare stages build their own layers, and
+        // every other type keeps the behaviour it had.
+        if (!tsAsset || tsAsset.type !== "image" || this.tsIsImageCompareMode() || !tsAsset.file_url) {
+            return "";
+        }
+        return tsApiURL(tsAsset.file_url);
+    }
+
+    async tsWaitForStageImage(tsAsset) {
+        const tsImageURL = this.tsResolveStageImageURL(tsAsset);
+        if (!tsImageURL) {
+            return;
+        }
+        await Promise.race([
+            this.tsWarmImage(tsImageURL),
+            new Promise((tsResolve) => {
+                window.setTimeout(tsResolve, tsViewerSettings.imageSwap.maxWaitMs);
+            }),
+        ]);
+    }
+
+    tsPrefetchNeighbourImages() {
+        const tsRadius = Math.max(0, Number(tsViewerSettings.imageSwap.prefetchRadius) || 0);
+        for (let tsOffset = -tsRadius; tsOffset <= tsRadius; tsOffset += 1) {
+            if (tsOffset === 0) {
+                continue;
+            }
+            const tsNeighbourURL = this.tsResolveStageImageURL(this.tsItems[this.tsIndex + tsOffset]);
+            if (tsNeighbourURL) {
+                void this.tsWarmImage(tsNeighbourURL);
+            }
+        }
+    }
+
     async tsNavigate(tsDirection) {
         if (!this.tsItems.length) {
             return;
@@ -1151,7 +1236,17 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         if (typeof this.tsOnChange === "function") {
             this.tsOnChange(this.tsIndex, this.tsItems[this.tsIndex] || null);
         }
+        // The index moves at once so a held arrow key keeps advancing; only the
+        // SWAP waits for the picture. The token makes the newest navigation the
+        // one that owns the stage: a decode that finishes late must not paint
+        // over an image the user has already moved past.
+        const tsRenderToken = ++this.tsStageRenderToken;
+        await this.tsWaitForStageImage(this.tsItems[this.tsIndex]);
+        if (tsRenderToken !== this.tsStageRenderToken) {
+            return;
+        }
         this.tsRender();
+        this.tsPrefetchNeighbourImages();
         void this.tsEnsureAssetDetail(this.tsIndex);
         void this.tsMaybePrefetchMore(this.tsIndex);
     }

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.1] - 2026-09-20
+
+### Fixed
+
+- **Stepping through images in the lightbox no longer flashes.** Navigating
+  rebuilt the stage, which threw the picture away before the next one was
+  readable: measured on a 1.8 MB output, the new image reported itself
+  undecoded and zero pixels tall for 30 to 60 ms per step, so the stage
+  collapsed and the picture snapped back a frame later. The next file is now
+  decoded before the swap and the neighbours are decoded ahead of time, so the
+  usual press of an arrow key waits for nothing; a file too slow for that
+  delays the picture by at most a moment and never the navigation itself. The
+  image element is also given the size the index already knows, so the stage
+  keeps its shape even then. Video, audio and 3D are untouched.
+
 ## [1.19.0] - 2026-09-08
 
 An audit of what this pack costs the ComfyUI browser found nothing that slows

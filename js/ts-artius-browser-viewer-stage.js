@@ -44,7 +44,13 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                 </div>
             `;
         }
-        return `<img src="${tsFileURL}" alt="${tsDeps.escapeAttribute(tsAsset.filename || tsAssetLabel)}">`;
+        // The index already knows the picture's size, so hand it to the element:
+        // the browser reserves the right box before a single byte is decoded.
+        // Without it a loading <img> is zero-sized, and every navigation
+        // collapsed the stage for a frame before the picture snapped back.
+        const tsWidth = Number(tsAsset.width) > 0 ? ` width="${Math.round(Number(tsAsset.width))}"` : "";
+        const tsHeight = Number(tsAsset.height) > 0 ? ` height="${Math.round(Number(tsAsset.height))}"` : "";
+        return `<img${tsWidth}${tsHeight} src="${tsFileURL}" alt="${tsDeps.escapeAttribute(tsAsset.filename || tsAssetLabel)}">`;
     }
     if (tsAsset.type === "video") {
         if (tsDeps.isVideoCompareMode()) {

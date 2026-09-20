@@ -140,6 +140,23 @@ export const tsViewerSettings = Object.freeze({
         panStep: 60,
         panStepFast: 240,
     },
+    imageSwap: {
+        // Navigating the lightbox rebuilds the stage, so the new <img> starts
+        // empty and the old picture is already gone. Measured on a 1.8 MB
+        // ComfyUI output: 30-60 ms with nothing on screen and a stage collapsed
+        // to zero height. Decoding the file before the swap closes that gap.
+        //
+        // maxWaitMs caps how long a swap waits: past it the stage renders
+        // exactly as it did before this existed, so a slow disk or a huge file
+        // delays the picture but never the navigation.
+        maxWaitMs: 400,
+        // Neighbours warmed after each render, which is what makes the usual
+        // press of the arrow key cost nothing.
+        prefetchRadius: 1,
+        // Decoded copies are what keep the swap instant; an unbounded map of
+        // them is a memory leak in a long browsing session.
+        cacheSize: 8,
+    },
     pagination: {
         prefetchThreshold: 6,
     },
