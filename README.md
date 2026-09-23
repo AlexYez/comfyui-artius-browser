@@ -62,8 +62,9 @@
 
 ### 📁 Supported formats
 
-- 🖼️ Images: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif`
-- 🎬 Videos: `.mp4` · `.mov` · `.webm` · `.prores`
+- 🖼️ Images: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif` · `.tif` · `.tiff` · `.exr`
+- 🎬 Videos: `.mp4` · `.mov` · `.webm` · `.prores` · `.mkv` · `.avi` · `.m4v`
+- 🔁 Formats a browser cannot show by itself (ProRes, HEVC, AVI, MKV, EXR, TIFF) play and display in the lightbox through a copy ffmpeg makes on demand; the file itself is never touched
 - 🎵 Audio: `.mp3` · `.wav` · `.flac` · `.opus` · `.ogg`
 - 🎲 3D: `.glb` · `.obj`
 - 📜 Workflows: `.json`
@@ -162,7 +163,7 @@ When another installed pack publishes a better loader, it wins: a video dropped 
 - 4-image **2×2 grid** compare
 - Separate `Prompt` and `Negative Prompt` panels
 - One-click `Copy Workflow` when the PNG carries it
-- Open in new tab, download, delete
+- Open in new tab, show in folder, download, delete
 
 </details>
 
@@ -451,8 +452,9 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 
 ### 📁 Formatos soportados
 
-- 🖼️ Imágenes: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif`
-- 🎬 Vídeos: `.mp4` · `.mov` · `.webm` · `.prores`
+- 🖼️ Imágenes: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif` · `.tif` · `.tiff` · `.exr`
+- 🎬 Vídeos: `.mp4` · `.mov` · `.webm` · `.prores` · `.mkv` · `.avi` · `.m4v`
+- 🔁 Los formatos que el navegador no puede mostrar (ProRes, HEVC, AVI, MKV, EXR, TIFF) se ven en el visor mediante una copia que ffmpeg crea bajo demanda; el archivo original no se modifica
 - 🎵 Audio: `.mp3` · `.wav` · `.flac` · `.opus` · `.ogg`
 - 🎲 3D: `.glb` · `.obj`
 - 📜 Workflows: `.json`
@@ -549,7 +551,7 @@ Si otro pack instalado publica un loader mejor, éste gana: un vídeo soltado en
 - Comparación **grid 2×2** de 4 imágenes
 - Paneles separados para `Prompt` y `Negative Prompt`
 - `Copy Workflow` en un clic cuando el PNG lo lleva
-- Abrir en nueva pestaña, descargar, borrar
+- Abrir en nueva pestaña, mostrar en la carpeta, descargar, borrar
 
 </details>
 
@@ -683,8 +685,9 @@ Consulta [CHANGELOG.md](CHANGELOG.md). Formato: [Keep a Changelog](https://keepa
 
 ### 📁 支持的格式
 
-- 🖼️ 图片:`.png` · `.jpg` · `.jpeg` · `.webp` · `.avif`
-- 🎬 视频:`.mp4` · `.mov` · `.webm` · `.prores`
+- 🖼️ 图片:`.png` · `.jpg` · `.jpeg` · `.webp` · `.avif` · `.tif` · `.tiff` · `.exr`
+- 🎬 视频:`.mp4` · `.mov` · `.webm` · `.prores` · `.mkv` · `.avi` · `.m4v`
+- 🔁 浏览器无法直接显示的格式(ProRes、HEVC、AVI、MKV、EXR、TIFF)在灯箱中通过 ffmpeg 按需生成的副本播放和显示,原文件不会被改动
 - 🎵 音频:`.mp3` · `.wav` · `.flac` · `.opus` · `.ogg`
 - 🎲 3D:`.glb` · `.obj`
 - 📜 Workflow:`.json`
@@ -781,7 +784,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 - 4 张图片的 **2×2 网格**对比
 - `Prompt` 与 `Negative Prompt` 独立面板
 - 当 PNG 包含 workflow 时,一键 `Copy Workflow`
-- 在新标签页打开、下载、删除
+- 在新标签页打开、在文件夹中显示、下载、删除
 
 </details>
 
@@ -916,8 +919,9 @@ ComfyUI/output/.ts_artius_browser/
 
 ### 📁 対応フォーマット
 
-- 🖼️ 画像: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif`
-- 🎬 動画: `.mp4` · `.mov` · `.webm` · `.prores`
+- 🖼️ 画像: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif` · `.tif` · `.tiff` · `.exr`
+- 🎬 動画: `.mp4` · `.mov` · `.webm` · `.prores` · `.mkv` · `.avi` · `.m4v`
+- 🔁 ブラウザが直接表示できない形式(ProRes、HEVC、AVI、MKV、EXR、TIFF)は、ffmpeg が必要時に作るコピーでライトボックスに再生・表示されます。元のファイルは変更されません
 - 🎵 音声: `.mp3` · `.wav` · `.flac` · `.opus` · `.ogg`
 - 🎲 3D: `.glb` · `.obj`
 - 📜 Workflows: `.json`
@@ -1014,7 +1018,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 - 4 枚の画像の **2×2 グリッド**比較
 - `Prompt` と `Negative Prompt` の独立パネル
 - PNG に含まれていれば 1 クリックで `Copy Workflow`
-- 新しいタブで開く、ダウンロード、削除
+- 新しいタブで開く、フォルダーで表示、ダウンロード、削除
 
 </details>
 
@@ -1149,8 +1153,9 @@ ComfyUI/output/.ts_artius_browser/
 
 ### 📁 지원 형식
 
-- 🖼️ 이미지: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif`
-- 🎬 비디오: `.mp4` · `.mov` · `.webm` · `.prores`
+- 🖼️ 이미지: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif` · `.tif` · `.tiff` · `.exr`
+- 🎬 비디오: `.mp4` · `.mov` · `.webm` · `.prores` · `.mkv` · `.avi` · `.m4v`
+- 🔁 브라우저가 직접 표시하지 못하는 형식(ProRes, HEVC, AVI, MKV, EXR, TIFF)은 ffmpeg가 필요할 때 만드는 사본으로 라이트박스에서 재생·표시됩니다. 원본 파일은 건드리지 않습니다
 - 🎵 오디오: `.mp3` · `.wav` · `.flac` · `.opus` · `.ogg`
 - 🎲 3D: `.glb` · `.obj`
 - 📜 Workflows: `.json`
@@ -1247,7 +1252,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 - 4 장 이미지의 **2×2 그리드** 비교
 - `Prompt` 와 `Negative Prompt` 분리 패널
 - PNG 가 가지고 있을 때 원클릭 `Copy Workflow`
-- 새 탭에서 열기, 다운로드, 삭제
+- 새 탭에서 열기, 폴더에서 보기, 다운로드, 삭제
 
 </details>
 
@@ -1382,8 +1387,9 @@ ComfyUI/output/.ts_artius_browser/
 
 ### 📁 Unterstützte Formate
 
-- 🖼️ Bilder: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif`
-- 🎬 Videos: `.mp4` · `.mov` · `.webm` · `.prores`
+- 🖼️ Bilder: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif` · `.tif` · `.tiff` · `.exr`
+- 🎬 Videos: `.mp4` · `.mov` · `.webm` · `.prores` · `.mkv` · `.avi` · `.m4v`
+- 🔁 Formate, die der Browser nicht selbst zeigen kann (ProRes, HEVC, AVI, MKV, EXR, TIFF), werden im Lightbox über eine Kopie abgespielt und angezeigt, die ffmpeg bei Bedarf erstellt; die Originaldatei bleibt unverändert
 - 🎵 Audio: `.mp3` · `.wav` · `.flac` · `.opus` · `.ogg`
 - 🎲 3D: `.glb` · `.obj`
 - 📜 Workflows: `.json`
@@ -1480,7 +1486,7 @@ Wenn ein anderes installiertes Pack einen besseren Loader bereitstellt, gewinnt 
 - **2×2-Grid**-Vergleich von 4 Bildern
 - Separate `Prompt`- und `Negative Prompt`-Panels
 - Ein-Klick-`Copy Workflow`, wenn das PNG ihn mitbringt
-- In neuem Tab öffnen, herunterladen, löschen
+- In neuem Tab öffnen, im Ordner anzeigen, herunterladen, löschen
 
 </details>
 
@@ -1615,8 +1621,9 @@ Siehe [CHANGELOG.md](CHANGELOG.md). Format: [Keep a Changelog](https://keepachan
 
 ### 📁 Formati supportati
 
-- 🖼️ Immagini: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif`
-- 🎬 Video: `.mp4` · `.mov` · `.webm` · `.prores`
+- 🖼️ Immagini: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif` · `.tif` · `.tiff` · `.exr`
+- 🎬 Video: `.mp4` · `.mov` · `.webm` · `.prores` · `.mkv` · `.avi` · `.m4v`
+- 🔁 I formati che il browser non sa mostrare (ProRes, HEVC, AVI, MKV, EXR, TIFF) si vedono nel lightbox tramite una copia creata da ffmpeg al bisogno; il file originale non viene toccato
 - 🎵 Audio: `.mp3` · `.wav` · `.flac` · `.opus` · `.ogg`
 - 🎲 3D: `.glb` · `.obj`
 - 📜 Workflows: `.json`
@@ -1713,7 +1720,7 @@ Se un altro pack installato pubblica un loader migliore, vince quello: un video 
 - Confronto **grid 2×2** di 4 immagini
 - Pannelli separati per `Prompt` e `Negative Prompt`
 - `Copy Workflow` in un click quando il PNG lo contiene
-- Apri in una nuova tab, scarica, elimina
+- Apri in una nuova tab, mostra nella cartella, scarica, elimina
 
 </details>
 
@@ -1849,8 +1856,9 @@ Vedi [CHANGELOG.md](CHANGELOG.md). Formato: [Keep a Changelog](https://keepachan
 
 ### 📁 Formats pris en charge
 
-- 🖼️ Images : `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif`
-- 🎬 Vidéos : `.mp4` · `.mov` · `.webm` · `.prores`
+- 🖼️ Images : `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif` · `.tif` · `.tiff` · `.exr`
+- 🎬 Vidéos : `.mp4` · `.mov` · `.webm` · `.prores` · `.mkv` · `.avi` · `.m4v`
+- 🔁 Les formats que le navigateur ne sait pas afficher (ProRes, HEVC, AVI, MKV, EXR, TIFF) sont lus et affichés dans la visionneuse via une copie créée à la demande par ffmpeg ; le fichier d'origine n'est jamais modifié
 - 🎵 Audio : `.mp3` · `.wav` · `.flac` · `.opus` · `.ogg`
 - 🎲 3D : `.glb` · `.obj`
 - 📜 Workflows : `.json`
@@ -1947,7 +1955,7 @@ Si un autre pack installé publie un meilleur loader, c'est lui qui gagne : une 
 - Comparaison **grille 2×2** de 4 images
 - Panneaux séparés `Prompt` et `Negative Prompt`
 - `Copy Workflow` en un clic quand le PNG le contient
-- Ouvrir dans un nouvel onglet, télécharger, supprimer
+- Ouvrir dans un nouvel onglet, afficher dans le dossier, télécharger, supprimer
 
 </details>
 
@@ -2083,8 +2091,9 @@ Voir [CHANGELOG.md](CHANGELOG.md). Format : [Keep a Changelog](https://keepachan
 
 ### 📁 Formatos suportados
 
-- 🖼️ Imagens: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif`
-- 🎬 Vídeos: `.mp4` · `.mov` · `.webm` · `.prores`
+- 🖼️ Imagens: `.png` · `.jpg` · `.jpeg` · `.webp` · `.avif` · `.tif` · `.tiff` · `.exr`
+- 🎬 Vídeos: `.mp4` · `.mov` · `.webm` · `.prores` · `.mkv` · `.avi` · `.m4v`
+- 🔁 Os formatos que o navegador não consegue mostrar (ProRes, HEVC, AVI, MKV, EXR, TIFF) são reproduzidos e exibidos no visualizador através de uma cópia criada pelo ffmpeg quando necessário; o ficheiro original nunca é alterado
 - 🎵 Áudio: `.mp3` · `.wav` · `.flac` · `.opus` · `.ogg`
 - 🎲 3D: `.glb` · `.obj`
 - 📜 Workflows: `.json`
@@ -2181,7 +2190,7 @@ Se outro pack instalado publicar um loader melhor, é esse que ganha: um vídeo 
 - Comparação **grelha 2×2** de 4 imagens
 - Painéis separados para `Prompt` e `Negative Prompt`
 - `Copy Workflow` num clique quando o PNG o contém
-- Abrir em novo separador, transferir, eliminar
+- Abrir em novo separador, mostrar na pasta, transferir, eliminar
 
 </details>
 

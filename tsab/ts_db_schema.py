@@ -127,17 +127,33 @@ CREATE TABLE IF NOT EXISTS asset_favorites (
     created_at INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_assets_path ON assets(path);
-CREATE INDEX IF NOT EXISTS idx_assets_filename ON assets(filename);
+-- Indexes no query uses: path duplicates the UNIQUE constraint's own index,
+-- filename was BINARY while every filename sort is NOCASE, and nothing filters
+-- on hash, status or has_preview alone. Each one was paid on every upsert of
+-- every scan and Rebuild Cache. Dropped on open for databases that have them.
+DROP INDEX IF EXISTS idx_assets_path;
+DROP INDEX IF EXISTS idx_assets_filename;
+DROP INDEX IF EXISTS idx_assets_hash;
+DROP INDEX IF EXISTS idx_assets_status;
+DROP INDEX IF EXISTS idx_assets_preview_ready;
 CREATE INDEX IF NOT EXISTS idx_assets_created_at ON assets(created_at);
-CREATE INDEX IF NOT EXISTS idx_assets_hash ON assets(hash);
 CREATE INDEX IF NOT EXISTS idx_assets_root_lookup_id ON assets(root_lookup_id);
+-- Also backs the foreign key from assets to asset_folders.
 CREATE INDEX IF NOT EXISTS idx_assets_folder_lookup_id ON assets(folder_lookup_id);
 CREATE INDEX IF NOT EXISTS idx_assets_mtime_ns ON assets(mtime_ns);
 CREATE INDEX IF NOT EXISTS idx_assets_size_bytes ON assets(size_bytes);
-CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(status);
-CREATE INDEX IF NOT EXISTS idx_assets_preview_ready ON assets(has_preview);
 CREATE INDEX IF NOT EXISTS idx_assets_preview_path ON assets(preview_path);
+-- One per sort key of the listing, which always constrains
+-- is_companion_image = 0 and orders by (key, id): the page is read in index
+-- order and the LIMIT stops the walk, instead of sorting every matching row
+-- in a temporary B-tree first. Measured on a 7k-asset library: 3.5 ms -> 0.03
+-- ms per page, growing with the library before and flat after. The cost is a
+-- filter on a RARE type (a handful of 3D models): the walk then passes the
+-- rows of other types, ~3 ms here.
+CREATE INDEX IF NOT EXISTS idx_assets_listing_created ON assets(is_companion_image, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_assets_listing_mtime ON assets(is_companion_image, mtime_ns, id);
+CREATE INDEX IF NOT EXISTS idx_assets_listing_size ON assets(is_companion_image, size_bytes, id);
+CREATE INDEX IF NOT EXISTS idx_assets_listing_filename ON assets(is_companion_image, filename COLLATE NOCASE, id);
 CREATE INDEX IF NOT EXISTS idx_assets_companion_lookup ON assets(root_lookup_id, folder_lookup_id, companion_stem, type_lookup_id);
 CREATE INDEX IF NOT EXISTS idx_assets_companion_filter ON assets(is_companion_image, type_lookup_id);
 CREATE INDEX IF NOT EXISTS idx_asset_folders_root_lookup_id ON asset_folders(root_lookup_id);
@@ -189,6 +205,23 @@ INNER JOIN asset_roots ON asset_roots.id = assets.root_lookup_id
 INNER JOIN asset_folders ON asset_folders.id = assets.folder_lookup_id
 LEFT JOIN asset_metadata ON asset_metadata.asset_id = assets.id
 LEFT JOIN asset_favorites ON asset_favorites.path = assets.path;
+"""
+
+# What an asset CARD needs from assets_view (TSBuildAssetCard): every column
+# except the two large texts, which the card only tests for emptiness. Those
+# are reduced to has_workflow / has_prompt here, so a listing page never
+# carries the workflow JSON (tens of KB per row) into Python at all.
+TS_DB_CARD_COLUMNS_SQL = """
+    assets_view.id, assets_view.path, assets_view.type, assets_view.preview_path,
+    assets_view.metadata, assets_view.technical_json, assets_view.mtime_ns,
+    assets_view.size_bytes, assets_view.hash, assets_view.created_at,
+    assets_view.folder_path, assets_view.duration, assets_view.width,
+    assets_view.height, assets_view.fps, assets_view.filename, assets_view.extension,
+    assets_view.scope, assets_view.root_id, assets_view.is_favorite,
+    assets_view.is_indexed, assets_view.has_preview, assets_view.has_metadata,
+    assets_view.is_companion_image, assets_view.status,
+    (assets_view.workflow_text != '') AS has_workflow,
+    (assets_view.prompt_text != '') AS has_prompt
 """
 
 TS_DB_FTS_REBUILD_SQL = """

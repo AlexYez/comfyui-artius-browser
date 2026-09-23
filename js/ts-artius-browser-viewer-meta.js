@@ -30,6 +30,15 @@ export function tsBuildPromptMetaBlock(tsOptions = {}) {
     `;
 }
 
+// While the asset's detail is still on its way the list payload has no prompt
+// or technical data, and "No prompt metadata found." flashed on every step
+// before the real text replaced it. Until then the panel says it is loading.
+// Takes the already translated "nothing found" text: the localization
+// check finds keys only in literal t("...") calls.
+function tsResolveEmptyText(tsDeps, tsEmptyText) {
+    return tsDeps.pending ? tsDeps.t("meta.loading", "Loading...") : tsEmptyText;
+}
+
 export function tsBuildImageMetaMarkup(tsAsset, tsDeps) {
     const tsPromptText = tsAsset.prompt_text || "";
     const tsNegativePromptText = tsAsset.negative_prompt_text || "";
@@ -37,7 +46,7 @@ export function tsBuildImageMetaMarkup(tsAsset, tsDeps) {
         title: tsDeps.t("meta.positivePrompt", "Positive Prompt"),
         field: "prompt",
         text: tsPromptText,
-        emptyText: tsDeps.t("meta.noPrompt", "No prompt metadata found."),
+        emptyText: tsResolveEmptyText(tsDeps, tsDeps.t("meta.noPrompt", "No prompt metadata found.")),
         copyLabel: tsDeps.t("button.copy", "Copy"),
         escapeHTML: tsDeps.escapeHTML,
         escapeAttribute: tsDeps.escapeAttribute,
@@ -149,8 +158,26 @@ export function tsBuild3DMetaMarkup(tsAsset, tsDeps) {
     return tsBuildTechnicalRowsMarkup(tsRows, tsDeps);
 }
 
+// Images had no technical block at all, although format, resolution and size
+// are in the card payload; video, audio and 3D always had one.
+export function tsBuildImageTechnicalMarkup(tsAsset, tsDeps) {
+    const tsRows = [];
+    const tsFormatName = String(tsAsset?.extension || "").replace(/^\./, "").toUpperCase();
+    if (tsFormatName) {
+        tsRows.push({ tsLabel: tsDeps.t("meta.fileFormat", "File Format"), tsValue: tsFormatName });
+    }
+    if (Number(tsAsset?.width) > 0 && Number(tsAsset?.height) > 0) {
+        tsRows.push({ tsLabel: tsDeps.t("meta.resolution", "Resolution"), tsValue: `${tsAsset.width}x${tsAsset.height}` });
+    }
+    const tsSizeText = tsDeps.formatBytes(tsAsset?.size_bytes);
+    if (tsSizeText) {
+        tsRows.push({ tsLabel: tsDeps.t("meta.size", "Size"), tsValue: tsSizeText });
+    }
+    return tsRows.length ? tsBuildTechnicalRowsMarkup(tsRows, tsDeps) : "";
+}
+
 export function tsBuildPromptSeedMetaMarkup(tsAsset, tsDeps) {
-    const tsPromptText = tsAsset.prompt_text || tsDeps.t("meta.noPrompt", "No prompt metadata found.");
+    const tsPromptText = tsAsset.prompt_text || tsResolveEmptyText(tsDeps, tsDeps.t("meta.noPrompt", "No prompt metadata found."));
     return `
         <div class="ts-meta-block">
             <div class="ts-meta-row">
@@ -203,7 +230,7 @@ export function tsBuildTechnicalMetaMarkup(tsAsset, tsDeps) {
         tsRows.push({ tsLabel: tsDeps.t("meta.bitrate", "Bitrate"), tsValue: tsBitrateText });
     }
     if (tsRows.length === 0) {
-        return tsBuildEmptyTechnicalMarkup(tsDeps.t("meta.noTechnical", "No ffprobe metadata found."), tsDeps);
+        return tsBuildEmptyTechnicalMarkup(tsResolveEmptyText(tsDeps, tsDeps.t("meta.noTechnical", "No ffprobe metadata found.")), tsDeps);
     }
     return tsBuildTechnicalRowsMarkup(tsRows, tsDeps);
 }

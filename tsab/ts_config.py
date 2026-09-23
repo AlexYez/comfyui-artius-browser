@@ -78,6 +78,19 @@ class TSConfigStore:
             self.ts_cached_config = ts_merged
             return copy.deepcopy(ts_merged)
 
+    def TSLoadSection(self, ts_section: str) -> dict:
+        """One top-level section, copied on its own.
+
+        TSLoadConfig deep-copies the WHOLE config (UI state, roots, expanded
+        folders...) on every call, and the preview generator asked for it four
+        or five times per thumbnail just to read a couple of numbers.
+        """
+        with self.ts_config_lock:
+            if self.ts_cached_config is None:
+                self.TSLoadConfig()
+            ts_value = (self.ts_cached_config or {}).get(ts_section)
+            return copy.deepcopy(ts_value) if isinstance(ts_value, dict) else {}
+
     def TSSaveConfig(self, ts_config: dict) -> dict:
         with self.ts_config_lock:
             ts_merged = self.TSMergeDefaults(ts_config)

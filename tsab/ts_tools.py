@@ -420,6 +420,73 @@ class TSToolLocator:
             return {}
         return ts_payload if isinstance(ts_payload, dict) else {}
 
+    def TSListFFmpegEncoders(self) -> set[str]:
+        """Encoder names this ffmpeg build offers ({} without ffmpeg)."""
+        ts_executable = self.TSResolveTool("ffmpeg")
+        if not ts_executable:
+            return set()
+        ts_result = self.TSRunCommand([ts_executable, "-hide_banner", "-encoders"], ts_timeout=30)
+        if not ts_result or ts_result.returncode != 0:
+            return set()
+        ts_encoders: set[str] = set()
+        for ts_line in ts_result.stdout.splitlines():
+            ts_parts = ts_line.split()
+            # " V....D libx264   libx264 H.264 ..." - flags, then the name.
+            if len(ts_parts) >= 2 and len(ts_parts[0]) == 6 and ts_parts[0][0] in "VAS":
+                ts_encoders.add(ts_parts[1])
+        return ts_encoders
+
+    def TSRunFFmpegConversion(self, ts_arguments: list[str], ts_output_path: Path, ts_timeout: int) -> bool:
+        """ffmpeg <arguments> <output>, bounded like every other ffmpeg job."""
+        ts_executable = self.TSResolveTool("ffmpeg")
+        if not ts_executable:
+            return False
+        ts_output_path.parent.mkdir(parents=True, exist_ok=True)
+        ts_result = self._TSRunBoundedCommand(
+            self.ts_ffmpeg_semaphore,
+            [ts_executable, "-y", "-hide_banner", "-loglevel", "error", *ts_arguments, str(ts_output_path)],
+            ts_timeout=ts_timeout,
+        )
+        ts_success = bool(
+            ts_result
+            and ts_result.returncode == 0
+            and ts_output_path.exists()
+            and ts_output_path.stat().st_size > 0
+        )
+        if not ts_success:
+            TSLogVerbose(
+                "tools.ffmpeg.conversion_failed",
+                output_path=str(ts_output_path),
+                error=(ts_result.stderr[-400:] if ts_result and ts_result.stderr else ""),
+            )
+        return ts_success
+
+    def TSExtractStillImage(
+        self,
+        ts_source_path: Path,
+        ts_output_path: Path,
+        ts_max_output_dim: int,
+        ts_decode_attempts: list[tuple[list[str], str]] | None = None,
+    ) -> bool:
+        """A still (EXR, 16-bit TIFF...) as an 8-bit PNG, fitted in a box.
+
+        ``ts_decode_attempts`` are (input arguments, filter prefix) pairs tried
+        in order - see TSStillImageDecodeAttempts."""
+        for ts_input_arguments, ts_filter_prefix in ts_decode_attempts or [([], "")]:
+            if self.TSRunFFmpegConversion(
+                [
+                    *ts_input_arguments,
+                    "-i", str(ts_source_path),
+                    "-frames:v", "1",
+                    "-vf", f"{ts_filter_prefix}scale='min({ts_max_output_dim},iw)':'min({ts_max_output_dim},ih)':force_original_aspect_ratio=decrease",
+                    "-c:v", "png",
+                ],
+                ts_output_path,
+                180,
+            ):
+                return True
+        return False
+
     def TSExtractVideoFrame(
         self,
         ts_source_path: Path,

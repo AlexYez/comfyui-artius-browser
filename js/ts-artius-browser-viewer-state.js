@@ -65,6 +65,23 @@ export function tsResolveVideoFrameTime(tsCurrentTime, tsFPS, tsDirection, tsDur
     return tsTargetTime;
 }
 
+// One zoom factor for a wheel event, whatever produced it. A mouse wheel
+// sends one ~100px notch per click and should keep the familiar fixed step; a
+// trackpad sends dozens of tiny deltas per gesture, and a fixed step per event
+// made it race through the whole range. Scaling by the distance makes both
+// feel right. deltaMode 1 = lines, 2 = pages.
+export function tsResolveWheelZoomFactor(tsDeltaY, tsDeltaMode, tsStepIn) {
+    const tsPixels = Number(tsDeltaY || 0) * (tsDeltaMode === 1 ? 33 : (tsDeltaMode === 2 ? 400 : 1));
+    if (!Number.isFinite(tsPixels) || tsPixels === 0) {
+        return 1;
+    }
+    const tsNotch = 100;
+    const tsStepLog = Math.log(Math.max(1.0001, Number(tsStepIn) || 1.14));
+    // Clamped to one notch per event, so a flung wheel cannot jump the range.
+    const tsNotches = Math.max(-1, Math.min(1, -tsPixels / tsNotch));
+    return Math.exp(tsNotches * tsStepLog);
+}
+
 export function tsSyncViewerItemsFromSource(tsOptions = {}) {
     if (typeof tsOptions.getItems !== "function") {
         return {
@@ -81,7 +98,23 @@ export function tsSyncViewerItemsFromSource(tsOptions = {}) {
             tsIndex: tsOptions.index,
         };
     }
-    const tsItems = [...tsSourceItems];
+    // The panel's list never carries an asset's detail (prompt, technical
+    // info): the lightbox fetches that itself. Syncing used to replace those
+    // merged objects with the bare cards on every forward step, so each visit
+    // fetched the detail again and re-rendered the stage when it came back.
+    // A viewer copy is kept while it still describes the same file.
+    const tsLoadedById = new Map(
+        (Array.isArray(tsOptions.items) ? tsOptions.items : [])
+            .filter((tsItem) => tsItem?.detail_loaded)
+            .map((tsItem) => [tsItem.id, tsItem]),
+    );
+    const tsItems = tsSourceItems.map((tsItem) => {
+        const tsLoaded = tsLoadedById.get(tsItem?.id);
+        if (!tsLoaded || tsItem?.detail_loaded || tsLoaded.file_url !== tsItem.file_url) {
+            return tsItem;
+        }
+        return { ...tsLoaded, ...tsItem, detail_loaded: true };
+    });
     const tsCurrentAssetId = tsOptions.preferredAssetId ?? tsOptions.items?.[tsOptions.index]?.id ?? null;
     if (tsCurrentAssetId !== null) {
         const tsMatchedIndex = tsItems.findIndex((tsItem) => tsItem.id === tsCurrentAssetId);

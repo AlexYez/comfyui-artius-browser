@@ -16,6 +16,12 @@ from .ts_config import TSConfigStore
 from .ts_db import TSDatabase
 from .ts_db_schema import TS_DB_SCHEMA_VERSION
 from .ts_delete import TSDeleteService
+from .ts_display_proxy import (
+    TS_DISPLAY_MODE_PROXY,
+    TS_DISPLAY_PROXY_CONTENT_TYPES,
+    TSDisplayProxyService,
+    TSResolveRowDisplayMode,
+)
 from .ts_handlers import TSHandlerRegistry
 from .ts_indexer import TSIndexer
 from .ts_load3d_stage import TSPrepare3DAssetForLoad3D
@@ -27,6 +33,7 @@ from .ts_logging import (
     TSSetVerboseLogging,
 )
 from .ts_preview import TSPreviewCache
+from .ts_reveal import TSRevealInFileManager
 from .ts_routes import TSRegisterRoutes
 from .ts_scan_service import TSScanService
 from .ts_settings import TS_EVENT_ASSET_UPSERT
@@ -50,6 +57,7 @@ class TSAssetBrowserRuntime:
         self.ts_tools = TSToolLocator(self.ts_config_store)
         self.ts_preview_cache = TSPreviewCache(self.ts_storage_paths, self.ts_config_store)
         self.ts_handler_registry = TSHandlerRegistry(self.ts_preview_cache, self.ts_tools)
+        self.ts_display_proxy = TSDisplayProxyService(self.ts_storage_paths.ts_cache_directory, self.ts_tools)
         self.ts_delete_service = TSDeleteService(
             ts_database=self.ts_database,
             ts_preview_cache=self.ts_preview_cache,
@@ -375,19 +383,13 @@ class TSAssetBrowserRuntime:
     def TSGetAssetDetail(self, ts_asset_id: int) -> dict[str, Any] | None:
         return self.ts_asset_catalog.TSGetAssetDetail(ts_asset_id)
 
-    def _TSApplyNoStoreHeaders(self, ts_response: TSWeb.StreamResponse) -> TSWeb.StreamResponse:
-        ts_response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        ts_response.headers["Pragma"] = "no-cache"
-        ts_response.headers["Expires"] = "0"
-        return ts_response
-
     def _TSApplyPreviewCacheHeaders(self, ts_response: TSWeb.StreamResponse) -> TSWeb.StreamResponse:
         ts_response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         return ts_response
 
     def TSBuildPreviewResponse(self, ts_asset_id: int) -> TSWeb.FileResponse:
         TSLogVerbose("runtime.preview.response", asset_id=ts_asset_id)
-        ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
+        ts_row = self.ts_database.TSGetAssetPreviewRow(ts_asset_id)
         if ts_row is None:
             raise TSWeb.HTTPNotFound()
         ts_preview_path_value = str(ts_row["preview_path"] or "")
@@ -399,7 +401,9 @@ class TSAssetBrowserRuntime:
                 TSLogVerbose("runtime.preview.outside_root", asset_id=ts_asset_id, preview_path=ts_preview_path_value, error=str(ts_error))
         if ts_preview_path_value and not self.ts_preview_cache.TSIsPlaceholderPreview(ts_preview_path_value) and (ts_preview_file_path is None or not ts_preview_file_path.exists()):
             try:
-                ts_row = self._TSEnsurePreview(ts_row) or ts_row
+                # Regeneration is the rare path, and it needs the whole row.
+                ts_full_row = self.ts_database.TSGetAssetById(ts_asset_id) or ts_row
+                ts_row = self._TSEnsurePreview(ts_full_row) or ts_full_row
             except Exception:
                 # Preview regeneration must not 500 the preview route: a
                 # vanished file or a root removed from config falls back to
@@ -425,7 +429,53 @@ class TSAssetBrowserRuntime:
         ts_file_path = self._TSAuthorizeAssetPath(ts_row)
         if not ts_file_path.exists():
             raise TSWeb.HTTPNotFound()
-        return self._TSApplyNoStoreHeaders(TSWeb.FileResponse(ts_file_path))
+        return self._TSApplyRevalidateHeaders(TSWeb.FileResponse(ts_file_path))
+
+    def TSBuildDisplayResponse(self, ts_asset_id: int, ts_force_proxy: bool = False) -> TSWeb.FileResponse:
+        """The file the lightbox SHOWS: the original, or a converted copy.
+
+        ``ts_force_proxy`` is the lightbox reporting that the browser failed to
+        play a file its codec list promised it could (a 10-bit H.264, an HEVC
+        without hardware support): the copy is made regardless.
+        """
+        ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
+        if ts_row is None:
+            raise TSWeb.HTTPNotFound()
+        ts_file_path = self._TSAuthorizeAssetPath(ts_row)
+        if not ts_file_path.is_file():
+            raise TSWeb.HTTPNotFound()
+        ts_type = str(ts_row["type"] or "")
+        ts_mode = TSResolveRowDisplayMode(ts_row)
+        if ts_mode != TS_DISPLAY_MODE_PROXY and not (ts_force_proxy and ts_type in {"image", "video"}):
+            return self._TSApplyRevalidateHeaders(TSWeb.FileResponse(ts_file_path))
+        # Deliberately NOT under the per-asset lock: a conversion can take
+        # minutes, and the detail request the lightbox sends at the same time
+        # takes that lock - its panel would say "Loading..." for the whole
+        # transcode. The proxy has its own per-key lock, and it writes only to
+        # its own cache, never to the asset row.
+        ts_proxy_path = self.ts_display_proxy.TSEnsureProxy(ts_row, ts_file_path)
+        if ts_proxy_path is None:
+            # No ffmpeg, no usable encoder, or a file ffmpeg cannot decode.
+            raise TSWeb.HTTPUnprocessableEntity(reason="Display copy could not be created")
+        # Explicit type: Python's mimetypes table on Windows has no ".webp",
+        # and the copy went out as application/octet-stream.
+        ts_content_type = TS_DISPLAY_PROXY_CONTENT_TYPES.get(ts_proxy_path.suffix.lower(), "application/octet-stream")
+        ts_response = TSWeb.FileResponse(ts_proxy_path, headers={"Content-Type": ts_content_type})
+        # The URL carries the asset's content token, so a given URL always
+        # means the same bytes.
+        ts_response.headers["Cache-Control"] = "private, max-age=31536000, immutable"
+        return ts_response
+
+    def _TSApplyRevalidateHeaders(self, ts_response: TSWeb.StreamResponse) -> TSWeb.StreamResponse:
+        # Originals may be kept, but must be revalidated on every use.
+        # `no-store` forbade the browser from keeping the bytes at all, so the
+        # lightbox's decoded neighbours, a re-opened video and every compare
+        # tile were downloaded again in full. FileResponse already sends
+        # ETag + Last-Modified and answers If-None-Match with 304, so a file
+        # rewritten in place is still caught - it just costs a round trip, not
+        # the file. `private`: user media never belongs in a shared cache.
+        ts_response.headers["Cache-Control"] = "private, no-cache"
+        return ts_response
 
     def _TSAuthorizeAssetPath(self, ts_row) -> Path:
         # The single gate every route that hands a stored asset file to the
@@ -454,6 +504,23 @@ class TSAssetBrowserRuntime:
         # "favorites only" filter in this one) reflects the star immediately.
         self._TSEmitAssetUpsert(ts_row)
         return self.ts_asset_catalog.TSBuildAssetCard(ts_row)
+
+    def TSRevealAsset(self, ts_asset_id: int) -> dict[str, Any]:
+        # Same gate as /file: the file manager is pointed at a path only after
+        # the row's root is re-checked against the roots configured now.
+        ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
+        if ts_row is None:
+            raise TSWeb.HTTPNotFound()
+        ts_file_path = self._TSAuthorizeAssetPath(ts_row)
+        if not ts_file_path.is_file():
+            raise TSWeb.HTTPNotFound()
+        return {"revealed": TSRevealInFileManager(ts_file_path)}
+
+    def TSRevealRequestWorkflowFile(self, ts_request, ts_relative_path: str) -> dict[str, Any]:
+        ts_workflow_path = self.ts_workflow_service.TSResolveRequestWorkflowPath(ts_request, ts_relative_path)
+        if not ts_workflow_path.is_file():
+            raise TSWeb.HTTPNotFound()
+        return {"revealed": TSRevealInFileManager(ts_workflow_path)}
 
     def TSDeleteAssets(self, ts_asset_ids: list[int]) -> dict[str, Any]:
         return self.ts_delete_service.TSDeleteAssets(ts_asset_ids)

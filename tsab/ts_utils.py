@@ -31,6 +31,16 @@ def TSNormalizePathString(ts_path_value: str | os.PathLike[str]) -> str:
     return os.path.normcase(str(ts_path)).replace("\\", "/")
 
 
+def TSNormalizeResolvedPathString(ts_path: str | os.PathLike[str]) -> str:
+    """TSNormalizePathString for a path that is ALREADY resolved.
+
+    Same key, minus the resolve() - a system call per file that a directory
+    walk from a resolved root has already paid for. Passing an unresolved path
+    here produces a key the database will not match.
+    """
+    return os.path.normcase(os.fspath(ts_path)).replace("\\", "/")
+
+
 def TSRelativePosixPath(ts_path: Path, ts_root: Path) -> str:
     ts_relative = ts_path.relative_to(ts_root).as_posix()
     return "" if ts_relative == "." else ts_relative

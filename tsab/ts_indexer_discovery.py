@@ -170,32 +170,60 @@ def TSScanDirectory(
     return ts_subdirectories, TSFilterCompanionEntries(ts_file_entries)
 
 
+def _TSPathSuffix(ts_name: str) -> str:
+    # Path(name).suffix without building a Path: a leading dot is a hidden
+    # file, not an extension, and a trailing dot is no extension at all.
+    ts_dot = ts_name.rfind(".")
+    return ts_name[ts_dot:] if 0 < ts_dot < len(ts_name) - 1 else ""
+
+
 def TSIterAssetStats(
     ts_root: TSRootDefinition,
     ts_ignored_paths: set[Path],
     ts_failed_directories: list[str] | None = None,
 ) -> Iterable[TSAssetStat]:
-    ts_directory_stack = [ts_root.ts_path]
     ts_resolved_root = ts_root.ts_path.resolve()
+    # The walk starts from the RESOLVED root and TSScanDirectory resolves every
+    # subdirectory it descends into, so "<resolved dir>/<entry name>" already
+    # is the resolved path of a regular file. Resolving it once more cost a
+    # system call per file (on Windows an open handle): 560 ms of a 580 ms
+    # walk over 6.9k files. Only a symlinked FILE can still point elsewhere.
+    ts_directory_stack = [ts_resolved_root]
+    # Relative paths by string slicing, for the same reason: every entry of a
+    # walk from the resolved root starts with this prefix, and pathlib's
+    # relative_to/suffix/parent were most of what was left of the walk time.
+    ts_root_prefix = os.path.join(str(ts_resolved_root), "")
     while ts_directory_stack:
         ts_directory = ts_directory_stack.pop()
         ts_subdirectories, ts_file_entries = TSScanDirectory(ts_directory, ts_ignored_paths, ts_failed_directories)
         ts_directory_stack.extend(ts_subdirectories)
         for ts_entry in ts_file_entries:
             try:
-                ts_entry_path = Path(ts_entry.path).resolve()
+                ts_entry_text = ts_entry.path
+                ts_filename = ts_entry.name
+                if ts_entry.is_symlink():
+                    ts_entry_path = Path(ts_entry_text).resolve()
+                    ts_entry_text = str(ts_entry_path)
+                    ts_filename = ts_entry_path.name
+                else:
+                    ts_entry_path = Path(ts_entry_text)
                 # stat() follows symlinks on purpose: the row is keyed by the
                 # RESOLVED path, so size/mtime must describe that same file or
                 # the mtime+size cheap-compare re-indexes it on every scan.
                 ts_stat = ts_entry.stat()
-                ts_relative_path = TSRelativePosixPath(ts_entry_path, ts_resolved_root)
+                if ts_entry_text.startswith(ts_root_prefix):
+                    ts_relative_path = ts_entry_text[len(ts_root_prefix):].replace(os.sep, "/")
+                else:
+                    # A symlinked file resolved outside the prefix: the
+                    # pathlib check raises ValueError when it left the root.
+                    ts_relative_path = TSRelativePosixPath(ts_entry_path, ts_resolved_root)
                 yield TSAssetStat(
                     ts_path=ts_entry_path,
                     ts_root=ts_root,
                     ts_relative_path=ts_relative_path,
-                    ts_folder_path=TSFolderPosixPath(ts_relative_path),
-                    ts_filename=ts_entry_path.name,
-                    ts_extension=ts_entry_path.suffix.lower(),
+                    ts_folder_path=ts_relative_path.rsplit("/", 1)[0] if "/" in ts_relative_path else "",
+                    ts_filename=ts_filename,
+                    ts_extension=_TSPathSuffix(ts_filename).lower(),
                     ts_size_bytes=int(ts_stat.st_size),
                     ts_mtime_ns=int(getattr(ts_stat, "st_mtime_ns", int(ts_stat.st_mtime * 1000000000))),
                     ts_ctime_ns=int(getattr(ts_stat, "st_ctime_ns", int(ts_stat.st_ctime * 1000000000))),

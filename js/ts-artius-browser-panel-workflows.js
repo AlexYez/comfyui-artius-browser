@@ -37,7 +37,9 @@ export function tsBuildWorkflowQueryResult(tsItems, tsOptions = {}) {
     const tsSortDirectionFactor = tsOptions.sortDirection === "asc" ? 1 : -1;
     const tsSortedItems = [...tsVisibleItems].sort((tsLeft, tsRight) => {
         if (tsOptions.sortKey === "filename") {
-            return tsSortDirectionFactor * String(tsLeft?.filename || "").localeCompare(String(tsRight?.filename || ""), undefined, { sensitivity: "base" });
+            // numeric: "shot 2" before "shot 10", the way a file manager
+            // lists them; plain code-point order put 10 first.
+            return tsSortDirectionFactor * String(tsLeft?.filename || "").localeCompare(String(tsRight?.filename || ""), undefined, { sensitivity: "base", numeric: true });
         }
         if (tsOptions.sortKey === "size_bytes") {
             return tsSortDirectionFactor * (Number(tsLeft?.size_bytes || 0) - Number(tsRight?.size_bytes || 0));

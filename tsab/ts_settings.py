@@ -69,8 +69,11 @@ TS_BACKEND_SETTINGS = {
         "legacy_directory_names": (".asset_browser",),
     },
     "media": {
-        "image_extensions": {".png", ".jpg", ".jpeg", ".webp", ".avif"},
-        "video_extensions": {".mp4", ".mov", ".webm", ".prores"},
+        # .tif/.tiff/.exr and .mkv/.avi/.m4v are indexed since 1.20.0. The
+        # browser cannot show most of them itself; they are displayed through
+        # a converted copy (tsab/ts_display_proxy.py), the file stays as is.
+        "image_extensions": {".png", ".jpg", ".jpeg", ".webp", ".avif", ".tif", ".tiff", ".exr"},
+        "video_extensions": {".mp4", ".mov", ".webm", ".prores", ".mkv", ".avi", ".m4v"},
         "audio_extensions": {".mp3", ".wav", ".flac", ".opus", ".ogg"},
         "3d_extensions": {".glb", ".obj"},
     },
@@ -147,6 +150,27 @@ TS_SUPPORTED_EXTENSIONS = (
     | TS_AUDIO_EXTENSIONS
     | TS_3D_EXTENSIONS
 )
+
+# What a browser shows by itself. Everything else of an indexed type is shown
+# through a display proxy: a WebP for a still, an H.264 MP4 for a clip.
+TS_BROWSER_IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp", ".avif", ".gif", ".bmp"})
+# Images Pillow cannot decode (or decodes wrongly: 16-bit and float TIFF come
+# out as a white or black frame through a plain RGB conversion). ffmpeg reads
+# them and maps them to 8-bit sRGB for thumbnails and the display proxy.
+TS_FFMPEG_IMAGE_EXTENSIONS = frozenset({".exr", ".tif", ".tiff"})
+TS_BROWSER_VIDEO_CONTAINERS = frozenset({".mp4", ".m4v", ".webm", ".mov"})
+TS_BROWSER_VIDEO_CODECS = frozenset({"h264", "vp8", "vp9", "av1"})
+# An empty string: a clip without sound.
+TS_BROWSER_AUDIO_CODECS = frozenset({"", "aac", "mp3", "opus", "vorbis", "flac"})
+# The proxy is for looking at, not for mastering: long side capped, so a
+# ProRes 4K clip converts in seconds rather than minutes.
+TS_DISPLAY_PROXY_VIDEO_MAX_EDGE = 1920
+TS_DISPLAY_PROXY_IMAGE_MAX_EDGE = 8192
+TS_DISPLAY_PROXY_VIDEO_TIMEOUT_SECONDS = 1800
+TS_DISPLAY_PROXY_IMAGE_TIMEOUT_SECONDS = 180
+# Converted copies are regenerated on demand, so the directory is trimmed
+# (oldest first) instead of growing with every clip ever opened.
+TS_DISPLAY_PROXY_CACHE_MAX_BYTES = 4 * 1024 * 1024 * 1024
 
 TS_EVENT_INDEX_START = f"{TS_EVENT_PREFIX}:index-start"
 TS_EVENT_INDEX_PROGRESS = f"{TS_EVENT_PREFIX}:index-progress"

@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 from typing import Iterable
 
@@ -79,13 +80,28 @@ class TSStoragePaths:
         self.ts_placeholder_directory.mkdir(parents=True, exist_ok=True)
         TSLogVerbose("storage.directories.ensured", root=str(self.ts_asset_browser_directory))
 
+    def _TSResolvedCacheRoot(self) -> Path:
+        # Resolved once: every asset card and every /preview request asks
+        # for it, and on Windows each resolve() is an open-handle system call.
+        ts_root = getattr(self, "_ts_resolved_cache_root", None)
+        if ts_root is None:
+            ts_root = self.ts_asset_browser_directory.resolve()
+            self._ts_resolved_cache_root = ts_root
+        return ts_root
+
     def TSResolveCachePath(self, ts_relative_cache_path: str) -> Path:
         ts_candidate = Path(ts_relative_cache_path)
+        ts_root = self._TSResolvedCacheRoot()
+        if not ts_candidate.is_absolute() and ".." not in ts_candidate.parts:
+            # The common case: a relative "cache/thumbnails/<key>.webp" the
+            # database wrote itself. Lexically joined under the resolved root
+            # it cannot leave it (no "..", not absolute), so the per-card
+            # resolve() - 15 ms for a 60-card page - buys nothing here.
+            return Path(os.path.normpath(ts_root / ts_candidate))
         if ts_candidate.is_absolute():
             ts_resolved = ts_candidate.resolve()
         else:
             ts_resolved = (self.ts_asset_browser_directory / ts_candidate).resolve()
-        ts_root = self.ts_asset_browser_directory.resolve()
         try:
             ts_resolved.relative_to(ts_root)
         except ValueError as ts_error:

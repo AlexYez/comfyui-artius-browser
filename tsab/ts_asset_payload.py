@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import quote
 
+from .ts_display_proxy import TS_DISPLAY_MODE_PROXY, TSResolveDisplayMode
 from .ts_utils import TSJsonLoads, TSRowValue
 
 
@@ -73,6 +74,15 @@ def TSBuildNative3DViewerURL(ts_row, ts_root: dict[str, Any]) -> str:
     )
 
 
+def _TSRowHasText(ts_row, ts_flag_column: str, ts_text_column: str) -> bool:
+    # A listing row carries the precomputed flag (TS_DB_CARD_COLUMNS_SQL); a
+    # full row - detail, upsert event, favorite toggle - carries the text.
+    ts_flag = TSRowValue(ts_row, ts_flag_column, None)
+    if ts_flag is not None:
+        return bool(ts_flag)
+    return bool(str(TSRowValue(ts_row, ts_text_column, "") or ""))
+
+
 def TSBuildAssetCard(ts_row, ts_roots: dict[str, dict[str, Any]], ts_preview_cache) -> dict[str, Any]:
     ts_root = ts_roots.get(str(ts_row["root_id"]), {})
     ts_preview_path = str(ts_row["preview_path"] or "")
@@ -97,6 +107,16 @@ def TSBuildAssetCard(ts_row, ts_roots: dict[str, dict[str, Any]], ts_preview_cac
     # cache filename is "{key}.3d.<ext>". Anchor on the stem suffix instead of
     # a substring so a normal preview whose path merely contains ".3d." cannot
     # be mislabeled as a 3D capture.
+    # What the lightbox loads to SHOW the asset: the file itself when the
+    # browser can display it, otherwise a converted copy made on demand
+    # (ProRes/HEVC/AVI -> H.264, EXR/TIFF -> WebP). Download, "open in new
+    # tab" and drag-and-drop keep using the original through file_url.
+    ts_display_mode = TSResolveDisplayMode(str(ts_row["type"] or ""), str(ts_row["extension"] or ""), ts_technical_info)
+    ts_display_url = (
+        f"/asset_browser/display/{ts_row['id']}?v={ts_file_cache_token}"
+        if ts_display_mode == TS_DISPLAY_MODE_PROXY
+        else ts_file_url
+    )
     ts_preview_filename = ts_preview_path.rsplit("/", 1)[-1].lower()
     ts_preview_is_3d_capture = ts_preview_exists and ts_preview_filename.rsplit(".", 1)[0].endswith(".3d")
     return {
@@ -109,6 +129,8 @@ def TSBuildAssetCard(ts_row, ts_roots: dict[str, dict[str, Any]], ts_preview_cac
         "folder_path": ts_row["folder_path"],
         "preview_url": ts_preview_url,
         "file_url": ts_file_url,
+        "display_url": ts_display_url,
+        "display_mode": ts_display_mode,
         "viewer_3d_url": TSBuildNative3DViewerURL(ts_row, ts_root) if str(ts_row["type"] or "") == "3d" else "",
         "preview_is_placeholder": (not ts_preview_exists) or ts_preview_cache.TSIsPlaceholderPreview(ts_preview_path),
         "preview_is_3d_capture": ts_preview_is_3d_capture,
@@ -124,12 +146,12 @@ def TSBuildAssetCard(ts_row, ts_roots: dict[str, dict[str, Any]], ts_preview_cac
         "is_favorite": bool(TSRowValue(ts_row, "is_favorite", 0)),
         "has_preview": bool(ts_row["has_preview"]),
         "has_metadata": bool(ts_row["has_metadata"]),
-        "has_workflow": bool(str(ts_row["workflow_text"] or "")),
+        "has_workflow": _TSRowHasText(ts_row, "has_workflow", "workflow_text"),
         # Videos carry an embedded prompt as often as they carry a
         # workflow, and as often as they carry neither - so the copy
         # action on a video card is offered only when there is something
         # to copy, rather than always, the way it is for an image.
-        "has_prompt": bool(str(ts_row["prompt_text"] or "")),
+        "has_prompt": _TSRowHasText(ts_row, "has_prompt", "prompt_text"),
         # [AI agent] Empty for every asset not made in TS Image Studio.
         "studio": TSResolveStudioTag(ts_row),
         "codec_name": str(ts_technical_info.get("codec_name") or ""),

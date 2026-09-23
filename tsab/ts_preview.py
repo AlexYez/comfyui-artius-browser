@@ -192,6 +192,35 @@ class TSPreviewCache:
                 return self.TSGetTypePlaceholderPreview("image")
             return self.TSRelativePreviewPath(ts_output_path)
 
+    def TSGenerateFFmpegImageThumbnail(
+        self,
+        ts_source_path: Path,
+        ts_preview_key: str,
+        ts_tools,
+        ts_decode_attempts: list[tuple[list[str], str]] | None = None,
+    ) -> str:
+        """Thumbnail for a still Pillow cannot read correctly (EXR, 16-bit or
+        float TIFF): ffmpeg decodes and pre-scales it to an 8-bit PNG, the
+        usual normalization finishes it. Falls back to Pillow without ffmpeg,
+        which still handles an ordinary 8-bit TIFF."""
+        if not ts_tools or not ts_tools.TSResolveTool("ffmpeg"):
+            return self.TSGenerateImageThumbnail(ts_source_path, ts_preview_key)
+        with self._TSGetPreviewKeyLock("thumbnails", ts_preview_key):
+            ts_output_path = self.TSBuildPreviewPath(ts_preview_key, "thumbnails")
+            if ts_output_path.exists():
+                return self.TSRelativePreviewPath(ts_output_path)
+            ts_temp_path = self.TSBuildPreviewPath(ts_preview_key, "thumbnails", ".source.png")
+            ts_max_output_dim = max(self._TSThumbnailSize() * 2, 256)
+            if not ts_tools.TSExtractStillImage(ts_source_path, ts_temp_path, ts_max_output_dim, ts_decode_attempts):
+                self._TSDiscardTempSource(ts_temp_path)
+                return self.TSGetTypePlaceholderPreview("image")
+            try:
+                self._TSNormalizePreviewFile(ts_temp_path, ts_output_path)
+            except Exception as ts_error:
+                TSLogVerbose("preview.ffmpeg_image.normalize.failed", source_path=str(ts_source_path), error=str(ts_error))
+                return self.TSGetTypePlaceholderPreview("image")
+            return self.TSRelativePreviewPath(ts_output_path)
+
     def _TSDiscardTempSource(self, ts_temp_path: Path) -> None:
         # The ".source.png" temp file is excluded from TSPurgeOrphanedPreviews on
         # the assumption that a live generator owns it. That assumption only
@@ -504,6 +533,9 @@ class TSPreviewCache:
             TSLogVerbose("preview.cache.clear_failed", path=str(ts_cache_directory), error=str(ts_error))
 
     def _TSPreviewConfig(self) -> dict:
+        ts_load_section = getattr(self.ts_config_store, "TSLoadSection", None)
+        if callable(ts_load_section):
+            return ts_load_section("preview")
         return self.ts_config_store.TSLoadConfig().get("preview", {})
 
     def _TSThumbnailSize(self) -> int:

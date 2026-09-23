@@ -20,6 +20,8 @@ import {
     tsLoadLocale,
     tsOpenAssetInNewTab,
     tsOpenDownload,
+    tsRevealAssetInFolder,
+    tsRevealWorkflowInFolder,
     tsDeleteWorkflowFile,
     tsPostJSON,
     tsResolveComfyLocale,
@@ -57,6 +59,7 @@ import {
     tsBuildItemIndexById,
     tsFindItemById,
     tsGetSelectedItems,
+    tsResolveDeleteOutcome,
     tsResolveDragAssets,
 } from "./ts-artius-browser-panel-selection.js";
 import {
@@ -134,7 +137,17 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsSettingsHydrated: false,
             tsQueuedFetchReset: false,
             tsQueuedFetchAppend: false,
+            tsQueuedFetchPreserve: false,
+            // Shift-click ranges start here. Only a plain or Ctrl click moves
+            // it; tsLastSelectedIndex is the keyboard focus, which a range
+            // click does move.
+            tsSelectionAnchorId: null,
+            tsFetchError: null,
         };
+        // Per-section scroll position, so Assets <-> Workflows returns to the
+        // place the user left instead of the top.
+        this.tsSectionScrollTop = { assets: 0, workflows: 0 };
+        this.tsSavedScrollTop = 0;
         this.tsBootstrapScanRequested = false;
         // First-load skeletons show only until the very first fetch settles;
         // after that an empty result is a real "no matches" state, not a
@@ -154,8 +167,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsGridMetrics = null;
         this.tsItemIndexById = new Map();
         this.tsDebouncedSearch = tsDebounce(() => this.tsFetchAssets(true), tsPanelSettings.debounceMs.search);
-        this.tsDebouncedRealtimeRefresh = tsDebounce(() => this.tsFetchAssets(true), tsPanelSettings.debounceMs.realtimeRefresh);
+        this.tsDebouncedRealtimeRefresh = tsDebounce(
+            () => this.tsFetchAssets(true, { tsPreserveView: true }),
+            tsPanelSettings.debounceMs.realtimeRefresh,
+        );
         this.tsDebouncedFilterRefresh = tsDebounce(() => this.tsFetchAssets(true), tsPanelSettings.debounceMs.filterChip);
+        this.tsDebouncedFilterInputRefresh = tsDebounce(() => this.tsFetchAssets(true), tsPanelSettings.debounceMs.filterInput);
         this.tsResponseCache = new TSAssetResponseCache({
             tsCapacity: tsPanelSettings.responseCache.capacity,
             tsTtlMs: tsPanelSettings.responseCache.ttlMs,
@@ -343,13 +360,22 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsHandleSidebarShown() {
         this.tsApplyBrowserWidth();
+        // ComfyUI re-attaches the tab, which drops the scroll offset: put the
+        // user back where they were before anything renders.
+        this.tsRestoreScrollPending = true;
+        // The sidebar animates its width in, so the viewport settles over a
+        // few frames. Every pass is cheap unless the size actually moved (see
+        // tsScheduleSidebarRefresh).
+        this.tsLastSidebarRefreshSize = "";
+        // Not tied to an animation frame: a tab that is not painting runs
+        // none, and the pending flag would then block every later save.
+        window.setTimeout(() => this.tsRestoreSavedScroll(), 0);
         this.tsScheduleSidebarRefresh(0);
-        this.tsScheduleSidebarRefresh(32);
         this.tsScheduleSidebarRefresh(96);
-        this.tsScheduleSidebarRefresh(180);
+        this.tsScheduleSidebarRefresh(220);
         if (this.tsIsWorkflowSection()) {
             this.tsWorkflowLibraryLoaded = false;
-            void this.tsFetchAssets(true);
+            void this.tsFetchAssets(true, { tsPreserveView: true });
         } else {
             // Re-show of the Assets tab. ComfyUI tears the sidebar tab out of
             // the DOM while another tab is active, so the panel can miss the
@@ -358,10 +384,24 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             // entry on execution_success). Without this, assets indexed since
             // the last view stay invisible until a manual Rescan. Drop the
             // cached first page and refetch so freshly indexed assets show up
-            // on return.
+            // on return - without losing the scroll position or the selection.
             this.tsInvalidateResponseCache();
-            void this.tsFetchAssets(true);
+            void this.tsFetchAssets(true, { tsPreserveView: true });
         }
+    }
+
+    tsRestoreSavedScroll() {
+        const tsScroll = this.tsRefs?.tsGalleryScroll;
+        if (!this.tsRestoreScrollPending || !tsScroll || !this.isConnected || tsScroll.clientHeight <= 0) {
+            return;
+        }
+        this.tsRestoreScrollPending = false;
+        const tsMetrics = this.tsGetGridMetrics();
+        const tsRows = Math.ceil(this.tsState.tsItems.length / Math.max(1, tsMetrics.tsColumns));
+        // The spacer first, or the browser clamps scrollTop to the old height.
+        this.tsRefs.tsGallerySpacer.style.height = `${tsMetrics.tsPaddingTop + tsMetrics.tsPaddingBottom + tsRows * tsMetrics.tsRowHeight}px`;
+        tsScroll.scrollTop = this.tsSavedScrollTop || 0;
+        this.tsHandleGalleryScroll();
     }
 
     tsScheduleSidebarRefresh(tsDelayMs = 0) {
@@ -375,8 +415,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 if (tsViewportWidth <= 0 || tsViewportHeight <= 0) {
                     return;
                 }
+                const tsSizeKey = `${tsViewportWidth}x${tsViewportHeight}`;
+                if (tsSizeKey === this.tsLastSidebarRefreshSize && !this.tsRestoreScrollPending) {
+                    // Same box as the last pass: a full rebuild here was pure
+                    // waste (four of them on every sidebar show).
+                    return;
+                }
+                this.tsLastSidebarRefreshSize = tsSizeKey;
                 this.tsLastGalleryViewportWidth = tsViewportWidth;
                 this.tsInvalidateGridMetrics();
+                this.tsRestoreSavedScroll();
                 this.tsRenderAll();
                 this.tsHandleGalleryScroll();
             });
@@ -594,7 +642,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 this.tsRefs.tsPreviewSize.value = String(this.tsState.tsPreviewSize);
             }
             if (this.tsRefs?.tsAutoscan) {
-                this.tsRefs.tsAutoscan.dataset.active = String(Boolean(this.tsState.tsAutoscan));
+                this.tsSetToggleState(this.tsRefs.tsAutoscan, Boolean(this.tsState.tsAutoscan));
             }
             this.tsEmitAutoscanChanged();
             this.tsApplyBrowserWidth();
@@ -797,14 +845,24 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsBuildWorkflowQueryResult() {
-        return tsBuildWorkflowQueryResult(this.tsWorkflowLibrary, {
+        const tsOptions = {
             search: this.tsState.tsSearch,
             mode: this.tsState.tsMode,
             folder: this.tsState.tsFolder,
             sortKey: this.tsState.tsSortKey,
             sortDirection: this.tsState.tsSortDirection,
             roots: this.tsGetWorkflowRootNodes(),
-        });
+        };
+        // Every scrolled page of 60 used to filter and sort the WHOLE library
+        // again. The result only changes with the library or the query.
+        const tsKey = JSON.stringify(tsOptions);
+        const tsCached = this.tsWorkflowQueryCache;
+        if (tsCached && tsCached.tsLibrary === this.tsWorkflowLibrary && tsCached.tsKey === tsKey) {
+            return tsCached.tsResult;
+        }
+        const tsResult = tsBuildWorkflowQueryResult(this.tsWorkflowLibrary, tsOptions);
+        this.tsWorkflowQueryCache = { tsLibrary: this.tsWorkflowLibrary, tsKey, tsResult };
+        return tsResult;
     }
 
     tsBuildShell() {
@@ -812,7 +870,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             ${tsPanelStyles}
             <div class="ts-shell" tabindex="0">
                 <div class="ts-toolbar">
-                    <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a><span class="ts-version" hidden></span><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a><a class="ts-update-badge" href="https://github.com/AlexYez/comfyui-artius-browser/releases" target="_blank" rel="noreferrer noopener" hidden></a></div>
+                    <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a><span class="ts-version" hidden></span><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a><a class="ts-update-badge" href="https://github.com/AlexYez/comfyui-artius-browser/releases" target="_blank" rel="noreferrer noopener" hidden></a><button class="ts-help-toggle" type="button">?</button></div>
                     <div class="ts-toolbar-main-wrap">
                     <div class="ts-toolbar-main">
                         <div class="ts-toolbar-cluster ts-section-group">
@@ -831,7 +889,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         </div>
                         <div class="ts-toolbar-cluster ts-sort-group">
                             <select class="ts-sort-select"></select>
-                            <select class="ts-sort-direction"></select>
+                            <button class="ts-sort-direction" type="button"></button>
                         </div>
                         <div class="ts-toolbar-cluster ts-mode-group">
                             <button class="ts-mode-button ts-mode-flat" type="button"></button>
@@ -912,6 +970,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsVersion: this.shadowRoot.querySelector(".ts-version"),
             tsDonate: this.shadowRoot.querySelector(".ts-donate"),
             tsUpdateBadge: this.shadowRoot.querySelector(".ts-update-badge"),
+            tsHelpToggle: this.shadowRoot.querySelector(".ts-help-toggle"),
             tsSectionAssets: this.shadowRoot.querySelector(".ts-section-assets"),
             tsSectionWorkflows: this.shadowRoot.querySelector(".ts-section-workflows"),
             tsSearch: this.shadowRoot.querySelector(".ts-search"),
@@ -965,11 +1024,23 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsResizeObserver = new ResizeObserver((tsEntries) => {
             const tsEntry = tsEntries?.[0];
             const tsWidth = Math.round(Number(tsEntry?.contentRect?.width || this.tsRefs.tsGalleryScroll.clientWidth || 0));
+            const tsHeight = Math.round(Number(tsEntry?.contentRect?.height || this.tsRefs.tsGalleryScroll.clientHeight || 0));
             if (tsWidth === this.tsLastGalleryViewportWidth) {
+                // A taller or shorter viewport (toolbar rows appearing, the
+                // filter panel opening) changes only WHICH rows are visible.
+                if (tsHeight !== this.tsLastGalleryViewportHeight) {
+                    this.tsLastGalleryViewportHeight = tsHeight;
+                    this.tsHandleGalleryScroll();
+                }
                 return;
             }
+            this.tsLastGalleryViewportHeight = tsHeight;
+            // A new column count moves every card: keep the first visible one
+            // in place rather than the pixel offset.
+            const tsScrollAnchor = this.tsCaptureScrollAnchor();
             this.tsLastGalleryViewportWidth = tsWidth;
             this.tsInvalidateGridMetrics();
+            this.tsRestoreScrollAnchor(tsScrollAnchor);
             this.tsScheduleGridRender(true, true);
         });
         this.tsResizeObserver.observe(this.tsRefs.tsGalleryScroll);
@@ -1053,24 +1124,29 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsQueueSaveUISettings();
             this.tsFetchAssets(true);
         });
-        this.tsRefs.tsSortDirection.addEventListener("change", (tsEvent) => {
-            this.tsState.tsSortDirection = tsEvent.target.value;
+        // Two directions, so one click flips it. The two-option dropdown it
+        // replaces took two clicks for the same thing.
+        this.tsRefs.tsSortDirection.addEventListener("click", () => {
+            this.tsState.tsSortDirection = this.tsState.tsSortDirection === "asc" ? "desc" : "asc";
             this.tsSyncSectionSettingsFromActive();
-            this.tsResizeSelectToCurrent(this.tsRefs.tsSortDirection);
+            this.tsRenderSortDirection();
             this.tsQueueSaveUISettings();
             this.tsFetchAssets(true);
         });
         this.tsRefs.tsModeFlat.addEventListener("click", () => this.tsSetMode("flat"));
         this.tsRefs.tsModeTree.addEventListener("click", () => this.tsSetMode("tree"));
         this.tsRefs.tsPreviewSize.addEventListener("input", (tsEvent) => {
+            const tsScrollAnchor = this.tsCaptureScrollAnchor();
             this.tsState.tsPreviewSize = Number(tsEvent.target.value || tsPreviewSizeRange.default);
             this.tsSyncSectionSettingsFromActive();
+            this.tsInvalidateGridMetrics();
+            this.tsRestoreScrollAnchor(tsScrollAnchor);
             this.tsScheduleGridRender(true, true);
             this.tsQueueSaveUISettings();
         });
         this.tsRefs.tsAutoscan.addEventListener("click", async () => {
             this.tsState.tsAutoscan = !this.tsState.tsAutoscan;
-            this.tsRefs.tsAutoscan.dataset.active = String(Boolean(this.tsState.tsAutoscan));
+            this.tsSetToggleState(this.tsRefs.tsAutoscan, Boolean(this.tsState.tsAutoscan));
             this.tsEmitAutoscanChanged();
             this.tsQueueSaveUISettings();
             if (this.tsState.tsAutoscan) {
@@ -1079,13 +1155,15 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         });
         this.tsRefs.tsSearchScope.addEventListener("click", () => {
             this.tsState.tsSearchScope = this.tsState.tsSearchScope === "all" ? "filename" : "all";
-            this.tsRefs.tsSearchScope.dataset.active = String(this.tsState.tsSearchScope === "all");
+            this.tsSetToggleState(this.tsRefs.tsSearchScope, this.tsState.tsSearchScope === "all");
             this.tsApplySearchScopeInset();
+            this.tsRenderSearchHint();
             this.tsQueueSaveUISettings();
             if (String(this.tsState.tsSearch || "").trim()) {
                 this.tsFetchAssets(true);
             }
         });
+        this.tsRefs.tsTypeChips.addEventListener("click", (tsEvent) => this.tsHandleTypeChipClick(tsEvent));
         this.tsRefs.tsFavoritesToggle.addEventListener("click", () => this.tsToggleFavoritesFilter());
         this.tsRefs.tsFiltersToggle.addEventListener("click", () => this.tsToggleFilterPanel());
         this.tsBindFilterInputs();
@@ -1096,6 +1174,15 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsDeleteSelected.addEventListener("click", () => this.tsDeleteSelected());
         this.tsBindToolbarResizer();
         this.tsRefs.tsGalleryScroll.addEventListener("scroll", () => this.tsHandleGalleryScroll(), { passive: true });
+        this.tsRefs.tsGalleryScroll.addEventListener("click", (tsEvent) => {
+            // Below the last row the click lands on the scroller or the
+            // spacer, never on the card layer.
+            const tsTarget = tsEvent.target;
+            if ((tsTarget === this.tsRefs.tsGalleryScroll || tsTarget === this.tsRefs.tsGallerySpacer)
+                && !tsEvent.shiftKey && !tsEvent.ctrlKey && !tsEvent.metaKey) {
+                this.tsClearSelection();
+            }
+        });
         this.tsRefs.tsEmpty.addEventListener("click", (tsEvent) => this.tsHandleEmptyStateClick(tsEvent));
         this.tsRefs.tsGalleryContent.addEventListener("click", (tsEvent) => this.tsHandleGalleryClick(tsEvent));
         this.tsRefs.tsGalleryContent.addEventListener("dblclick", (tsEvent) => this.tsHandleGalleryDoubleClick(tsEvent));
@@ -1107,6 +1194,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsGalleryContent.addEventListener("pointerout", (tsEvent) => this.tsHandleGalleryPointerOut(tsEvent));
         this.tsRefs.tsContextMenu.addEventListener("click", (tsEvent) => this.tsHandleContextMenuClick(tsEvent));
         this.tsRefs.tsShortcutsClose.addEventListener("click", () => this.tsToggleShortcutHelp(false));
+        // The "?" key only helps someone who already knows it exists.
+        this.tsRefs.tsHelpToggle.addEventListener("click", () => this.tsToggleShortcutHelp());
         this.tsRefs.tsShortcuts.addEventListener("click", (tsEvent) => {
             if (tsEvent.target === this.tsRefs.tsShortcuts) {
                 this.tsToggleShortcutHelp(false);
@@ -1124,6 +1213,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             // dragged onto the canvas) and would re-insert the previously
             // dragged asset instead of letting ComfyUI handle the drop.
             window.__tsArtiusDraggedAsset = "";
+            this.tsMarkDraggedCards([]);
         });
         this.tsRefs.tsTreePanel.addEventListener("click", (tsEvent) => this.tsHandleTreeClick(tsEvent));
         this.tsRefs.tsShell.addEventListener("keydown", (tsEvent) => this.tsHandleKeydown(tsEvent));
@@ -1211,11 +1301,20 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (tsDeleteButton) {
             tsDeleteButton.disabled = !tsAssetPatch.allow_delete;
         }
+        // A star set in another browser tab arrives here as an upsert: the
+        // backend emits it for exactly that reason.
+        if (typeof tsAssetPatch.is_favorite === "boolean") {
+            this.tsRefreshCardFavorite(tsAssetPatch.id, tsAssetPatch.is_favorite);
+        }
         return true;
     }
 
     tsResolveCardPreviewURL(tsItem) {
-        if (tsItem?.type === "3d" && tsItem.viewer_3d_url) {
+        // The in-memory capture is a data URL of a few hundred KB. It bridges
+        // the moment between a capture and its save; once the saved capture
+        // is the card's own preview, pasting the data URL into the grid
+        // markup on every render is pure weight.
+        if (tsItem?.type === "3d" && tsItem.viewer_3d_url && !tsItem.preview_is_3d_capture) {
             const tsCapturedPreviewURL = this.ts3DQueue.tsGetCachedPreviewURL(tsItem.viewer_3d_url);
             if (tsCapturedPreviewURL) {
                 return tsCapturedPreviewURL;
@@ -1295,10 +1394,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             ...this.tsState.tsItems[tsIndex],
             ...tsAssetPatch,
         };
+        // The bumped revision makes the next render compare this card's
+        // markup again; a card off screen needs nothing more than that.
         this.tsItemsRevision += 1;
-        if (!this.tsPatchVisibleCard(this.tsState.tsItems[tsIndex])) {
-            this.tsDebouncedAssetEventRefresh();
-        }
+        this.tsPatchVisibleCard(this.tsState.tsItems[tsIndex]);
     }
 
     tsHandleAssetRemoveEvent(tsEvent) {
@@ -1329,7 +1428,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsUpdateBadge.title = this.tsT("tooltip.newVersion", "A newer release of Artius Browser is available on GitHub.");
         this.tsRefs.tsSectionAssets.textContent = this.tsT("button.assets", "Assets");
         this.tsRefs.tsSectionWorkflows.textContent = this.tsT("button.workflows", "Workflows");
-        this.tsRefs.tsSortDirection.title = this.tsT("tooltip.sortDirection", "Toggle ascending and descending sorting.");
+        this.tsRefs.tsSortDirection.title = this.tsT("tooltip.sortDirection", "Sort direction: click to reverse.");
         this.tsRefs.tsModeFlat.textContent = this.tsT("button.flat", "Flat");
         this.tsRefs.tsModeFlat.title = this.tsT("tooltip.mode.flat", "Switch to the flat feed.");
         this.tsRefs.tsModeTree.textContent = this.tsT("button.tree", "Tree");
@@ -1348,7 +1447,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsGalleryContent.setAttribute("aria-label", this.tsT("aria.gallery", "Asset grid"));
         this.tsRefs.tsSearchScope.textContent = this.tsT("button.searchPrompts", "Prompt");
         this.tsRefs.tsSearchScope.title = this.tsT("tooltip.searchPrompts", "Also search inside prompts and model names (not just filenames).");
-        this.tsRefs.tsSearchScope.dataset.active = String(this.tsState.tsSearchScope === "all");
+        this.tsSetToggleState(this.tsRefs.tsSearchScope, this.tsState.tsSearchScope === "all");
         this.tsApplySearchScopeInset();
         this.tsRefs.tsFavoritesToggle.textContent = this.tsT("button.favorites", "Favorites");
         this.tsRefs.tsFavoritesToggle.title = this.tsT("tooltip.favorites", "Show only assets you starred.");
@@ -1365,6 +1464,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsFilterMinHeight.placeholder = this.tsT("filter.min", "min");
         this.tsRefs.tsFilterMaxHeight.placeholder = this.tsT("filter.max", "max");
         this.tsRefs.tsShortcutsTitle.textContent = this.tsT("shortcuts.title", "Keyboard shortcuts");
+        this.tsRefs.tsHelpToggle.title = this.tsT("tooltip.help", "Keyboard shortcuts (?)");
+        this.tsRefs.tsHelpToggle.setAttribute("aria-label", this.tsT("tooltip.help", "Keyboard shortcuts (?)"));
         this.tsRefs.tsShortcutsClose.textContent = "×";
         this.tsRefs.tsShortcutsClose.setAttribute("aria-label", this.tsT("button.close", "Close"));
         this.tsApplyToolbarScale();
@@ -1395,8 +1496,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsRenderSectionButtons() {
-        this.tsRefs.tsSectionAssets.dataset.active = String(this.tsState.tsSection === "assets");
-        this.tsRefs.tsSectionWorkflows.dataset.active = String(this.tsState.tsSection === "workflows");
+        this.tsSetToggleState(this.tsRefs.tsSectionAssets, this.tsState.tsSection === "assets");
+        this.tsSetToggleState(this.tsRefs.tsSectionWorkflows, this.tsState.tsSection === "workflows");
         this.tsRefs.tsSectionAssets.title = this.tsT("tooltip.section.assets", "Browse indexed assets.");
         this.tsRefs.tsSectionWorkflows.title = this.tsT("tooltip.section.workflows", "Browse ComfyUI workflows.");
     }
@@ -1404,12 +1505,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     tsRenderToolbarForSection() {
         const tsWorkflowSection = this.tsIsWorkflowSection();
         const tsWorkflowHiddenDisplay = tsWorkflowSection ? "none" : "";
-        this.tsRefs.tsSearch.placeholder = tsWorkflowSection
-            ? this.tsT("placeholder.search.workflows", "Search workflow filename...")
-            : this.tsT("placeholder.search", "Search filename...");
-        this.tsRefs.tsSearch.title = tsWorkflowSection
-            ? this.tsT("tooltip.search.workflows", "Search workflows by filename only.")
-            : this.tsT("tooltip.search", "Search assets by filename only.");
+        this.tsRenderSearchHint();
         this.tsRefs.tsSearch.value = String(this.tsState.tsSearch || "");
         this.tsRefs.tsRootSelect.title = this.tsT("tooltip.root", "Choose a root folder.");
         this.tsRefs.tsTypeCluster.hidden = tsWorkflowSection;
@@ -1446,6 +1542,23 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsLastObservedToolbarHeight = 0;
             this.tsApplyToolbarScale();
         }
+    }
+
+    // The field says what it searches: with the Prompt scope on, "filename
+    // only" was simply wrong.
+    tsRenderSearchHint() {
+        const tsWorkflowSection = this.tsIsWorkflowSection();
+        const tsPromptScope = !tsWorkflowSection && this.tsState.tsSearchScope === "all";
+        this.tsRefs.tsSearch.placeholder = tsWorkflowSection
+            ? this.tsT("placeholder.search.workflows", "Search workflow filename...")
+            : tsPromptScope
+                ? this.tsT("placeholder.searchAll", "Search filenames, prompts, models...")
+                : this.tsT("placeholder.search", "Search filename...");
+        this.tsRefs.tsSearch.title = tsWorkflowSection
+            ? this.tsT("tooltip.search.workflows", "Search workflows by filename only.")
+            : tsPromptScope
+                ? this.tsT("tooltip.searchAll", "Search filenames, prompts and model names.")
+                : this.tsT("tooltip.search", "Search assets by filename only.");
     }
 
     tsRenderSortOptions() {
@@ -1490,30 +1603,45 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     tsRenderTypeChips() {
-        this.tsRefs.tsTypeChips.innerHTML = tsTypeOrder
-            .map((tsType) => `
-                <button
-                    class="ts-chip"
-                    type="button"
-                    data-type="${tsType}"
-                    data-active="${String(this.tsState.tsTypes.has(tsType))}"
-                    title="${this.tsT(`tooltip.type.${tsType}`, `Toggle ${tsType}`)}"
-                >${this.tsT(`type.${tsType}`, tsType)}</button>
-            `)
-            .join("");
+        // Rebuilt only when a label changes (locale); a toggle just flips the
+        // chip's state, so the button under the pointer or the keyboard focus
+        // is never replaced. One delegated listener serves them all
+        // (tsHandleTypeChipClick) instead of a new set per render.
+        const tsChipKey = tsTypeOrder.map((tsType) => this.tsT(`type.${tsType}`, tsType)).join("|");
+        if (this.tsLastTypeChipKey !== tsChipKey) {
+            this.tsLastTypeChipKey = tsChipKey;
+            this.tsRefs.tsTypeChips.innerHTML = tsTypeOrder
+                .map((tsType) => `
+                    <button
+                        class="ts-chip"
+                        type="button"
+                        data-type="${tsType}"
+                        title="${this.tsEscapeAttribute(this.tsT(`tooltip.type.${tsType}`, `Toggle ${tsType}`))}"
+                    >${this.tsEscapeHTML(this.tsT(`type.${tsType}`, tsType))}</button>
+                `)
+                .join("");
+        }
         this.tsRefs.tsTypeChips.querySelectorAll("[data-type]").forEach((tsButton) => {
-            tsButton.addEventListener("click", () => {
-                const tsType = tsButton.dataset.type;
-                if (this.tsState.tsTypes.has(tsType)) {
-                    this.tsState.tsTypes.delete(tsType);
-                } else {
-                    this.tsState.tsTypes.add(tsType);
-                }
-                this.tsRenderTypeChips();
-                this.tsQueueSaveUISettings();
-                this.tsDebouncedFilterRefresh();
-            });
+            const tsActive = String(this.tsState.tsTypes.has(tsButton.dataset.type));
+            tsButton.dataset.active = tsActive;
+            tsButton.setAttribute("aria-pressed", tsActive);
         });
+    }
+
+    tsHandleTypeChipClick(tsEvent) {
+        const tsButton = tsEvent.target.closest("[data-type]");
+        if (!tsButton) {
+            return;
+        }
+        const tsType = tsButton.dataset.type;
+        if (this.tsState.tsTypes.has(tsType)) {
+            this.tsState.tsTypes.delete(tsType);
+        } else {
+            this.tsState.tsTypes.add(tsType);
+        }
+        this.tsRenderTypeChips();
+        this.tsQueueSaveUISettings();
+        this.tsDebouncedFilterRefresh();
     }
 
     tsBindFilterInputs() {
@@ -1527,8 +1655,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsInput.addEventListener("input", () => {
                 const tsValue = Math.max(0, Math.floor(Number(tsInput.value) || 0));
                 this.tsState[tsField] = tsValue;
+                this.tsRenderFiltersToggle();
                 this.tsQueueSaveUISettings();
-                this.tsDebouncedFilterRefresh();
+                // "1920" is four keystrokes; querying for 1, 19 and 192 on
+                // the way there was three requests nobody wanted.
+                this.tsDebouncedFilterInputRefresh();
             });
         }
         const tsDateInputs = [
@@ -1538,8 +1669,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         for (const [tsInput, tsField] of tsDateInputs) {
             tsInput.addEventListener("change", () => {
                 this.tsState[tsField] = String(tsInput.value || "");
+                this.tsRenderFiltersToggle();
                 this.tsQueueSaveUISettings();
-                this.tsFetchAssets(true);
+                // A date picker fires "change" for every digit typed into it.
+                this.tsDebouncedFilterInputRefresh();
             });
         }
     }
@@ -1578,7 +1711,25 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsFilterMaxWidth.value = this.tsState.tsFilterMaxWidth ? String(this.tsState.tsFilterMaxWidth) : "";
         this.tsRefs.tsFilterMinHeight.value = this.tsState.tsFilterMinHeight ? String(this.tsState.tsFilterMinHeight) : "";
         this.tsRefs.tsFilterMaxHeight.value = this.tsState.tsFilterMaxHeight ? String(this.tsState.tsFilterMaxHeight) : "";
-        this.tsRefs.tsFiltersToggle.dataset.active = String(this.tsState.tsFiltersOpen || this.tsHasActiveFilters());
+        this.tsRenderFiltersToggle();
+    }
+
+    // Two different facts used to share one highlight: "the filter row is
+    // open" and "filters are narrowing the grid". The first is the button's
+    // pressed state; the second is a dot, so a closed row with active filters
+    // still says so.
+    tsRenderFiltersToggle() {
+        this.tsSetToggleState(this.tsRefs.tsFiltersToggle, Boolean(this.tsState.tsFiltersOpen));
+        this.tsRefs.tsFiltersToggle.dataset.applied = String(this.tsHasActiveFilters());
+    }
+
+    tsSetToggleState(tsButton, tsActive) {
+        if (!tsButton) {
+            return;
+        }
+        const tsValue = String(Boolean(tsActive));
+        tsButton.dataset.active = tsValue;
+        tsButton.setAttribute("aria-pressed", tsValue);
     }
 
     tsToggleFilterPanel(tsForce = undefined) {
@@ -1597,7 +1748,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsFilterPanel.dataset.open = String(tsShouldShow);
         this.tsRefs.tsFiltersToggle.hidden = tsWorkflowSection;
         this.tsRefs.tsFiltersToggle.style.display = tsWorkflowSection ? "none" : "";
-        this.tsRefs.tsFiltersToggle.dataset.active = String(this.tsState.tsFiltersOpen || this.tsHasActiveFilters());
+        this.tsRenderFiltersToggle();
         if (tsShouldShow) {
             this.tsSyncFilterInputs();
         }
@@ -1607,7 +1758,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsWorkflowSection = this.tsIsWorkflowSection();
         this.tsRefs.tsFavoritesToggle.hidden = tsWorkflowSection;
         this.tsRefs.tsFavoritesToggle.style.display = tsWorkflowSection ? "none" : "";
-        this.tsRefs.tsFavoritesToggle.dataset.active = String(Boolean(this.tsState.tsFavoritesOnly));
+        this.tsSetToggleState(this.tsRefs.tsFavoritesToggle, Boolean(this.tsState.tsFavoritesOnly));
     }
 
     tsToggleFavoritesFilter() {
@@ -1652,10 +1803,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (!tsButton) {
             return;
         }
-        tsButton.dataset.favorite = String(Boolean(tsIsFavorite));
-        tsButton.title = tsIsFavorite
+        const tsLabel = tsIsFavorite
             ? this.tsT("button.unfavorite", "Remove from favorites")
             : this.tsT("button.favorite", "Add to favorites");
+        tsButton.dataset.favorite = String(Boolean(tsIsFavorite));
+        tsButton.setAttribute("aria-pressed", String(Boolean(tsIsFavorite)));
+        tsButton.title = tsLabel;
+        tsButton.setAttribute("aria-label", tsLabel);
     }
 
     tsClearFilters() {
@@ -1692,6 +1846,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (!this.tsIsWorkflowSection()) {
             this.tsRememberAssetLocation();
         }
+        this.tsSectionScrollTop[this.tsState.tsSection] = Number(this.tsRefs?.tsGalleryScroll?.scrollTop || 0);
         this.tsState.tsSection = tsSection;
         if (tsSection === "workflows") {
             this.tsState.tsRootId = "workflows";
@@ -1711,14 +1866,19 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRenderToolbarForSection();
         this.tsRenderSortOptions();
         await this.tsFetchAssets(true);
-        this.tsRefs.tsGalleryContent.innerHTML = "";
-        this.tsLastGridMarkupKey = "";
+        // The fetch has already rendered the new section's cards; the grid is
+        // re-measured once for its preview size. Clearing the markup here used
+        // to cost a visible blank frame between the two sections.
+        const tsSavedScrollTop = Number(this.tsSectionScrollTop[tsSection] || 0);
+        if (tsSavedScrollTop > 0 && this.tsRefs?.tsGalleryScroll) {
+            const tsMetrics = this.tsGetGridMetrics();
+            const tsRows = Math.ceil(this.tsState.tsItems.length / Math.max(1, tsMetrics.tsColumns));
+            this.tsRefs.tsGallerySpacer.style.height = `${tsMetrics.tsPaddingTop + tsMetrics.tsPaddingBottom + tsRows * tsMetrics.tsRowHeight}px`;
+            this.tsRefs.tsGalleryScroll.scrollTop = tsSavedScrollTop;
+        }
         this.tsLastScrollWindowKey = "";
         this.tsScheduleGridRender(true, true);
         this.tsHandleGalleryScroll();
-        this.tsScheduleSidebarRefresh(0);
-        this.tsScheduleSidebarRefresh(48);
-        this.tsScheduleSidebarRefresh(120);
     }
 
     async tsRequestRescan(tsOverridePayload = undefined) {
@@ -1869,14 +2029,92 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         });
     }
 
-    tsBuildRequestPath(tsCursorAfter) {
-        const tsParams = this.tsBuildSearchParams(tsCursorAfter);
+    tsBuildRequestPath(tsCursorAfter, tsOverrides = {}) {
+        const tsParams = this.tsBuildSearchParams(tsCursorAfter, tsOverrides);
         return `${tsRouteBase}/search?${tsParams.toString()}`;
     }
 
-    async tsFetchAssets(tsReset = true) {
+    // A refresh of the SAME query - an autoscan finishing after a generation,
+    // the sidebar coming back, a rescan - must not throw the user back to the
+    // top of the grid, drop their selection or forget the pages they scrolled
+    // through. It asks for as many rows as are loaded (capped by the route)
+    // and keeps scroll and selection; a query change still resets everything.
+    tsResolvePreservedFetchLimit() {
+        const tsLoaded = this.tsState.tsItems.length;
+        return Math.max(tsDefaultLimit, Math.min(tsPanelSettings.softRefreshMaxItems, tsLoaded));
+    }
+
+    tsApplyPreservedSelection(tsFocusId) {
+        // Selection and the keyboard focus are kept by asset id, not by
+        // index: a new render at the top of a date-sorted grid shifts every
+        // index by one.
+        const tsSelection = this.tsState.tsSelection;
+        for (const tsId of [...tsSelection]) {
+            if (!this.tsItemIndexById.has(tsId)) {
+                tsSelection.delete(tsId);
+            }
+        }
+        const tsFocusIndex = tsFocusId === null || tsFocusId === undefined
+            ? undefined
+            : this.tsItemIndexById.get(tsFocusId);
+        this.tsState.tsLastSelectedIndex = tsFocusIndex === undefined ? -1 : tsFocusIndex;
+        if (!this.tsItemIndexById.has(this.tsState.tsSelectionAnchorId)) {
+            this.tsState.tsSelectionAnchorId = null;
+        }
+    }
+
+    tsApplyIncomingFolders(tsFolders) {
+        // Compared with the folders on screen, not with the last payload:
+        // Rebuild Cache empties the tree and a delete edits counts in place,
+        // and either must still be undone by the next matching answer.
+        const tsNextFolders = Array.isArray(tsFolders) ? tsFolders : [];
+        const tsChanged = JSON.stringify(tsNextFolders) !== JSON.stringify(this.tsState.tsFolders || []);
+        this.tsState.tsFolders = tsNextFolders;
+        if (tsChanged) {
+            this.tsFoldersRevision += 1;
+        }
+    }
+
+    tsRenderLoadingState() {
+        // Dims the grid while a changed query is in flight, after a short
+        // delay (CSS) so a fast answer never flashes. The first load has its
+        // skeletons instead.
+        const tsWrap = this.tsRefs?.tsGalleryScroll?.parentElement;
+        if (!tsWrap) {
+            return;
+        }
+        tsWrap.dataset.loading = String(Boolean(this.tsState.tsLoading && this.tsHasLoadedOnce && this.tsLoadingDims));
+    }
+
+    tsItemsRenderKey(tsItems) {
+        // Everything a card draws from. Equal keys mean a refresh brought back
+        // exactly what is on screen, so the grid is not touched at all.
+        return tsItems.map((tsItem) => [
+            tsItem?.id,
+            tsItem?.preview_url,
+            tsItem?.is_favorite ? 1 : 0,
+            tsItem?.has_prompt ? 1 : 0,
+            tsItem?.has_workflow ? 1 : 0,
+            tsItem?.allow_delete ? 1 : 0,
+            tsItem?.width,
+            tsItem?.height,
+            tsItem?.duration,
+            tsItem?.studio?.mode || "",
+            tsItem?.filename,
+        ].join(",")).join("|");
+    }
+
+    async tsFetchAssets(tsReset = true, tsOptions = {}) {
+        const tsPreserveView = Boolean(tsReset && tsOptions?.tsPreserveView && this.tsState.tsItems.length > 0);
         if (this.tsState.tsLoading) {
             if (tsReset) {
+                // A hard reset queued behind a soft one must win: it means the
+                // query itself changed.
+                if (!this.tsState.tsQueuedFetchReset) {
+                    this.tsState.tsQueuedFetchPreserve = tsPreserveView;
+                } else if (!tsPreserveView) {
+                    this.tsState.tsQueuedFetchPreserve = false;
+                }
                 this.tsState.tsQueuedFetchReset = true;
             } else if (!this.tsState.tsQueuedFetchReset) {
                 this.tsState.tsQueuedFetchAppend = true;
@@ -1886,11 +2124,19 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsFetchPromise = (async () => {
             let tsDidMutate = false;
             this.tsState.tsLoading = true;
+            this.tsState.tsFetchError = null;
             const tsWorkflowOffset = tsReset ? 0 : this.tsState.tsItems.length;
+            const tsWorkflowLimit = tsPreserveView ? this.tsResolvePreservedFetchLimit() : tsDefaultLimit;
             const tsCursorForFetch = tsReset ? null : this.tsState.tsNextCursor;
-            const tsCanUseCache = tsReset && !this.tsIsWorkflowSection();
+            // A preserving refresh exists to pick up NEW data, and asks for a
+            // different page size, so it bypasses the first-page cache.
+            const tsCanUseCache = tsReset && !tsPreserveView && !this.tsIsWorkflowSection();
             const tsCacheKey = tsCanUseCache ? this.tsBuildRequestPath(null) : null;
             const tsCacheEntry = tsCacheKey ? this.tsResponseCache.tsGet(tsCacheKey) : null;
+            // Only a query the user changed dims the grid; a background
+            // refresh or the next scrolled page must not make it flicker.
+            this.tsLoadingDims = tsReset && !tsPreserveView && !tsCacheEntry;
+            this.tsRenderLoadingState();
             const tsFetchEpoch = this.tsResponseCacheEpoch;
             try {
                 let tsPayload;
@@ -1899,28 +2145,55 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 } else if (this.tsIsWorkflowSection()) {
                     await this.tsEnsureWorkflowLibrary(false);
                     const tsWorkflowQuery = this.tsBuildWorkflowQueryResult();
-                    const tsWindowItems = tsWorkflowQuery.items.slice(tsWorkflowOffset, tsWorkflowOffset + tsDefaultLimit);
+                    const tsWindowItems = tsWorkflowQuery.items.slice(tsWorkflowOffset, tsWorkflowOffset + tsWorkflowLimit);
                     tsPayload = {
                         items: tsWindowItems,
                         has_more: tsWorkflowOffset + tsWindowItems.length < tsWorkflowQuery.items.length,
                         next_cursor: null,
                         roots: tsWorkflowQuery.roots,
-                        folders: tsWorkflowQuery.folders,
                         health: [],
                         scan_status: null,
                     };
+                    // The workflow tree is derived from the whole library, so
+                    // it only needs rebuilding with the first page.
+                    if (tsReset) {
+                        tsPayload.folders = tsWorkflowQuery.folders;
+                    }
                 } else {
-                    const tsRequestPath = this.tsBuildRequestPath(tsCursorForFetch);
+                    const tsRequestPath = tsPreserveView
+                        ? this.tsBuildRequestPath(null, { limit: this.tsResolvePreservedFetchLimit() })
+                        : this.tsBuildRequestPath(tsCursorForFetch);
                     tsPayload = await tsFetchJSON(tsRequestPath);
                     if (tsCacheKey && tsRequestPath === tsCacheKey && tsFetchEpoch === this.tsResponseCacheEpoch) {
                         this.tsResponseCache.tsSet(tsCacheKey, tsPayload);
                     }
                 }
                 const tsIncomingItems = Array.isArray(tsPayload.items) ? tsPayload.items : [];
-                if (tsReset) {
+                const tsFocusId = this.tsState.tsItems[this.tsState.tsLastSelectedIndex]?.id ?? null;
+                const tsScrollAnchor = tsPreserveView ? this.tsCaptureScrollAnchor() : null;
+                if (tsReset && tsPreserveView) {
+                    if (this.tsItemsRenderKey(tsIncomingItems) !== this.tsItemsRenderKey(this.tsState.tsItems)) {
+                        // Keep what the lightbox already fetched for a card:
+                        // the list payload never carries prompt text.
+                        const tsLoadedDetails = new Map(
+                            this.tsState.tsItems
+                                .filter((tsItem) => tsItem?.detail_loaded)
+                                .map((tsItem) => [tsItem.id, tsItem]),
+                        );
+                        this.tsState.tsItems = tsIncomingItems.map((tsItem) => {
+                            const tsLoaded = tsLoadedDetails.get(tsItem.id);
+                            return tsLoaded && tsLoaded.preview_url === tsItem.preview_url
+                                ? { ...tsLoaded, ...tsItem, detail_loaded: true }
+                                : tsItem;
+                        });
+                        this.tsItemsRevision += 1;
+                        tsDidMutate = true;
+                    }
+                } else if (tsReset) {
                     this.tsState.tsItems = tsIncomingItems;
                     this.tsState.tsSelection.clear();
                     this.tsState.tsLastSelectedIndex = -1;
+                    this.tsState.tsSelectionAnchorId = null;
                     this.tsRefs.tsGalleryScroll.scrollTop = 0;
                     this.tsItemsRevision += 1;
                     tsDidMutate = true;
@@ -1939,6 +2212,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     }
                 }
                 this.tsRebuildItemIndex();
+                if (tsPreserveView) {
+                    this.tsApplyPreservedSelection(tsFocusId);
+                    if (tsDidMutate) {
+                        this.tsRestoreScrollAnchor(tsScrollAnchor);
+                    }
+                }
                 this.tsState.tsHasMore = Boolean(tsPayload.has_more);
                 this.tsState.tsNextCursor = tsPayload.next_cursor || null;
                 const tsIncomingRoots = Array.isArray(tsPayload.roots) ? tsPayload.roots : [];
@@ -1946,14 +2225,17 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 const tsRootsChanged = tsRootsKey !== this.tsLastRootsKey;
                 this.tsLastRootsKey = tsRootsKey;
                 this.tsState.tsRoots = tsIncomingRoots;
-                this.tsState.tsFolders = Array.isArray(tsPayload.folders) ? tsPayload.folders : [];
-                this.tsFoldersRevision += 1;
+                // A scrolled page carries no "folders" key: the tree belongs to
+                // the query, and the backend only counts it with the first page.
+                if (Object.prototype.hasOwnProperty.call(tsPayload, "folders")) {
+                    this.tsApplyIncomingFolders(tsPayload.folders);
+                }
                 this.tsState.tsHealth = Array.isArray(tsPayload.health) ? tsPayload.health : [];
                 this.tsState.tsScanStatus = tsPayload.scan_status || null;
                 if (tsRootsChanged) {
                     this.tsRenderRootOptions();
                 }
-                this.tsRenderListOnly();
+                this.tsRenderListOnly(tsDidMutate || !tsPreserveView);
                 if (tsReset) {
                     void this.tsMaybeBootstrapScan();
                 }
@@ -1962,8 +2244,22 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 }
             } catch (tsError) {
                 tsConsoleWarn("Timesaver Artius Browser fetch failed", tsError);
+                // An unreachable backend used to look exactly like an empty
+                // library. Only a failed FIRST page is worth a screen of its
+                // own: a failed scroll page or background refresh leaves the
+                // cards the user is looking at alone.
+                if (tsReset && (!tsPreserveView || this.tsState.tsItems.length === 0)) {
+                    this.tsState.tsFetchError = String(tsError?.message || tsError || "");
+                    if (!tsPreserveView) {
+                        this.tsState.tsItems = [];
+                        this.tsRebuildItemIndex();
+                        this.tsItemsRevision += 1;
+                    }
+                    this.tsScheduleGridRender(true);
+                }
             } finally {
                 this.tsState.tsLoading = false;
+                this.tsRenderLoadingState();
                 // The first fetch has settled: from now on an empty grid is a
                 // real "no matches" state, so skeletons stop and the empty
                 // message takes over.
@@ -1977,10 +2273,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 this.tsRenderSelectionButtons();
                 const tsShouldReset = this.tsState.tsQueuedFetchReset;
                 const tsShouldAppend = !tsShouldReset && this.tsState.tsQueuedFetchAppend;
+                const tsQueuedPreserve = Boolean(this.tsState.tsQueuedFetchPreserve);
                 this.tsState.tsQueuedFetchReset = false;
                 this.tsState.tsQueuedFetchAppend = false;
+                this.tsState.tsQueuedFetchPreserve = false;
                 if (tsShouldReset) {
-                    tsDidMutate = Boolean(await this.tsFetchAssets(true)) || tsDidMutate;
+                    tsDidMutate = Boolean(await this.tsFetchAssets(true, { tsPreserveView: tsQueuedPreserve })) || tsDidMutate;
                 } else if (tsShouldAppend) {
                     tsDidMutate = Boolean(await this.tsFetchAssets(false)) || tsDidMutate;
                 }
@@ -2053,8 +2351,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsState.tsItems = tsIncomingItems;
         this.tsState.tsHasMore = Boolean(tsPayload.has_more);
         this.tsState.tsNextCursor = tsPayload.next_cursor || null;
-        this.tsState.tsFolders = Array.isArray(tsPayload.folders) ? tsPayload.folders : this.tsState.tsFolders;
-        this.tsFoldersRevision += 1;
+        if (Array.isArray(tsPayload.folders)) {
+            this.tsApplyIncomingFolders(tsPayload.folders);
+        }
         this.tsItemsRevision += 1;
         this.tsRebuildItemIndex();
         this.tsRenderListOnly();
@@ -2071,7 +2370,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRenderRootOptions();
         this.tsRenderModeButtons();
         this.tsRefs.tsPreviewSize.value = String(this.tsState.tsPreviewSize);
-        this.tsRefs.tsAutoscan.dataset.active = String(Boolean(this.tsState.tsAutoscan));
+        this.tsSetToggleState(this.tsRefs.tsAutoscan, Boolean(this.tsState.tsAutoscan));
         this.tsRenderProgress();
         this.tsRenderHealth();
         this.tsRenderTree(true);
@@ -2079,26 +2378,26 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRenderSelectionButtons();
     }
 
-    tsRenderListOnly() {
+    tsRenderListOnly(tsGridChanged = true) {
         this.tsRenderProgress();
         this.tsRenderHealth();
         this.tsRenderSortDirection();
         this.tsRenderModeButtons();
-        this.tsRenderTree(true);
-        this.tsRenderGrid(true);
+        // Both renders are keyed (folders revision / items revision), so a
+        // refresh that brought back what is already on screen costs nothing.
+        this.tsRenderTree();
+        this.tsRenderGrid(tsGridChanged);
         this.tsRenderSelectionButtons();
     }
 
     tsRenderSortDirection() {
-        const tsOptions = [
-            ["desc", this.tsT("button.sortDesc", "Desc")],
-            ["asc", this.tsT("button.sortAsc", "Asc")],
-        ];
-        this.tsRefs.tsSortDirection.innerHTML = tsOptions
-            .map(([tsValue, tsLabel]) => `<option value="${tsValue}">${tsLabel}</option>`)
-            .join("");
-        this.tsRefs.tsSortDirection.value = this.tsState.tsSortDirection || "desc";
-        this.tsResizeSelectToCurrent(this.tsRefs.tsSortDirection);
+        const tsAscending = this.tsState.tsSortDirection === "asc";
+        const tsLabel = tsAscending ? this.tsT("button.sortAsc", "Asc") : this.tsT("button.sortDesc", "Desc");
+        const tsText = `${tsAscending ? "↑" : "↓"} ${tsLabel}`;
+        if (this.tsRefs.tsSortDirection.textContent !== tsText) {
+            this.tsRefs.tsSortDirection.textContent = tsText;
+        }
+        this.tsRefs.tsSortDirection.dataset.direction = tsAscending ? "asc" : "desc";
     }
 
     tsRenderRootOptions() {
@@ -2132,8 +2431,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsRenderModeButtons() {
         this.tsRefs.tsBody.dataset.mode = this.tsState.tsMode;
-        this.tsRefs.tsModeFlat.dataset.active = String(this.tsState.tsMode === "flat");
-        this.tsRefs.tsModeTree.dataset.active = String(this.tsState.tsMode === "tree");
+        this.tsSetToggleState(this.tsRefs.tsModeFlat, this.tsState.tsMode === "flat");
+        this.tsSetToggleState(this.tsRefs.tsModeTree, this.tsState.tsMode === "tree");
     }
 
     tsBuildProgressLabel(tsStatus) {
@@ -2204,7 +2503,79 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         };
     }
 
+    // The first card on screen and how far into its row the view sits. Keeping
+    // THAT card in place is what makes a layout change feel stable: a pixel
+    // scrollTop means a different card once the column count or the list
+    // above the view changes. At the very top there is nothing to keep, and
+    // new renders arriving there should simply be seen.
+    tsCaptureScrollAnchor() {
+        const tsScroll = this.tsRefs?.tsGalleryScroll;
+        const tsMetrics = this.tsGridMetrics;
+        if (!tsScroll || !tsMetrics || !this.tsState.tsItems.length || tsScroll.scrollTop <= 0) {
+            return null;
+        }
+        const tsRow = Math.max(0, Math.floor((tsScroll.scrollTop - tsMetrics.tsPaddingTop) / tsMetrics.tsRowHeight));
+        const tsItem = this.tsState.tsItems[Math.min(this.tsState.tsItems.length - 1, tsRow * tsMetrics.tsColumns)];
+        if (!tsItem) {
+            return null;
+        }
+        return {
+            tsId: tsItem.id,
+            tsOffset: tsScroll.scrollTop - (tsMetrics.tsPaddingTop + tsRow * tsMetrics.tsRowHeight),
+            tsRowHeight: tsMetrics.tsRowHeight,
+        };
+    }
+
+    tsRestoreScrollAnchor(tsAnchor) {
+        if (!tsAnchor) {
+            return;
+        }
+        const tsIndex = this.tsItemIndexById.get(tsAnchor.tsId);
+        if (tsIndex === undefined) {
+            return;
+        }
+        const tsMetrics = this.tsGetGridMetrics();
+        const tsRow = Math.floor(tsIndex / Math.max(1, tsMetrics.tsColumns));
+        // The offset is scaled with the row, so a card half scrolled out
+        // stays half scrolled out at a new preview size.
+        const tsOffset = tsAnchor.tsOffset * (tsMetrics.tsRowHeight / Math.max(1, tsAnchor.tsRowHeight));
+        const tsScroll = this.tsRefs.tsGalleryScroll;
+        const tsSpacerHeight = tsMetrics.tsPaddingTop + tsMetrics.tsPaddingBottom
+            + Math.ceil(this.tsState.tsItems.length / Math.max(1, tsMetrics.tsColumns)) * tsMetrics.tsRowHeight;
+        // The spacer must be tall enough BEFORE scrollTop is written, or the
+        // browser clamps the value to the old height.
+        this.tsRefs.tsGallerySpacer.style.height = `${tsSpacerHeight}px`;
+        tsScroll.scrollTop = Math.max(0, tsMetrics.tsPaddingTop + tsRow * tsMetrics.tsRowHeight + tsOffset);
+    }
+
+    // Scrolls the grid just enough to bring a card into view - the keyboard
+    // selection and the lightbox both move it, and a selection the user
+    // cannot see is a selection they have lost.
+    tsEnsureIndexVisible(tsIndex) {
+        const tsScroll = this.tsRefs?.tsGalleryScroll;
+        if (!tsScroll || tsIndex < 0 || tsIndex >= this.tsState.tsItems.length) {
+            return;
+        }
+        const tsMetrics = this.tsGetGridMetrics();
+        const tsRow = Math.floor(tsIndex / Math.max(1, tsMetrics.tsColumns));
+        const tsTop = tsMetrics.tsPaddingTop + tsRow * tsMetrics.tsRowHeight;
+        const tsBottom = tsTop + tsMetrics.tsCardHeight;
+        const tsViewTop = tsScroll.scrollTop;
+        const tsViewBottom = tsViewTop + tsScroll.clientHeight;
+        if (tsTop < tsViewTop) {
+            tsScroll.scrollTop = Math.max(0, tsTop - tsMetrics.tsGap);
+        } else if (tsBottom > tsViewBottom) {
+            tsScroll.scrollTop = tsBottom - tsScroll.clientHeight + tsMetrics.tsGap;
+        }
+    }
+
     tsHandleGalleryScroll() {
+        const tsScroll = this.tsRefs?.tsGalleryScroll;
+        // Remembered only while the grid is really laid out: a detached or
+        // hidden panel reads 0 and would overwrite the place to return to.
+        if (tsScroll && this.isConnected && tsScroll.clientHeight > 0 && !this.tsRestoreScrollPending) {
+            this.tsSavedScrollTop = tsScroll.scrollTop;
+        }
         if (!this.tsState.tsItems.length) {
             return;
         }
@@ -2303,8 +2674,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 && tsNode.tsRootId === this.tsState.tsRootId
                 && (this.tsState.tsFolder || "") === (tsNode.tsFolderPath || "");
             const tsToggleLabel = tsExpanded ? "&#9662;" : "&#9656;";
+            const tsToggleName = (tsExpanded
+                ? this.tsT("aria.collapseFolder", "Collapse {name}")
+                : this.tsT("aria.expandFolder", "Expand {name}")).replace("{name}", String(tsNode.tsLabel || ""));
             const tsToggleMarkup = tsHasChildren
-                ? `<button class="ts-tree-toggle" type="button" data-toggle-key="${this.tsEscapeAttribute(tsNode.tsKey)}">${tsToggleLabel}</button>`
+                ? `<button class="ts-tree-toggle" type="button" data-toggle-key="${this.tsEscapeAttribute(tsNode.tsKey)}" aria-expanded="${String(tsExpanded)}" aria-label="${this.tsEscapeAttribute(tsToggleName)}">${tsToggleLabel}</button>`
                 : `<span class="ts-tree-toggle-spacer"></span>`;
             return `
                 <div>
@@ -2316,6 +2690,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                             data-tree-folder="${this.tsEscapeAttribute(tsNode.tsFolderPath || "")}"
                             data-tree-root="${this.tsEscapeAttribute(tsNode.tsRootId)}"
                             data-active="${String(tsActive)}"
+                            ${tsActive ? 'aria-current="true"' : ""}
                         >
                             <span class="ts-tree-name">${this.tsEscapeHTML(tsNode.tsLabel)}</span>
                             <span class="ts-tree-count">${tsNode.tsCount}</span>
@@ -2325,7 +2700,23 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 </div>
             `;
         }).join("");
+        // The tree is rebuilt as markup. A keyboard user who just pressed a
+        // toggle or picked a folder gets the focus back on the same control,
+        // instead of losing it to the document.
+        const tsFocused = this.shadowRoot?.activeElement;
+        const tsFocusedToggle = this.tsRefs.tsTreePanel.contains(tsFocused) ? tsFocused?.dataset?.toggleKey : undefined;
+        const tsFocusedFolder = this.tsRefs.tsTreePanel.contains(tsFocused) && tsFocused?.dataset?.treeRoot !== undefined
+            ? `${tsFocused.dataset.treeRoot}::${tsFocused.dataset.treeFolder || ""}`
+            : undefined;
         this.tsRefs.tsTreePanel.innerHTML = tsRenderNodes(tsTree);
+        if (tsFocusedToggle !== undefined || tsFocusedFolder !== undefined) {
+            const tsTarget = [...this.tsRefs.tsTreePanel.querySelectorAll("button")].find((tsButton) => (
+                tsFocusedToggle !== undefined
+                    ? tsButton.dataset.toggleKey === tsFocusedToggle
+                    : `${tsButton.dataset.treeRoot}::${tsButton.dataset.treeFolder || ""}` === tsFocusedFolder
+            ));
+            tsTarget?.focus?.({ preventScroll: true });
+        }
     }
 
     tsBuildCardMediaMarkup(tsItem, tsPreviewURL) {
@@ -2412,18 +2803,36 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsSearchText = String(this.tsState.tsSearch || "").trim();
         const tsScanStatus = this.tsState.tsScanStatus;
         const tsNeverScanned = !tsScanStatus?.running && !tsScanStatus?.started_at;
-        if (tsSearchText && this.tsState.tsSearchScope !== "all") {
+        if (this.tsState.tsFetchError) {
+            // Unreachable backend: say so, rather than "your library is empty".
+            return {
+                tsTitle: this.tsT("empty.errorTitle", "Could not load the library."),
+                tsLines: [this.tsT("empty.errorHint", "ComfyUI did not answer. Check that it is still running, then try again.")],
+                tsAction: { tsAction: "retry", tsLabel: this.tsT("empty.retryAction", "Try again") },
+            };
+        }
+        const tsHasFilters = this.tsState.tsFavoritesOnly || this.tsHasActiveFilters() || this.tsState.tsTypes.size > 0;
+        if (tsSearchText && this.tsState.tsSearchScope !== "all" && !tsHasFilters) {
             return {
                 tsTitle: this.tsT("empty.searchTitle", "Nothing found by filename."),
                 tsLines: [this.tsT("empty.searchHint", "This search only looks at filenames.")],
                 tsAction: { tsAction: "search-prompts", tsLabel: this.tsT("empty.searchPromptsAction", "Search prompts and models too") },
             };
         }
-        if (this.tsState.tsFavoritesOnly || this.tsHasActiveFilters() || this.tsState.tsTypes.size > 0 || tsSearchText) {
+        if (tsHasFilters) {
+            // Filters and the search are separate things: resetting the
+            // filters keeps what the user typed.
             return {
                 tsTitle: this.tsT("empty.title", "No assets match the current filters."),
                 tsLines: [],
                 tsAction: { tsAction: "clear-filters", tsLabel: this.tsT("empty.clearFiltersAction", "Reset filters") },
+            };
+        }
+        if (tsSearchText) {
+            return {
+                tsTitle: this.tsT("empty.searchAllTitle", "Nothing found in filenames, prompts or models."),
+                tsLines: [],
+                tsAction: { tsAction: "clear-search", tsLabel: this.tsT("empty.clearSearchAction", "Clear search") },
             };
         }
         if (tsNeverScanned || this.tsState.tsItems.length === 0) {
@@ -2465,18 +2874,26 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsAction = tsButton.dataset.emptyAction;
         if (tsAction === "search-prompts") {
             this.tsState.tsSearchScope = "all";
-            this.tsRefs.tsSearchScope.dataset.active = "true";
+            this.tsSetToggleState(this.tsRefs.tsSearchScope, true);
             this.tsApplySearchScopeInset();
+            this.tsRenderSearchHint();
             this.tsQueueSaveUISettings();
             this.tsFetchAssets(true);
         } else if (tsAction === "clear-filters") {
             this.tsState.tsFavoritesOnly = false;
             this.tsState.tsTypes.clear();
-            this.tsState.tsSearch = "";
-            this.tsRefs.tsSearch.value = "";
             this.tsRenderFavoritesToggle();
             this.tsRenderTypeChips();
             this.tsClearFilters();
+        } else if (tsAction === "clear-search") {
+            this.tsState.tsSearch = "";
+            this.tsRefs.tsSearch.value = "";
+            this.tsSyncSectionSettingsFromActive();
+            this.tsQueueSaveUISettings();
+            this.tsFetchAssets(true);
+        } else if (tsAction === "retry") {
+            this.tsState.tsFetchError = null;
+            this.tsFetchAssets(true);
         } else if (tsAction === "rescan") {
             void this.tsRequestRescan();
         }
@@ -2486,12 +2903,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsItems = this.tsState.tsItems;
         const tsWorkflowSection = this.tsIsWorkflowSection();
         const tsMetrics = this.tsGetGridMetrics();
-        const tsGap = tsMetrics.tsGap;
         const tsPaddingTop = tsMetrics.tsPaddingTop;
         const tsPaddingBottom = tsMetrics.tsPaddingBottom;
-        const tsPaddingLeft = tsMetrics.tsPaddingLeft;
         const tsCardWidth = tsMetrics.tsCardWidth;
-        const tsCardHeight = tsMetrics.tsCardHeight;
         const tsColumns = tsMetrics.tsColumns;
         const tsRowHeight = tsMetrics.tsRowHeight;
 
@@ -2509,11 +2923,18 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             && this.tsState.tsSettingsHydrated;
         if (tsShowSkeletons) {
             this.tsRefs.tsEmpty.textContent = "";
+            this.tsLastEmptyMarkup = "";
             this.tsRenderSkeletonGrid(tsMetrics);
             return;
         }
 
-        this.tsRefs.tsEmpty.innerHTML = tsItems.length === 0 ? this.tsBuildEmptyStateMarkup() : "";
+        // Rewritten only when it changes, so a focused "Try again" or "Rescan"
+        // button survives the renders a scan's progress events trigger.
+        const tsEmptyMarkup = tsItems.length === 0 ? this.tsBuildEmptyStateMarkup() : "";
+        if (this.tsLastEmptyMarkup !== tsEmptyMarkup) {
+            this.tsLastEmptyMarkup = tsEmptyMarkup;
+            this.tsRefs.tsEmpty.innerHTML = tsEmptyMarkup;
+        }
         if (tsItems.length === 0) {
             this.tsRefs.tsGalleryContent.innerHTML = "";
             this.tsLastGridMarkupKey = "empty";
@@ -2537,119 +2958,15 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsVisibleEndIndex,
             tsItems.length,
         ].join("::");
-        const tsCards = [];
-
-        for (let tsIndex = tsVisibleStartIndex; tsIndex < tsVisibleEndIndex; tsIndex += 1) {
-            const tsItem = tsItems[tsIndex];
-            const tsColumn = tsIndex % tsColumns;
-            const tsRow = Math.floor(tsIndex / tsColumns);
-            const tsSelected = this.tsState.tsSelection.has(tsItem.id);
-            const tsLeft = tsPaddingLeft + tsColumn * (tsCardWidth + tsGap);
-            const tsTop = tsPaddingTop + tsRow * tsRowHeight;
-            const tsWorkflowFolderBadge = tsWorkflowSection
-                ? String(tsItem.folder_path || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "")
-                : "";
-            const tsBadges = tsWorkflowSection ? [] : [tsItem.type.toUpperCase()];
-            // [AI agent] Renders only for assets carrying a studio session tag.
-            const tsStudioBadge = tsWorkflowSection ? null : this.tsStudioBadge(tsItem);
-            const tsResolutionBadge = Number(tsItem.width) > 0 && Number(tsItem.height) > 0
-                ? `${tsItem.width}x${tsItem.height}`
-                : "";
-            const tsDurationBadge = tsFormatCardDuration(tsItem.duration);
-            const tsFPSBadge = tsItem.type === "video" ? tsFormatCardFPS(tsItem.fps) : "";
-            if (tsItem.type === "image" && tsResolutionBadge) {
-                tsBadges.push(tsResolutionBadge);
-            }
-            if (tsItem.type === "video") {
-                if (tsResolutionBadge) {
-                    tsBadges.push(tsResolutionBadge);
-                }
-                if (tsFPSBadge) {
-                    tsBadges.push(tsFPSBadge);
-                }
-                if (tsDurationBadge) {
-                    tsBadges.push(tsDurationBadge);
-                }
-            }
-            if (tsItem.type === "audio" && tsDurationBadge) {
-                tsBadges.push(tsDurationBadge);
-            }
-            const tsShowActions = true;
-            // ComfyUI embeds the prompt and the workflow in videos as well as
-            // in PNGs, so both actions follow the payload flags rather than the
-            // asset type. Video and audio without an embedded prompt show
-            // nothing, which is why the copy action is flag-gated for them and
-            // still unconditional for a picture.
-            const tsShowCopyAction = !tsWorkflowSection
-                && (tsItem.type === "video" || tsItem.type === "audio" ? Boolean(tsItem.has_prompt) : true);
-            const tsShowWorkflowAction = !tsWorkflowSection && Boolean(tsItem.has_workflow);
-            // [AI agent] Studio renders can be reopened in the session that
-            // made them; the button only exists where that is possible.
-            const tsExternalIds = new Set(
-                this.tsExternalAssetActions(tsItem).map((tsAction) => tsAction.id));
-            const tsShowRecreate = !tsWorkflowSection && Boolean(tsItem.studio?.mode)
-                && tsExternalIds.has("ts-image-studio.recreate");
-            // [AI agent] Send the picture into the studio's current mode —
-            // the same thing a drag does, for when dragging is not an option.
-            const tsShowUseInStudio = !tsWorkflowSection
-                && tsExternalIds.has("ts-image-studio.use-source");
-            const tsPreviewURL = this.tsResolveCardPreviewURL(tsItem);
-            const tsMediaMarkup = this.tsBuildCardMediaMarkup(tsItem, tsPreviewURL);
-            tsCards.push(`
-                <div
-                    class="ts-card"
-                    role="option"
-                    aria-selected="${String(tsSelected)}"
-                    aria-label="${this.tsEscapeAttribute(tsItem.filename || "")}"
-                    data-card-id="${tsItem.id}"
-                    data-card-index="${tsIndex}"
-                    data-selected="${String(tsSelected)}"
-                    draggable="${tsWorkflowSection ? "false" : "true"}"
-                    style="width:${tsCardWidth}px;height:${tsCardHeight}px;transform:translate(${tsLeft}px,${tsTop}px);"
-                >
-                    <div class="ts-card-media">
-                        ${tsMediaMarkup}
-                        ${tsWorkflowSection ? "" : `
-                            <button
-                                class="ts-card-favorite"
-                                type="button"
-                                data-action="favorite"
-                                data-card-id="${tsItem.id}"
-                                data-favorite="${String(Boolean(tsItem.is_favorite))}"
-                                aria-pressed="${String(Boolean(tsItem.is_favorite))}"
-                                title="${tsItem.is_favorite ? this.tsT("button.unfavorite", "Remove from favorites") : this.tsT("button.favorite", "Add to favorites")}"
-                            >★</button>
-                        `}
-                        ${tsShowActions ? `
-                            <div class="ts-card-actions">
-                                ${tsWorkflowSection ? `<button type="button" data-action="load-workflow" data-card-id="${tsItem.id}" title="${this.tsT("button.loadWorkflow", "Load Workflow")}">L</button>` : ""}
-                                ${tsShowUseInStudio ? `<button type="button" data-action="use-in-studio" data-card-id="${tsItem.id}" title="${this.tsEscapeAttribute(this.tsT("button.useInStudio", "Use in the studio"))}">S</button>` : ""}
-                                ${tsShowRecreate ? `<button type="button" data-action="recreate" data-card-id="${tsItem.id}" title="${this.tsEscapeAttribute(this.tsT("button.recreate", "Restore studio session"))}">R</button>` : ""}
-                                ${tsShowCopyAction ? `<button type="button" data-action="copy" data-card-id="${tsItem.id}" title="${this.tsT("button.copyPrompt", "Copy Prompt")}">P</button>` : ""}
-                                ${tsShowWorkflowAction ? `<button type="button" data-action="workflow" data-card-id="${tsItem.id}" title="${this.tsT("button.copyWorkflow", "Copy Workflow")}">W</button>` : ""}
-                                <button type="button" data-action="download" data-card-id="${tsItem.id}" title="${this.tsT("button.download", "Download")}">D</button>
-                                <button type="button" data-action="delete" data-card-id="${tsItem.id}" title="${this.tsT("button.delete", "Delete")}" ${tsWorkflowSection || tsItem.allow_delete ? "" : "disabled"}>X</button>
-                            </div>
-                        ` : ""}
-                        <div class="ts-card-badges">
-                            ${tsStudioBadge ? `
-                                <div class="ts-card-badge" data-kind="studio" title="${this.tsEscapeAttribute(tsStudioBadge.tsTitle)}">${this.tsEscapeHTML(tsStudioBadge.tsText)}</div>
-                            ` : ""}
-                            ${tsWorkflowFolderBadge ? `
-                                <div class="ts-card-badge" data-kind="workflow-folder" title="${this.tsEscapeAttribute(tsWorkflowFolderBadge)}">${this.tsEscapeHTML(tsWorkflowFolderBadge)}</div>
-                            ` : ""}
-                            ${tsBadges.map((tsBadge, tsBadgeIndex) => `
-                                <div class="ts-card-badge" data-kind="${tsBadgeIndex === 0 ? "type" : "meta"}">${this.tsEscapeHTML(tsBadge)}</div>
-                            `).join("")}
-                        </div>
-                    </div>
-                </div>
-            `);
-        }
-
+        const tsWantsMore = () => this.tsState.tsHasMore
+            && !this.tsState.tsLoading
+            && tsScrollTop + tsViewportHeight >= tsSpacerHeight - 480;
+        // Checked BEFORE any markup is built. Near the end of the list every
+        // scroll event schedules a render; building every visible card's
+        // markup only to find nothing changed was the whole cost of it.
         if (!tsForce && this.tsLastGridMarkupKey === tsMarkupKey) {
             this.ts3DQueue.tsScheduleVisible(tsVisibleItems);
-            if (this.tsState.tsHasMore && !this.tsState.tsLoading && tsScrollTop + tsViewportHeight >= this.tsRefs.tsGallerySpacer.offsetHeight - 480) {
+            if (tsWantsMore()) {
                 this.tsFetchAssets(false);
             }
             return;
@@ -2659,23 +2976,207 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         // flicker-free.
         const tsEnteringFromSkeleton = String(this.tsLastGridMarkupKey || "").startsWith("skeleton:");
         this.tsLastGridMarkupKey = tsMarkupKey;
-        this.tsRefs.tsGalleryContent.innerHTML = tsCards.join("");
+        this.tsReconcileGridCards(tsVisibleStartIndex, tsVisibleEndIndex, tsMetrics, tsWorkflowSection);
         if (tsEnteringFromSkeleton) {
             this.tsPlayGridEntrance();
         }
         this.ts3DQueue.tsScheduleVisible(tsVisibleItems);
-        if (this.tsState.tsHasMore && !this.tsState.tsLoading && tsScrollTop + tsViewportHeight >= this.tsRefs.tsGallerySpacer.offsetHeight - 480) {
+        if (tsWantsMore()) {
             this.tsFetchAssets(false);
         }
+    }
+
+    // Keyed update of the card layer. A card whose markup did not change keeps
+    // its DOM node and only moves: its image is not decoded again, a hovered
+    // preview keeps playing and a focused button keeps focus. Rebuilding the
+    // whole layer with innerHTML on every row scrolled past did all three.
+    tsReconcileGridCards(tsStartIndex, tsEndIndex, tsMetrics, tsWorkflowSection) {
+        const tsContent = this.tsRefs.tsGalleryContent;
+        const tsItems = this.tsState.tsItems;
+        const tsExisting = new Map();
+        for (const tsNode of [...tsContent.children]) {
+            const tsNodeId = tsNode.dataset?.cardId;
+            if (tsNodeId !== undefined && typeof tsNode.tsCardMarkup === "string") {
+                tsExisting.set(tsNodeId, tsNode);
+            } else {
+                // Skeletons and anything else from an older render.
+                tsNode.remove();
+            }
+        }
+        if (!this.tsCardTemplate) {
+            this.tsCardTemplate = document.createElement("template");
+        }
+        const tsFreshNodes = [];
+        for (let tsIndex = tsStartIndex; tsIndex < tsEndIndex; tsIndex += 1) {
+            const tsItem = tsItems[tsIndex];
+            const tsKey = String(tsItem.id);
+            const tsMarkup = this.tsBuildCardMarkup(tsItem, tsWorkflowSection, tsMetrics);
+            let tsNode = tsExisting.get(tsKey);
+            if (tsNode && tsNode.tsCardMarkup === tsMarkup) {
+                tsExisting.delete(tsKey);
+            } else {
+                if (tsNode) {
+                    tsExisting.delete(tsKey);
+                    tsNode.remove();
+                }
+                this.tsCardTemplate.innerHTML = tsMarkup;
+                tsNode = this.tsCardTemplate.content.firstElementChild;
+                tsNode.tsCardMarkup = tsMarkup;
+                tsFreshNodes.push(tsNode);
+            }
+            const tsColumn = tsIndex % tsMetrics.tsColumns;
+            const tsRow = Math.floor(tsIndex / tsMetrics.tsColumns);
+            const tsLeft = tsMetrics.tsPaddingLeft + tsColumn * (tsMetrics.tsCardWidth + tsMetrics.tsGap);
+            const tsTop = tsMetrics.tsPaddingTop + tsRow * tsMetrics.tsRowHeight;
+            const tsTransform = `translate(${tsLeft}px,${tsTop}px)`;
+            if (tsNode.style.transform !== tsTransform) {
+                tsNode.style.transform = tsTransform;
+            }
+            const tsIndexText = String(tsIndex);
+            if (tsNode.dataset.cardIndex !== tsIndexText) {
+                tsNode.dataset.cardIndex = tsIndexText;
+            }
+            const tsSelectedText = String(this.tsState.tsSelection.has(tsItem.id));
+            if (tsNode.dataset.selected !== tsSelectedText) {
+                tsNode.dataset.selected = tsSelectedText;
+                tsNode.setAttribute("aria-selected", tsSelectedText);
+            }
+        }
+        for (const tsStale of tsExisting.values()) {
+            tsStale.remove();
+        }
+        if (tsFreshNodes.length) {
+            tsContent.append(...tsFreshNodes);
+        }
+    }
+
+    // One card, WITHOUT its position, index or selection: those change on
+    // every scroll or click and are applied to the node directly, so equal
+    // markup really means "nothing on this card changed".
+    tsBuildCardMarkup(tsItem, tsWorkflowSection, tsMetrics) {
+        const tsWorkflowFolderBadge = tsWorkflowSection
+            ? String(tsItem.folder_path || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "")
+            : "";
+        const tsBadges = tsWorkflowSection ? [] : [tsItem.type.toUpperCase()];
+        // [AI agent] Renders only for assets carrying a studio session tag.
+        const tsStudioBadge = tsWorkflowSection ? null : this.tsStudioBadge(tsItem);
+        const tsResolutionBadge = Number(tsItem.width) > 0 && Number(tsItem.height) > 0
+            ? `${tsItem.width}x${tsItem.height}`
+            : "";
+        const tsDurationBadge = tsFormatCardDuration(tsItem.duration);
+        const tsFPSBadge = tsItem.type === "video" ? tsFormatCardFPS(tsItem.fps) : "";
+        if (tsItem.type === "image" && tsResolutionBadge) {
+            tsBadges.push(tsResolutionBadge);
+        }
+        if (tsItem.type === "video") {
+            if (tsResolutionBadge) {
+                tsBadges.push(tsResolutionBadge);
+            }
+            if (tsFPSBadge) {
+                tsBadges.push(tsFPSBadge);
+            }
+            if (tsDurationBadge) {
+                tsBadges.push(tsDurationBadge);
+            }
+        }
+        if (tsItem.type === "audio" && tsDurationBadge) {
+            tsBadges.push(tsDurationBadge);
+        }
+        // ComfyUI embeds the prompt and the workflow in videos as well as
+        // in PNGs, so both actions follow the payload flags rather than the
+        // asset type. Video and audio without an embedded prompt show
+        // nothing, which is why the copy action is flag-gated for them and
+        // still unconditional for a picture.
+        const tsShowCopyAction = !tsWorkflowSection
+            && (tsItem.type === "video" || tsItem.type === "audio" ? Boolean(tsItem.has_prompt) : true);
+        const tsShowWorkflowAction = !tsWorkflowSection && Boolean(tsItem.has_workflow);
+        // [AI agent] Studio renders can be reopened in the session that
+        // made them; the button only exists where that is possible.
+        const tsExternalIds = new Set(
+            this.tsExternalAssetActions(tsItem).map((tsAction) => tsAction.id));
+        const tsShowRecreate = !tsWorkflowSection && Boolean(tsItem.studio?.mode)
+            && tsExternalIds.has("ts-image-studio.recreate");
+        // [AI agent] Send the picture into the studio's current mode —
+        // the same thing a drag does, for when dragging is not an option.
+        const tsShowUseInStudio = !tsWorkflowSection
+            && tsExternalIds.has("ts-image-studio.use-source");
+        const tsPreviewURL = this.tsResolveCardPreviewURL(tsItem);
+        const tsMediaMarkup = this.tsBuildCardMediaMarkup(tsItem, tsPreviewURL);
+        const tsDeleteAllowed = tsWorkflowSection || tsItem.allow_delete;
+        // Every card button carries its full name for assistive technology;
+        // the single letter on screen is only a visual shorthand.
+        const tsActionButton = (tsAction, tsLetter, tsLabel, tsExtra = "") => `<button type="button" data-action="${tsAction}" data-card-id="${tsItem.id}" title="${this.tsEscapeAttribute(tsLabel)}" aria-label="${this.tsEscapeAttribute(tsLabel)}"${tsExtra}>${tsLetter}</button>`;
+        const tsFavoriteLabel = tsItem.is_favorite
+            ? this.tsT("button.unfavorite", "Remove from favorites")
+            : this.tsT("button.favorite", "Add to favorites");
+        return `
+            <div
+                class="ts-card"
+                role="option"
+                aria-label="${this.tsEscapeAttribute(tsItem.filename || "")}"
+                data-card-id="${tsItem.id}"
+                draggable="${tsWorkflowSection ? "false" : "true"}"
+                style="width:${tsMetrics.tsCardWidth}px;height:${tsMetrics.tsCardHeight}px;"
+            >
+                <div class="ts-card-media">
+                    ${tsMediaMarkup}
+                    ${tsWorkflowSection ? "" : `
+                        <button
+                            class="ts-card-favorite"
+                            type="button"
+                            data-action="favorite"
+                            data-card-id="${tsItem.id}"
+                            data-favorite="${String(Boolean(tsItem.is_favorite))}"
+                            aria-pressed="${String(Boolean(tsItem.is_favorite))}"
+                            title="${this.tsEscapeAttribute(tsFavoriteLabel)}"
+                            aria-label="${this.tsEscapeAttribute(tsFavoriteLabel)}"
+                        >★</button>
+                    `}
+                    <div class="ts-card-actions">
+                        ${tsWorkflowSection ? tsActionButton("load-workflow", "L", this.tsT("button.loadWorkflow", "Load Workflow")) : ""}
+                        ${tsShowUseInStudio ? tsActionButton("use-in-studio", "S", this.tsT("button.useInStudio", "Use in the studio")) : ""}
+                        ${tsShowRecreate ? tsActionButton("recreate", "R", this.tsT("button.recreate", "Restore studio session")) : ""}
+                        ${tsShowCopyAction ? tsActionButton("copy", "P", this.tsT("button.copyPrompt", "Copy Prompt")) : ""}
+                        ${tsShowWorkflowAction ? tsActionButton("workflow", "W", this.tsT("button.copyWorkflow", "Copy Workflow")) : ""}
+                        ${tsActionButton("download", "D", this.tsT("button.download", "Download"))}
+                        ${tsActionButton(
+                            "delete",
+                            "X",
+                            tsDeleteAllowed
+                                ? this.tsT("button.moveToTrash", "Move to trash")
+                                : this.tsT("tooltip.deleteNotAllowed", "Deleting is turned off for this folder"),
+                            tsDeleteAllowed ? "" : " disabled",
+                        )}
+                    </div>
+                    <div class="ts-card-badges">
+                        ${tsStudioBadge ? `
+                            <div class="ts-card-badge" data-kind="studio" title="${this.tsEscapeAttribute(tsStudioBadge.tsTitle)}">${this.tsEscapeHTML(tsStudioBadge.tsText)}</div>
+                        ` : ""}
+                        ${tsWorkflowFolderBadge ? `
+                            <div class="ts-card-badge" data-kind="workflow-folder" title="${this.tsEscapeAttribute(tsWorkflowFolderBadge)}">${this.tsEscapeHTML(tsWorkflowFolderBadge)}</div>
+                        ` : ""}
+                        ${tsBadges.map((tsBadge, tsBadgeIndex) => `
+                            <div class="ts-card-badge" data-kind="${tsBadgeIndex === 0 ? "type" : "meta"}">${this.tsEscapeHTML(tsBadge)}</div>
+                        `).join("")}
+                    </div>
+                </div>
+            </div>
+        `.trim();
     }
 
     tsRenderSelectionButtons() {
         const tsSelectedItems = this.tsGetSelectedItems();
         const tsWorkflowSection = this.tsIsWorkflowSection();
-        const tsHasDeletable = !tsWorkflowSection && tsSelectedItems.some((tsItem) => tsItem.allow_delete);
+        const tsDeletableCount = tsWorkflowSection ? 0 : tsSelectedItems.filter((tsItem) => tsItem.allow_delete).length;
         this.tsRefs.tsRescan.disabled = tsWorkflowSection || Boolean(this.tsState.tsScanStatus?.running);
         this.tsRefs.tsRebuildCache.disabled = tsWorkflowSection || Boolean(this.tsState.tsScanStatus?.running);
-        this.tsRefs.tsDeleteSelected.disabled = !tsHasDeletable;
+        this.tsRefs.tsDeleteSelected.disabled = tsDeletableCount === 0;
+        // Say how many files the click will move, the way Compare does.
+        const tsDeleteLabel = this.tsT("button.deleteSelected", "Delete Selected");
+        const tsDeleteText = tsDeletableCount > 1 ? `${tsDeleteLabel} (${tsDeletableCount})` : tsDeleteLabel;
+        if (this.tsRefs.tsDeleteSelected.textContent !== tsDeleteText) {
+            this.tsRefs.tsDeleteSelected.textContent = tsDeleteText;
+        }
         this.tsRenderCompareButton(tsSelectedItems, tsWorkflowSection);
     }
 
@@ -2778,8 +3279,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsCopied ? this.tsT("toast.workflowCopied", "Workflow copied") : this.tsT("toast.copyFailed", "Copy failed"),
         );
     }
-    tsRefreshCardSelection() {
-        this.tsRefs.tsGalleryContent.querySelectorAll("[data-card-id]").forEach((tsCard) => {
+    tsRefreshCardSelection(tsOnlyIds = null) {
+        const tsCards = Array.isArray(tsOnlyIds)
+            ? tsOnlyIds
+                .map((tsId) => this.tsRefs.tsGalleryContent.querySelector(`[data-card-id="${Number(tsId)}"]`))
+                .filter(Boolean)
+            : this.tsRefs.tsGalleryContent.querySelectorAll("[data-card-id]");
+        tsCards.forEach((tsCard) => {
             const tsCardId = Number(tsCard.dataset.cardId);
             const tsIsSelected = this.tsState.tsSelection.has(tsCardId);
             tsCard.dataset.selected = String(tsIsSelected);
@@ -2822,6 +3328,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
         const tsCard = tsEvent.target.closest("[data-card-id]");
         if (!tsCard) {
+            // A click on the empty space between and below the cards clears
+            // the selection, as it does in a file manager.
+            if (!tsEvent.shiftKey && !tsEvent.ctrlKey && !tsEvent.metaKey) {
+                this.tsClearSelection();
+            }
             return;
         }
         const tsCardId = Number(tsCard.dataset.cardId);
@@ -2835,10 +3346,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 this.tsState.tsSelection.add(tsCardId);
             }
             this.tsState.tsLastSelectedIndex = tsCardIndex;
+            this.tsState.tsSelectionAnchorId = tsCardId;
         } else {
             this.tsState.tsSelection.clear();
             this.tsState.tsSelection.add(tsCardId);
             this.tsState.tsLastSelectedIndex = tsCardIndex;
+            this.tsState.tsSelectionAnchorId = tsCardId;
         }
         this.tsRenderSelectionButtons();
         this.tsRefreshCardSelection();
@@ -2951,6 +3464,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return [
                 { tsAction: "load-workflow", tsLabel: this.tsT("menu.loadWorkflow", "Load workflow") },
                 { tsAction: "download", tsLabel: this.tsT("menu.download", "Download") },
+                { tsAction: "reveal", tsLabel: this.tsT("menu.showInFolder", "Show in folder") },
                 { tsAction: "delete", tsLabel: this.tsT("menu.delete", "Delete"), tsDanger: true },
             ];
         }
@@ -2979,6 +3493,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (tsAsset.type !== "3d") {
             tsItems.push({ tsAction: "open-tab", tsLabel: this.tsT("menu.openInNewTab", "Open in new tab") });
         }
+        tsItems.push({ tsAction: "reveal", tsLabel: this.tsT("menu.showInFolder", "Show in folder") });
         tsItems.push({
             tsAction: "delete",
             tsLabel: this.tsT("menu.delete", "Delete"),
@@ -3005,13 +3520,56 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             this.tsState.tsSelection.clear();
             this.tsState.tsSelection.add(tsAsset.id);
             this.tsState.tsLastSelectedIndex = Number(tsCard.dataset.cardIndex);
+            this.tsState.tsSelectionAnchorId = tsAsset.id;
             this.tsRenderSelectionButtons();
             this.tsRefreshCardSelection();
         }
         this.tsOpenContextMenu(tsEvent.clientX, tsEvent.clientY, tsAsset);
     }
 
-    tsOpenContextMenu(tsClientX, tsClientY, tsAsset) {
+    // The keyboard route to the same menu (the Menu key or Shift+F10), opened
+    // at the focused card and with its first item focused.
+    tsOpenContextMenuForIndex(tsIndex) {
+        const tsAsset = this.tsState.tsItems[tsIndex];
+        if (!tsAsset) {
+            return;
+        }
+        this.tsEnsureIndexVisible(tsIndex);
+        const tsCard = this.tsRefs.tsGalleryContent.querySelector(`[data-card-id="${Number(tsAsset.id)}"]`);
+        const tsRect = tsCard?.getBoundingClientRect?.() || this.tsRefs.tsGalleryScroll.getBoundingClientRect();
+        this.tsOpenContextMenu(tsRect.left + Math.min(24, tsRect.width / 2), tsRect.top + Math.min(24, tsRect.height / 2), tsAsset, true);
+    }
+
+    tsHandleContextMenuKeydown(tsEvent) {
+        const tsItems = [...this.tsRefs.tsContextMenu.querySelectorAll(".ts-context-item:not([disabled])")];
+        if (!tsItems.length) {
+            return;
+        }
+        const tsPath = typeof tsEvent.composedPath === "function" ? tsEvent.composedPath() : [];
+        const tsCurrent = tsItems.indexOf(tsPath[0]);
+        let tsNext = -1;
+        if (tsEvent.key === "ArrowDown") {
+            tsNext = tsCurrent < 0 ? 0 : (tsCurrent + 1) % tsItems.length;
+        } else if (tsEvent.key === "ArrowUp") {
+            tsNext = tsCurrent < 0 ? tsItems.length - 1 : (tsCurrent - 1 + tsItems.length) % tsItems.length;
+        } else if (tsEvent.key === "Home") {
+            tsNext = 0;
+        } else if (tsEvent.key === "End") {
+            tsNext = tsItems.length - 1;
+        } else if (tsEvent.key === "Tab") {
+            // A menu is not a tab stop: Tab leaves it, the way it does in a
+            // native context menu.
+            this.tsCloseContextMenu(true);
+            return;
+        }
+        if (tsNext >= 0) {
+            tsEvent.preventDefault();
+            tsEvent.stopPropagation();
+            tsItems[tsNext].focus();
+        }
+    }
+
+    tsOpenContextMenu(tsClientX, tsClientY, tsAsset, tsFocusFirst = false) {
         const tsMenu = this.tsRefs.tsContextMenu;
         const tsItems = this.tsBuildContextMenuItems(tsAsset);
         tsMenu.innerHTML = tsItems
@@ -3042,11 +3600,27 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         tsMenu.style.left = `${Math.max(0, tsLeft)}px`;
         tsMenu.style.top = `${Math.max(0, tsTop)}px`;
+        // Focus moves into the menu for the keyboard route; a right-click
+        // leaves the pointer in charge, and the arrow keys still reach the
+        // items from there (tsHandleContextMenuKeydown).
+        if (tsFocusFirst) {
+            tsMenu.querySelector(".ts-context-item:not([disabled])")?.focus();
+        }
         // Dismissal listeners live only while the menu is open (teardown: they
         // are removed in tsCloseContextMenu). Bound once and reused.
         if (!this.tsContextMenuDismiss) {
             this.tsContextMenuDismiss = (tsDismissEvent) => {
-                if (tsDismissEvent.type === "keydown" && tsDismissEvent.key !== "Escape") {
+                if (tsDismissEvent.type === "keydown") {
+                    if (tsDismissEvent.key !== "Escape") {
+                        // Arrow keys walk the items even when the menu was
+                        // opened with the mouse and nothing inside is focused.
+                        this.tsHandleContextMenuKeydown(tsDismissEvent);
+                        return;
+                    }
+                    // The same Escape must not also clear the grid selection.
+                    tsDismissEvent.stopPropagation();
+                    tsDismissEvent.preventDefault();
+                    this.tsCloseContextMenu(true);
                     return;
                 }
                 if (tsDismissEvent.type === "pointerdown") {
@@ -3073,10 +3647,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsGalleryScroll.addEventListener("scroll", this.tsContextMenuDismiss, true);
     }
 
-    tsCloseContextMenu() {
+    tsCloseContextMenu(tsRestoreFocus = false) {
         const tsMenu = this.tsRefs?.tsContextMenu;
         if (!tsMenu || tsMenu.dataset.open !== "true") {
             return;
+        }
+        // Focus that was inside the menu goes back to the grid, not to the
+        // document body, so the arrow keys keep working.
+        const tsFocusWasInside = tsMenu.contains(this.shadowRoot?.activeElement);
+        if (tsRestoreFocus || tsFocusWasInside) {
+            this.tsRefs.tsShell?.focus?.({ preventScroll: true });
         }
         tsMenu.dataset.open = "false";
         tsMenu.hidden = true;
@@ -3115,6 +3695,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsOpenDownload(tsAsset);
         } else if (tsAction === "open-tab") {
             tsOpenAssetInNewTab(tsAsset);
+        } else if (tsAction === "reveal") {
+            if (this.tsIsWorkflowSection()) {
+                void tsRevealWorkflowInFolder(tsAsset.relative_path);
+            } else {
+                void tsRevealAssetInFolder(tsAsset);
+            }
         } else if (tsAction === "delete") {
             if (this.tsIsWorkflowSection()) {
                 void this.tsDeleteWorkflowById(tsAsset.id);
@@ -3130,15 +3716,24 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 tsHeading: this.tsT("shortcuts.grid", "Asset grid"),
                 tsRows: [
                     ["↑ ↓ ← →", this.tsT("shortcuts.move", "Move the selection")],
+                    ["Shift + ↑ ↓ ← →", this.tsT("shortcuts.extend", "Extend the selection")],
                     ["Enter", this.tsT("shortcuts.open", "Open the lightbox / load the workflow")],
+                    ["Esc", this.tsT("shortcuts.clearSelection", "Clear the selection")],
+                    ["Menu / Shift + F10", this.tsT("shortcuts.menu", "Open the context menu")],
+                    ["Ctrl + click", this.tsT("shortcuts.clickToggle", "Add to or remove from the selection")],
+                    ["Shift + click", this.tsT("shortcuts.clickRange", "Select a range")],
                 ],
             },
             {
                 tsHeading: this.tsT("shortcuts.lightbox", "Lightbox"),
                 tsRows: [
-                    ["Esc", this.tsT("shortcuts.close", "Close")],
+                    ["Esc", this.tsT("shortcuts.closeOrReset", "Back to the whole picture, then close")],
                     ["← →", this.tsT("shortcuts.nav", "Previous / next asset")],
                     ["↑ ↓", this.tsT("shortcuts.frame", "Step one video frame")],
+                    ["Space", this.tsT("shortcuts.playPause", "Play / pause")],
+                    ["+ − / 1 / 0", this.tsT("shortcuts.zoomSingle", "Zoom / actual pixels / fit")],
+                    [this.tsT("shortcuts.clickKey", "Click"), this.tsT("shortcuts.clickZoom", "Actual pixels at that point, click again to fit")],
+                    [this.tsT("shortcuts.pinchKey", "Wheel / pinch"), this.tsT("shortcuts.zoomGesture", "Zoom around the pointer")],
                     ["Delete", this.tsT("shortcuts.trash", "Send to system trash")],
                 ],
             },
@@ -3150,6 +3745,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     ["D", this.tsT("shortcuts.download", "Download")],
                     ["X", this.tsT("shortcuts.delete", "Send to trash")],
                     ["L", this.tsT("shortcuts.loadWorkflow", "Load workflow")],
+                    ["S / R", this.tsT("shortcuts.studio", "TS Image Studio: use as source / restore the session (when installed)")],
                 ],
             },
             {
@@ -3276,6 +3872,50 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         tsEvent.dataTransfer.setData(tsAssetDragMime, tsPayload);
         tsEvent.dataTransfer.effectAllowed = "copy";
         window.__tsArtiusDraggedAsset = tsPayload;
+        this.tsMarkDraggedCards(tsDragAssets.map((tsAsset) => tsAsset.id));
+        if (tsDragAssets.length > 1) {
+            this.tsSetMultiDragImage(tsEvent, tsDragAssets.length);
+        }
+    }
+
+    // The dragged cards dim while they are in flight, so it is visible what
+    // the drop will carry; cleared on dragend.
+    tsMarkDraggedCards(tsIds) {
+        const tsIdSet = new Set((tsIds || []).map(Number));
+        this.tsRefs.tsGalleryContent.querySelectorAll("[data-card-id]").forEach((tsCard) => {
+            if (tsIdSet.has(Number(tsCard.dataset.cardId))) {
+                tsCard.dataset.dragging = "true";
+            } else {
+                delete tsCard.dataset.dragging;
+            }
+        });
+    }
+
+    // A multi-card drag used to look exactly like a single one. The ghost is
+    // a small "N files" chip; the browser snapshots it synchronously, so it
+    // lives in the document for one task only.
+    tsSetMultiDragImage(tsEvent, tsCount) {
+        if (typeof tsEvent.dataTransfer?.setDragImage !== "function" || !document.body) {
+            return;
+        }
+        const tsGhost = document.createElement("div");
+        tsGhost.textContent = this.tsT("toast.filesCount", "{count} files").replace("{count}", String(tsCount));
+        Object.assign(tsGhost.style, {
+            position: "fixed",
+            top: "-1000px",
+            left: "-1000px",
+            padding: "6px 12px",
+            borderRadius: "999px",
+            font: "600 12px/1.2 system-ui, sans-serif",
+            color: "#fff",
+            background: "rgba(40, 110, 220, 0.95)",
+            boxShadow: "0 6px 18px rgba(0, 0, 0, 0.35)",
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+        });
+        document.body.append(tsGhost);
+        tsEvent.dataTransfer.setDragImage(tsGhost, -12, -12);
+        window.setTimeout(() => tsGhost.remove(), 0);
     }
 
     tsHandleTreeClick(tsEvent) {
@@ -3357,8 +3997,36 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (this.tsState.tsItems.length === 0) {
             return;
         }
-        const tsCurrentIndex = this.tsState.tsLastSelectedIndex >= 0 ? this.tsState.tsLastSelectedIndex : 0;
+        // Grid keys belong to the grid. Enter on Rescan, a type chip, a tree
+        // folder or a context-menu item used to open the lightbox instead of
+        // pressing that control (its click was preventDefault-ed away).
+        const tsGridTarget = this.tsResolveGridKeyTarget(tsEvent);
+        if (!tsGridTarget) {
+            return;
+        }
+        if (tsEvent.key === "Escape" && this.tsState.tsSelection.size > 0) {
+            tsEvent.preventDefault();
+            this.tsClearSelection();
+            return;
+        }
+        if (tsEvent.key === "ContextMenu" || (tsEvent.shiftKey && tsEvent.key === "F10")) {
+            const tsFocusItem = this.tsState.tsItems[this.tsState.tsLastSelectedIndex];
+            if (tsFocusItem) {
+                tsEvent.preventDefault();
+                this.tsOpenContextMenuForIndex(this.tsState.tsLastSelectedIndex);
+            }
+            return;
+        }
+        // Nothing selected yet: the first arrow press selects the FIRST card
+        // rather than jumping straight past it to the second.
+        const tsHasFocus = this.tsState.tsLastSelectedIndex >= 0;
+        const tsCurrentIndex = tsHasFocus ? this.tsState.tsLastSelectedIndex : 0;
         let tsNextIndex = tsCurrentIndex;
+        if (!tsHasFocus && ["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"].includes(tsEvent.key)) {
+            tsEvent.preventDefault();
+            this.tsSelectSingleIndex(0);
+            return;
+        }
         if (tsEvent.key === "ArrowRight") {
             tsNextIndex = Math.min(this.tsState.tsItems.length - 1, tsCurrentIndex + 1);
         }
@@ -3373,14 +4041,17 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         if (tsNextIndex !== tsCurrentIndex) {
             tsEvent.preventDefault();
-            this.tsState.tsSelection.clear();
-            this.tsState.tsSelection.add(this.tsState.tsItems[tsNextIndex].id);
-            this.tsState.tsLastSelectedIndex = tsNextIndex;
-            this.tsRenderSelectionButtons();
-            this.tsRefreshCardSelection();
+            if (tsEvent.shiftKey) {
+                this.tsSelectRange(tsNextIndex);
+                this.tsEnsureIndexVisible(tsNextIndex);
+                return;
+            }
+            this.tsSelectSingleIndex(tsNextIndex);
             return;
         }
-        if (tsEvent.key === "Enter") {
+        // Enter/Space on a button INSIDE a card (P, D, the star...) is that
+        // button's own click; only the grid itself opens the lightbox.
+        if (tsEvent.key === "Enter" && tsGridTarget === "grid") {
             tsEvent.preventDefault();
             const tsSelectedItem = this.tsGetSelectedItems()[0] || this.tsState.tsItems[0];
             if (tsSelectedItem) {
@@ -3393,8 +4064,58 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
     }
 
+    // "grid" when the key was pressed on the grid itself (the focused panel
+    // shell or a card), "card-control" for a button inside a card, null for
+    // anything else - toolbar, tree, menus - whose keys are its own.
+    tsResolveGridKeyTarget(tsEvent) {
+        const tsPath = typeof tsEvent.composedPath === "function" ? tsEvent.composedPath() : [];
+        const tsTarget = tsPath[0] || tsEvent.target;
+        if (!tsTarget || tsTarget === this.tsRefs.tsShell || tsTarget === this) {
+            return "grid";
+        }
+        const tsInGallery = tsPath.includes(this.tsRefs.tsGalleryScroll);
+        if (!tsInGallery) {
+            return null;
+        }
+        const tsTagName = String(tsTarget.tagName || "").toUpperCase();
+        return tsTagName === "BUTTON" || tsTagName === "A" ? "card-control" : "grid";
+    }
+
+    tsSelectSingleIndex(tsIndex) {
+        const tsItem = this.tsState.tsItems[tsIndex];
+        if (!tsItem) {
+            return;
+        }
+        this.tsState.tsSelection.clear();
+        this.tsState.tsSelection.add(tsItem.id);
+        this.tsState.tsLastSelectedIndex = tsIndex;
+        this.tsState.tsSelectionAnchorId = tsItem.id;
+        this.tsRenderSelectionButtons();
+        this.tsRefreshCardSelection();
+        this.tsEnsureIndexVisible(tsIndex);
+    }
+
+    tsClearSelection() {
+        if (this.tsState.tsSelection.size === 0) {
+            return;
+        }
+        this.tsState.tsSelection.clear();
+        this.tsState.tsSelectionAnchorId = null;
+        this.tsRenderSelectionButtons();
+        this.tsRefreshCardSelection();
+    }
+
     tsSelectRange(tsTargetIndex) {
-        const tsStartIndex = this.tsState.tsLastSelectedIndex >= 0 ? this.tsState.tsLastSelectedIndex : tsTargetIndex;
+        // The range grows from the ANCHOR - the last plain or Ctrl click - so
+        // click 5, Shift-click 10, Shift-click 8 selects 5-8, as in every file
+        // manager. It used to restart from the previous Shift-click.
+        const tsAnchorIndex = this.tsItemIndexById.get(this.tsState.tsSelectionAnchorId);
+        const tsStartIndex = tsAnchorIndex !== undefined
+            ? tsAnchorIndex
+            : (this.tsState.tsLastSelectedIndex >= 0 ? this.tsState.tsLastSelectedIndex : tsTargetIndex);
+        if (tsAnchorIndex === undefined) {
+            this.tsState.tsSelectionAnchorId = this.tsState.tsItems[tsStartIndex]?.id ?? null;
+        }
         const tsRangeStart = Math.min(tsStartIndex, tsTargetIndex);
         const tsRangeEnd = Math.max(tsStartIndex, tsTargetIndex);
         this.tsState.tsSelection.clear();
@@ -3435,14 +4156,22 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             if (!tsItem || tsGlobalIndex === undefined || tsGlobalIndex < 0) {
                 return;
             }
+            // Only the two cards whose state changed are touched, and the
+            // grid follows the lightbox, so closing it lands on the picture
+            // the user was looking at.
+            const tsPreviousIds = [...this.tsState.tsSelection];
             this.tsState.tsSelection.clear();
             this.tsState.tsSelection.add(tsItem.id);
             this.tsState.tsLastSelectedIndex = tsGlobalIndex;
+            this.tsState.tsSelectionAnchorId = tsItem.id;
             this.tsRenderSelectionButtons();
-            this.tsRefreshCardSelection();
+            this.tsRefreshCardSelection([...tsPreviousIds, tsItem.id]);
+            this.tsEnsureIndexVisible(tsGlobalIndex);
         }, tsCompareItems.length > 0 ? {
             tsCompareItems,
+            tsOnDeleted: (tsIds) => this.tsRemoveItemsByIds(tsIds),
         } : {
+            tsOnDeleted: (tsIds) => this.tsRemoveItemsByIds(tsIds),
             tsGetItems: () => this.tsState.tsItems,
             tsCanLoadMore: () => Boolean(this.tsState.tsHasMore || this.tsState.tsLoading || this.tsState.tsQueuedFetchAppend),
             tsRequestMore: async () => {
@@ -3490,28 +4219,77 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         );
         if (tsLibraryIndex >= 0) {
             this.tsWorkflowLibrary.splice(tsLibraryIndex, 1);
+            // Mutated in place, so the memoized query result is stale.
+            this.tsWorkflowQueryCache = null;
         }
         // Drop from current list without refetching — preserves scroll position.
         this.tsRemoveItemsByIds([tsWorkflowId]);
+        tsShowToast("success", this.tsT("toast.movedToTrash", "Moved to trash"), String(tsWorkflow.filename || ""));
     }
 
     async tsDeleteAssets(tsAssets) {
         const tsDeletableAssets = tsAssets.filter((tsAsset) => tsAsset.allow_delete);
+        const tsProtectedCount = tsAssets.length - tsDeletableAssets.length;
         if (tsDeletableAssets.length === 0) {
+            if (tsProtectedCount > 0) {
+                tsShowToast("info", this.tsT("toast.deleteNotAllowed", "Deleting is turned off for this folder"));
+            }
             return;
         }
-        const tsDeletedIds = tsDeletableAssets.map((tsAsset) => tsAsset.id);
+        // One file goes to the trash on a click, as before. A batch is one
+        // stray Shift-click away from a whole day's renders, so it asks first
+        // and says how many.
+        if (tsDeletableAssets.length > 1) {
+            const tsConfirmed = window.confirm(
+                this.tsT("confirm.deleteAssets", "Move {count} files to the trash?")
+                    .replace("{count}", String(tsDeletableAssets.length)),
+            );
+            if (!tsConfirmed) {
+                return;
+            }
+        }
+        const tsRequestedIds = tsDeletableAssets.map((tsAsset) => tsAsset.id);
+        let tsResult;
         try {
-            await tsPostJSON(`${tsRouteBase}/delete`, { ids: tsDeletedIds });
+            tsResult = await tsPostJSON(`${tsRouteBase}/delete`, { ids: tsRequestedIds });
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser failed to delete assets", tsError);
             tsShowToast("error", this.tsT("toast.deleteFailed", "Delete failed"), String(tsError?.message || tsError || ""));
             return;
         }
-        // Surgical removal instead of `tsFetchAssets(true)` — preserves scroll
-        // position. Backend also emits tsab:asset-remove events; the existing
-        // event handler is a safety net but does nothing on already-empty state.
-        this.tsRemoveItemsByIds(tsDeletedIds);
+        const tsOutcome = tsResolveDeleteOutcome(tsRequestedIds, tsResult);
+        // Only what the backend really removed leaves the grid. A file that is
+        // open in another program stays - it used to vanish and then come
+        // back on the next refresh. Surgical removal instead of a refetch
+        // keeps the scroll position; the backend's asset-remove events are a
+        // safety net.
+        this.tsRemoveItemsByIds(tsOutcome.tsRemovedIds);
+        this.tsReportDeleteOutcome(tsOutcome, tsDeletableAssets, tsProtectedCount);
+    }
+
+    tsReportDeleteOutcome(tsOutcome, tsAssets, tsProtectedCount = 0) {
+        const tsDeletedCount = tsOutcome.tsDeletedIds.length;
+        if (tsDeletedCount > 0) {
+            const tsSingle = tsDeletedCount === 1
+                ? tsAssets.find((tsAsset) => tsAsset.id === tsOutcome.tsDeletedIds[0])
+                : null;
+            tsShowToast(
+                "success",
+                this.tsT("toast.movedToTrash", "Moved to trash"),
+                tsSingle
+                    ? String(tsSingle.filename || "")
+                    : this.tsT("toast.filesCount", "{count} files").replace("{count}", String(tsDeletedCount)),
+            );
+        }
+        const tsFailedCount = tsOutcome.tsFailedIds.length + tsProtectedCount;
+        if (tsFailedCount > 0) {
+            tsShowToast(
+                "warn",
+                this.tsT("toast.deleteSkipped", "{count} could not be moved to the trash")
+                    .replace("{count}", String(tsFailedCount)),
+                this.tsT("toast.deleteSkippedHint", "The file may be open in another program, or deleting is turned off for its folder."),
+            );
+        }
     }
 
     tsRemoveItemsByIds(tsIds) {
@@ -3534,18 +4312,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (tsRemovedItems.length === 0) {
             return;
         }
+        const tsFocusId = this.tsState.tsItems[this.tsState.tsLastSelectedIndex]?.id ?? null;
         this.tsState.tsItems = tsNextItems;
         this.tsItemsRevision += 1;
         this.tsRebuildItemIndex();
         for (const tsId of tsRemovalSet) {
             this.tsState.tsSelection.delete(tsId);
         }
-        // Reset the shift-click anchor whenever the array changes shape.
-        // Items before the previous anchor may have been removed, shifting
-        // it to a different item; the pre-1.2.0 path (tsFetchAssets(true))
-        // also reset the anchor to -1, so this matches that behavior and
-        // avoids next-shift-click selecting a wrong range.
-        this.tsState.tsLastSelectedIndex = -1;
+        // Items before the focus may have gone, shifting every index after
+        // them, so the focus and the Shift-click anchor are re-found by id.
+        this.tsApplyPreservedSelection(tsFocusId);
         this.tsApplyFolderCountDecrements(tsRemovedItems);
         this.tsInvalidateResponseCache();
         this.tsDebouncedAssetEventRefresh();

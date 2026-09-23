@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from PIL import Image
 
 from .common import TSBuildDiscoveredPayload, TSBuildIndexedPayload
+from ..ts_display_proxy import TSStillImageDecodeAttempts
 from .prompt_metadata import (
     TSExtractModelsFromPromptField,
     TSExtractPromptPartsFromPromptField,
     TSExtractSeedFromPromptField,
 )
 from ..ts_metadata_extract import TSExtractWorkflowText
-from ..ts_settings import TS_IMAGE_EXTENSIONS, TS_PROMPT_PARTS_VERSION
+from ..ts_settings import TS_FFMPEG_IMAGE_EXTENSIONS, TS_IMAGE_EXTENSIONS, TS_PROMPT_PARTS_VERSION
 from ..ts_types import TSAssetPayload, TSAssetStat
 from ..ts_utils import TSJsonDumps
 
@@ -115,6 +117,9 @@ class TSImageHandler:
         except Exception:
             ts_width = None
             ts_height = None
+        if (ts_width is None or ts_height is None) and ts_asset_stat.ts_extension in TS_FFMPEG_IMAGE_EXTENSIONS:
+            # Pillow cannot open OpenEXR at all; ffprobe reads its header.
+            ts_width, ts_height = self._TSProbeStillSize(ts_asset_stat.ts_path)
         return TSBuildIndexedPayload(
             ts_asset_stat,
             self.ts_kind,
@@ -126,8 +131,28 @@ class TSImageHandler:
             ts_has_metadata=False,
         )
 
+    def _TSProbeStillSize(self, ts_path) -> tuple[int | None, int | None]:
+        if self.ts_tools is None:
+            return None, None
+        ts_probe = self.ts_tools.TSRunFFProbe(ts_path)
+        for ts_stream in ts_probe.get("streams") or []:
+            if isinstance(ts_stream, dict) and ts_stream.get("codec_type") == "video":
+                try:
+                    return int(ts_stream.get("width") or 0) or None, int(ts_stream.get("height") or 0) or None
+                except (TypeError, ValueError):
+                    return None, None
+        return None, None
+
     def TSGeneratePreview(self, ts_row) -> str:
         ts_preview_key = self.ts_preview_cache.TSBuildAssetPreviewKey(str(ts_row["hash"] or ""), ts_row["path"])
+        ts_extension = str(ts_row["extension"] or "").lower()
+        if ts_extension in TS_FFMPEG_IMAGE_EXTENSIONS:
+            return self.ts_preview_cache.TSGenerateFFmpegImageThumbnail(
+                Path(str(ts_row["path"])),
+                ts_preview_key,
+                self.ts_tools,
+                TSStillImageDecodeAttempts(ts_extension),
+            )
         return self.ts_preview_cache.TSGenerateImageThumbnail(ts_row["path"], ts_preview_key)
 
     def _TSReadImageMetadata(self, ts_image_path) -> dict[str, str]:

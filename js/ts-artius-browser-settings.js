@@ -72,7 +72,13 @@ export const tsPanelSettings = Object.freeze({
         search: 220,
         realtimeRefresh: 350,
         filterChip: 120,
+        // Typed filter values (width, height, dates): long enough to cover
+        // the gap between keystrokes of one number.
+        filterInput: 450,
     },
+    // A refresh of the same query asks for everything already loaded, so the
+    // user keeps their place; the listing route caps a page at 500.
+    softRefreshMaxItems: 500,
     responseCache: {
         ttlMs: 30000,
         capacity: 10,
@@ -156,7 +162,16 @@ export const tsViewerSettings = Object.freeze({
         // Decoded copies are what keep the swap instant; an unbounded map of
         // them is a memory leak in a long browsing session.
         cacheSize: 8,
+        // Crossfade between two pictures. A hard cut reads as a blink even
+        // when the next file is already decoded; the outgoing picture fades
+        // out over the new one instead. 0 turns it off, and so does the
+        // system's "reduce motion" preference.
+        fadeMs: 220,
     },
+    // How long a step onto a video, audio or 3D asset waits before building
+    // its player. Key repeat fires every ~30 ms, so a held arrow passes
+    // through without starting a download or a WebGL context per step.
+    mediaSwapSettleMs: 140,
     pagination: {
         prefetchThreshold: 6,
     },

@@ -46,12 +46,17 @@ class TSDeleteService:
     def _TSDeleteAssetsLocked(self, ts_asset_ids: list[int]) -> dict[str, Any]:
         ts_deleted_ids: list[int] = []
         ts_skipped_ids: list[int] = []
+        # Subset of skipped: ids with no row at all (already deleted from
+        # another tab, pruned by a scan). The panel drops those cards; every
+        # other skipped id is a file that is still there.
+        ts_missing_ids: list[int] = []
         ts_deleted_refs: list[tuple[int, str, str]] = []
         ts_roots = {ts_root["root_id"]: ts_root for ts_root in self.ts_get_roots()}
         for ts_asset_id in ts_asset_ids:
             ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
             if ts_row is None:
                 ts_skipped_ids.append(ts_asset_id)
+                ts_missing_ids.append(ts_asset_id)
                 TSLogVerbose("runtime.asset.delete.skipped", asset_id=ts_asset_id, reason="missing_row")
                 continue
 
@@ -96,4 +101,4 @@ class TSDeleteService:
             for ts_asset_id, ts_path, _ts_preview_path in ts_deleted_refs:
                 TSLogVerbose("runtime.asset.deleted", asset_id=ts_asset_id, path=ts_path)
                 self.ts_emit_event(TS_EVENT_ASSET_REMOVE, {"id": ts_asset_id, "path": ts_path})
-        return {"deleted": ts_deleted_ids, "skipped": ts_skipped_ids}
+        return {"deleted": ts_deleted_ids, "skipped": ts_skipped_ids, "missing": ts_missing_ids}

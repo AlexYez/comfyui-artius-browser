@@ -76,8 +76,17 @@ class TSAssetCatalogService:
             "scan_status": self.ts_scan_service.TSGetScanStatus(),
             "health": self._TSHealthPayload(),
             "roots": list(ts_roots.values()),
-            "folders": self.ts_database.TSListFolders(ts_scope_for_tree, ts_root_id_for_tree) if ts_view == "tree" else [],
+            "folders": [],
         }
+        if ts_view == "tree":
+            if ts_cursor_after is None:
+                ts_response["folders"] = self.ts_database.TSListFolders(ts_scope_for_tree, ts_root_id_for_tree)
+            else:
+                # A scrolled page belongs to the query whose first page already
+                # carried the tree; recounting every folder in the library for
+                # each 60 cards was a full-table GROUP BY per page. The key is
+                # left out, not emptied, so the panel keeps the tree it has.
+                del ts_response["folders"]
         TSLogVerbose("runtime.assets.response", returned=len(ts_response["items"]), has_more=ts_response["has_more"])
         return ts_response
 

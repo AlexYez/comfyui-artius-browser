@@ -16,6 +16,7 @@ from .ts_db_query import TS_SORT_KEY_MAP, TSBuildAssetQueryParts, TSResolveSortK
 from .ts_db_schema import (
     TS_DB_ADDITIVE_COLUMNS,
     TS_DB_CACHE_SIZE_KIB,
+    TS_DB_CARD_COLUMNS_SQL,
     TS_DB_DROP_SCHEMA_SQL,
     TS_DB_FAVORITES_SALVAGE_SQL,
     TS_DB_FTS_PROMPT_SCHEMA_VERSION,
@@ -336,9 +337,17 @@ class TSDatabase:
         ts_rows: list[sqlite3.Row] = []
         for ts_path_batch in self._TSChunkedValues(list(dict.fromkeys(ts_paths)), 500):
             ts_placeholders = ",".join("?" for _ in ts_path_batch)
+            # Only what the scan reads from an existing row (cheap-compare,
+            # carry-over, preview purge, prompt-metadata version check). The
+            # prompt and workflow texts made `SELECT *` six times slower and
+            # ~150 MB of strings per full scan of a real library.
             ts_rows.extend(
                 ts_connection.execute(
-                    f"SELECT * FROM assets_view WHERE path IN ({ts_placeholders})",
+                    f"""
+                    SELECT id, path, type, preview_path, metadata, mtime_ns, size_bytes,
+                           hash, created_at, is_indexed, has_preview, has_metadata
+                    FROM assets_view WHERE path IN ({ts_placeholders})
+                    """,
                     ts_path_batch,
                 ).fetchall()
             )
@@ -685,6 +694,15 @@ class TSDatabase:
             (ts_asset_id,),
         ).fetchone()
 
+    def TSGetAssetPreviewRow(self, ts_asset_id: int) -> sqlite3.Row | None:
+        # The /preview route needs three columns. A full assets_view row
+        # carries the workflow JSON (tens of KB) - read for every thumbnail of
+        # a freshly opened grid only to be thrown away.
+        return self.TSGetConnection().execute(
+            "SELECT id, type, preview_path FROM assets_view WHERE id = ?",
+            (ts_asset_id,),
+        ).fetchone()
+
     def TSGetAssetByPath(self, ts_path: str) -> sqlite3.Row | None:
         return self.TSGetConnection().execute(
             "SELECT * FROM assets_view WHERE path = ?",
@@ -784,12 +802,24 @@ class TSDatabase:
         )
         ts_connection = self.TSGetConnection()
         ts_page_limit = max(1, int(ts_limit)) + 1
+        # Two phases. The ORDER BY needs a sorter, and SQLite fills every
+        # selected column of every matching row BEFORE the LIMIT applies - so
+        # `SELECT assets_view.*` read the prompt and workflow text of the whole
+        # library for each 60-card page (148 MB of workflow JSON on a real
+        # 7k-asset database: 49 ms warm, 110+ ms cold). The inner query sorts
+        # ids only; the outer one reads the card columns for the page alone and
+        # reduces the two large texts to the booleans the card needs.
         ts_list_query = f"""
-            SELECT assets_view.*
-            FROM {ts_from_sql}
-            {ts_where_sql}
+            SELECT {TS_DB_CARD_COLUMNS_SQL}
+            FROM assets_view
+            WHERE assets_view.id IN (
+                SELECT assets_view.id
+                FROM {ts_from_sql}
+                {ts_where_sql}
+                {ts_order_by_sql}
+                LIMIT ?
+            )
             {ts_order_by_sql}
-            LIMIT ?
         """
         ts_rows = ts_connection.execute(ts_list_query, [*ts_parameters, ts_page_limit]).fetchall()
         ts_has_more = len(ts_rows) > ts_limit

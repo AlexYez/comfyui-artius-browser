@@ -39,6 +39,7 @@ export const tsPanelStyles = `<style>
                     display: grid;
                     grid-template-rows: auto 1fr;
                     background: var(--ts-bg-0);
+                    container: ts-shell / inline-size;
                 }
 
                 .ts-shell:focus-visible {
@@ -272,6 +273,18 @@ export const tsPanelStyles = `<style>
                     text-decoration: none;
                 }
 
+                .ts-help-toggle {
+                    margin-left: auto;
+                    min-height: 22px;
+                    width: 22px;
+                    padding: 0;
+                    border-radius: 999px;
+                    font-size: 12px;
+                    font-weight: 700;
+                    line-height: 1;
+                    color: var(--ts-muted);
+                }
+
                 .ts-title-link:hover {
                     text-decoration: underline;
                 }
@@ -415,8 +428,7 @@ export const tsPanelStyles = `<style>
                 }
 
                 .ts-root-select,
-                .ts-sort-select,
-                .ts-sort-direction {
+                .ts-sort-select {
                     appearance: none;
                     -webkit-appearance: none;
                     font: inherit;
@@ -435,12 +447,20 @@ export const tsPanelStyles = `<style>
                     background-repeat: no-repeat;
                 }
 
-                .ts-sort-select,
-                .ts-sort-direction {
+                .ts-sort-select {
                     padding: 0 20px 0 10px;
                     background-position:
                         calc(100% - 11px) calc(50% - 2px),
                         calc(100% - 6px) calc(50% - 2px);
+                }
+
+                /* A button now: one click reverses the order. It keeps the
+                   select's transparent look so the sort group reads as one. */
+                .ts-sort-direction {
+                    padding: 0 10px;
+                    background: transparent;
+                    color: var(--ts-text);
+                    white-space: nowrap;
                 }
 
                 .ts-sort-group {
@@ -598,6 +618,45 @@ export const tsPanelStyles = `<style>
                     padding: 7px 10px;
                     min-height: 32px;
                     outline: none;
+                }
+
+                /* The outline above is removed for the look; the focus itself
+                   must still be visible, or a keyboard user cannot tell where
+                   they are. */
+                .ts-search:focus-visible,
+                select:focus-visible,
+                input:focus-visible {
+                    border-color: var(--ts-accent);
+                    box-shadow: 0 0 0 1px var(--ts-accent);
+                }
+
+                button:focus-visible,
+                .ts-chip:focus-visible {
+                    outline: 2px solid var(--ts-accent);
+                    outline-offset: 1px;
+                }
+
+                /* Filters narrowing the grid while the row is closed. */
+                .ts-filters-toggle[data-applied="true"]::after {
+                    content: "";
+                    display: inline-block;
+                    width: 6px;
+                    height: 6px;
+                    margin-left: 6px;
+                    border-radius: 999px;
+                    background: var(--ts-accent);
+                    vertical-align: middle;
+                }
+
+                /* A changed query in flight: the old cards dim after a short
+                   delay, so a quick answer never flickers. */
+                .ts-gallery-content {
+                    transition: opacity 0.12s ease;
+                }
+
+                .ts-gallery-wrap[data-loading="true"] .ts-gallery-content {
+                    opacity: 0.55;
+                    transition: opacity 0.18s ease 0.18s;
                 }
 
                 input[type="range"] {
@@ -914,6 +973,10 @@ export const tsPanelStyles = `<style>
                     border-color: var(--ts-accent);
                 }
 
+                .ts-card[data-dragging="true"] {
+                    opacity: 0.55;
+                }
+
                 .ts-card-media {
                     position: relative;
                     background: var(--ts-bg-2);
@@ -989,8 +1052,11 @@ export const tsPanelStyles = `<style>
                     z-index: 2;
                 }
 
+                /* :focus-within too: a card button reached with Tab used to be
+                   focused while fully transparent. */
                 .ts-card:hover .ts-card-actions,
-                .ts-card[data-selected="true"] .ts-card-actions {
+                .ts-card[data-selected="true"] .ts-card-actions,
+                .ts-card:focus-within .ts-card-actions {
                     opacity: 1;
                     transform: translateY(0);
                 }
@@ -1002,6 +1068,24 @@ export const tsPanelStyles = `<style>
                     background: var(--ts-surface-overlay-strong);
                     font-size: var(--ts-card-action-font-size, 10px);
                     font-weight: 700;
+                }
+
+                /* Trash sits apart from Download: at the default size the two
+                   were 3px apart, one slip from sending a file to the trash. */
+                .ts-card-actions button[data-action="delete"] {
+                    margin-left: calc(var(--ts-card-action-gap, 4px) * 1.5);
+                }
+
+                .ts-card-actions button[data-action="delete"]:not([disabled]):hover {
+                    border-color: var(--ts-danger);
+                    color: var(--ts-danger);
+                }
+
+                .ts-card-actions button:focus-visible,
+                .ts-card-favorite:focus-visible {
+                    outline: 2px solid var(--ts-accent);
+                    outline-offset: 1px;
+                    opacity: 1;
                 }
 
                 /* Top-left star, opposite the hover action cluster. Unlike those
@@ -1134,7 +1218,11 @@ export const tsPanelStyles = `<style>
                     line-height: 1.35;
                 }
 
-                @media (max-width: 960px) {
+                /* Keyed to the PANEL's width, not the window's. The sidebar is
+                   narrow in any window, so a 960px viewport query stacked a
+                   wide sidebar in a small window and left a narrow one in a
+                   wide window with ~100px of grid beside a 220px tree. */
+                @container ts-shell (max-width: 460px) {
                     .ts-body {
                         grid-template-columns: 1fr;
                     }

@@ -26,7 +26,7 @@ from .ts_settings import (
 )
 from .ts_asset_metadata import TSNeedsPromptMetadataRefresh
 from .ts_types import TSAssetPayload, TSAssetStat, TSRootDefinition, TSScanStatus
-from .ts_utils import TSJsonLoads, TSNormalizePathString
+from .ts_utils import TSJsonLoads, TSNormalizePathString, TSNormalizeResolvedPathString
 
 TSLogger = logging.getLogger("TSArtiusBrowser")
 
@@ -311,13 +311,16 @@ class TSIndexer:
                 for ts_root in ts_roots:
                     ts_failed_directories: list[str] = []
                     for ts_asset_stat_batch in self._TSIterAssetStatBatches(ts_root, 500, ts_failed_directories):
-                        ts_path_batch = [TSNormalizePathString(ts_asset_stat.ts_path) for ts_asset_stat in ts_asset_stat_batch]
+                        # The walk hands out RESOLVED paths already, so the
+                        # key is built without resolving each file again - and
+                        # once per file, not once for the query and again in
+                        # the loop.
+                        ts_path_batch = [TSNormalizeResolvedPathString(ts_asset_stat.ts_path) for ts_asset_stat in ts_asset_stat_batch]
                         ts_existing_rows = self.ts_database.TSGetSnapshotBatch(ts_path_batch)
                         ts_discovered_payloads: list[TSAssetPayload] = []
-                        ts_pending_candidates: list[tuple[TSAssetStat, Any | None, bool]] = []
+                        ts_pending_candidates: list[tuple[TSAssetStat, str, Any | None, bool]] = []
 
-                        for ts_asset_stat in ts_asset_stat_batch:
-                            ts_normalized_path = TSNormalizePathString(ts_asset_stat.ts_path)
+                        for ts_asset_stat, ts_normalized_path in zip(ts_asset_stat_batch, ts_path_batch):
                             ts_seen_paths.add(ts_normalized_path)
                             ts_existing_row = ts_existing_rows.get(ts_normalized_path)
                             self.ts_status.ts_scanned += 1
@@ -338,7 +341,7 @@ class TSIndexer:
                                     if ts_existing_preview_path and self.ts_database.TSCountPreviewReferences(ts_existing_preview_path, int(ts_existing_row["id"])) == 0:
                                         self.ts_preview_cache.TSPurgePreview(ts_existing_preview_path)
                                 ts_discovered_payloads.append(ts_discovered_payload)
-                            ts_pending_candidates.append((ts_asset_stat, ts_existing_row, ts_stat_changed))
+                            ts_pending_candidates.append((ts_asset_stat, ts_normalized_path, ts_existing_row, ts_stat_changed))
                             if self.ts_status.ts_scanned % max(1, TS_PROGRESS_EVENT_FILE_STEP) == 0:
                                 self._TSEmitScanProgress()
 
@@ -347,8 +350,7 @@ class TSIndexer:
                             ts_catalog_rows = self.ts_database.TSUpsertAssets(ts_discovered_payloads)
                             ts_catalog_rows_by_path = {str(ts_row["path"]): ts_row for ts_row in ts_catalog_rows}
 
-                        for ts_asset_stat, ts_existing_row, ts_stat_changed in ts_pending_candidates:
-                            ts_normalized_path = TSNormalizePathString(ts_asset_stat.ts_path)
+                        for ts_asset_stat, ts_normalized_path, ts_existing_row, ts_stat_changed in ts_pending_candidates:
                             ts_effective_row = ts_catalog_rows_by_path.get(ts_normalized_path, ts_existing_row)
                             ts_needs_index = (
                                 ts_stat_changed

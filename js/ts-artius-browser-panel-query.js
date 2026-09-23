@@ -24,8 +24,11 @@ export function tsBuildAssetSearchParams(tsOptions = {}) {
     tsParams.set("view", tsView || "flat");
     tsParams.set("sort", tsSortKey || "created_at");
     tsParams.set("order", tsSortDirection || "desc");
-    if (tsSearch) {
-        tsParams.set("q", String(tsSearch));
+    // Trimmed: " cat" and "cat " are the same search, and as distinct strings
+    // they were distinct requests and distinct cache entries.
+    const tsSearchText = String(tsSearch || "").trim();
+    if (tsSearchText) {
+        tsParams.set("q", tsSearchText);
         const tsSearchScope = Object.prototype.hasOwnProperty.call(tsOverrides, "searchScope")
             ? tsOverrides.searchScope
             : tsOptions.searchScope;

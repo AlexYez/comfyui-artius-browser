@@ -293,6 +293,36 @@ export async function tsDeleteWorkflowFile(tsRelativePath) {
     return tsPostJSON(`${tsRouteBase}/workflow/delete`, { path: tsNormalizeRelativePath(tsRelativePath) });
 }
 
+// "Show in folder": the backend opens the system file manager with the file
+// selected. It opens on the machine that runs ComfyUI, which is the user's own
+// machine in the usual local setup. The only answer worth a toast is failure.
+async function tsRevealInFolder(tsRequest) {
+    try {
+        const tsResult = await tsRequest();
+        if (tsResult?.revealed) {
+            return true;
+        }
+    } catch (tsError) {
+        tsConsoleWarn("Timesaver Artius Browser could not show the file in its folder", tsError);
+    }
+    tsShowToast("error", tsT("toast.revealFailed", "Could not open the folder"));
+    return false;
+}
+
+export function tsRevealAssetInFolder(tsAsset) {
+    if (!tsAsset?.id) {
+        return Promise.resolve(false);
+    }
+    return tsRevealInFolder(() => tsPostJSON(`${tsRouteBase}/reveal/${tsAsset.id}`, {}));
+}
+
+export function tsRevealWorkflowInFolder(tsRelativePath) {
+    if (!tsRelativePath) {
+        return Promise.resolve(false);
+    }
+    return tsRevealInFolder(() => tsPostJSON(`${tsRouteBase}/workflow/reveal`, { path: tsNormalizeRelativePath(tsRelativePath) }));
+}
+
 // Mirror of the locale most recently loaded here. The panel and the sidebar
 // both go through tsLoadLocale, so this module always holds the strings the
 // user is currently seeing - which is what lets the canvas drop bridge, which
