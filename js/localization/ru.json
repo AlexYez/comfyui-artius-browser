@@ -230,5 +230,20 @@
     "shortcuts.pinchKey": "Колесо / щипок",
     "shortcuts.zoomGesture": "Масштаб вокруг указателя",
     "shortcuts.mouseButtonsKey": "Кнопки мыши Назад / Вперёд",
-    "shortcuts.help": "Эта справка"
+    "shortcuts.help": "Эта справка",
+    "button.downloadSelected": "Скачать выбранные",
+    "tooltip.downloadSelected": "Скачать выбранные файлы. Несколько файлов упаковываются в один ZIP-архив.",
+    "status.archivePacking": "Упаковка...",
+    "menu.downloadZip": "Скачать выбранные в ZIP ({count})",
+    "toast.archivePreparing": "Упаковка файлов в ZIP: {count}...",
+    "toast.archiveSkipped": "Не добавлено в архив: {count}",
+    "toast.archiveSkippedHint": "Файлы перемещены или удалены, открыты в другой программе, или их папка больше не подключена.",
+    "toast.archiveNoSpace": "Недостаточно места на диске для архива",
+    "toast.archiveEmpty": "Ни один из выбранных файлов не найден",
+    "toast.archiveFailed": "Не удалось создать ZIP-архив",
+    "button.loop": "Повтор",
+    "tooltip.loop": "Начинать сначала, когда воспроизведение доходит до конца",
+    "button.firstFrame": "Первый кадр (Home)",
+    "button.lastFrame": "Последний кадр (End)",
+    "shortcuts.firstLastFrame": "Первый / последний кадр"
 }

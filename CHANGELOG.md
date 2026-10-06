@@ -5,6 +5,37 @@ All notable changes to **Timesaver Artius Browser** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.1] - 2026-10-06
+
+### Added
+
+- **Download selected as a ZIP.** Select any mix of images, videos, audio and
+  3D models and press the new "Download Selected (N)" button, or right-click
+  inside the selection and choose "Download selected as ZIP". Several files
+  are packed into one archive and the browser downloads it like any other
+  file, with a progress bar; a single selected file downloads as itself.
+  Files are stored, not recompressed, so packing runs at disk speed; files
+  with the same name from different folders get " (2)", " (3)". Every file is
+  checked against the configured roots exactly like a single download; a file
+  that has gone missing is left out and reported. The archive is written next
+  to the browser's cache, refused when it would leave the drive with less than
+  512 MB free, and deleted as soon as the download finishes (or after an hour
+  if it never does).
+
+### Changed
+
+- **Players are built for comparing, not just watching.** Videos no longer
+  restart by themselves at the end: they stop on their last frame, and a new
+  "Loop" toggle (one remembered setting for the video player, the comparison
+  and audio) brings repeating back for whoever wants it. Home / End and new
+  ⇤ ⇥ buttons jump to the first / last frame. Flipping through videos keeps
+  your place: leave a clip paused (on a frame, or on its end) and the next one
+  opens paused on the same moment - on its own last frame if you were at the
+  end - so you can step through a batch comparing endings; a clip left playing
+  lets the next one autoplay as before. In a comparison, End (or the end of
+  playback with Loop off) parks every clip on its OWN last frame, even when
+  their lengths differ, instead of one clip's timestamp.
+
 ## [1.20.0] - 2026-09-23
 
 ### Added

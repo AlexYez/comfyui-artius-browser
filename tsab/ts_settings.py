@@ -172,6 +172,15 @@ TS_DISPLAY_PROXY_IMAGE_TIMEOUT_SECONDS = 180
 # (oldest first) instead of growing with every clip ever opened.
 TS_DISPLAY_PROXY_CACHE_MAX_BYTES = 4 * 1024 * 1024 * 1024
 
+# "Download selected" packs the files into one ZIP. The cap keeps a single
+# request from naming the whole library; the margin is disk space left free
+# after the archive is written, so packing never fills the output drive.
+TS_ARCHIVE_MAX_ASSETS = 5000
+TS_ARCHIVE_DISK_MARGIN_BYTES = 512 * 1024 * 1024
+# A built archive waits this long for its download; an abandoned one (tab
+# closed before the download started) is deleted by the next build.
+TS_ARCHIVE_MAX_AGE_SECONDS = 60 * 60
+
 TS_EVENT_INDEX_START = f"{TS_EVENT_PREFIX}:index-start"
 TS_EVENT_INDEX_PROGRESS = f"{TS_EVENT_PREFIX}:index-progress"
 TS_EVENT_INDEX_COMPLETE = f"{TS_EVENT_PREFIX}:index-complete"

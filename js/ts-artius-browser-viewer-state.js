@@ -65,6 +65,38 @@ export function tsResolveVideoFrameTime(tsCurrentTime, tsFPS, tsDirection, tsDur
     return tsTargetTime;
 }
 
+// The last frame of a clip as a seek target: the middle of its final frame.
+// Seeking to `duration` itself lands past the last frame, where some decoders
+// show nothing and every one reports "ended".
+export function tsResolveLastFrameTime(tsDuration, tsFPS) {
+    const tsSafeFPS = Number.isFinite(tsFPS) && tsFPS > 0 ? tsFPS : 30;
+    const tsSafeDuration = Number.isFinite(tsDuration) && tsDuration > 0 ? tsDuration : 0;
+    return tsSafeDuration > 0 ? Math.max(0, tsSafeDuration - 0.5 / tsSafeFPS) : 0;
+}
+
+// Within one frame of the end counts as "on the last frame": a step to the
+// last frame lands half a frame before the end, never exactly on it.
+export function tsIsOnLastFrame(tsCurrentTime, tsDuration, tsFPS) {
+    const tsSafeFPS = Number.isFinite(tsFPS) && tsFPS > 0 ? tsFPS : 30;
+    const tsSafeDuration = Number.isFinite(tsDuration) && tsDuration > 0 ? tsDuration : 0;
+    return tsSafeDuration > 0 && (Number(tsCurrentTime) || 0) >= tsSafeDuration - 1 / tsSafeFPS;
+}
+
+// Where a clip opens when the one before it was left paused: the same moment,
+// clamped to its own length, or its own last frame when the previous clip was
+// parked on its end - so flipping through finished clips compares their last
+// frames, whatever their lengths.
+export function tsResolveCarriedVideoTime(tsCarry, tsDuration, tsFPS) {
+    const tsLastFrameTime = tsResolveLastFrameTime(tsDuration, tsFPS);
+    if (!tsCarry) {
+        return 0;
+    }
+    if (tsCarry.tsAtEnd) {
+        return tsLastFrameTime;
+    }
+    return Math.max(0, Math.min(tsLastFrameTime, Number(tsCarry.tsTime) || 0));
+}
+
 // One zoom factor for a wheel event, whatever produced it. A mouse wheel
 // sends one ~100px notch per click and should keep the familiar fixed step; a
 // trackpad sends dozens of tiny deltas per gesture, and a fixed step per event

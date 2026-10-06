@@ -230,5 +230,20 @@
     "shortcuts.pinchKey": "Wheel / pinch",
     "shortcuts.zoomGesture": "Zoom around the pointer",
     "shortcuts.mouseButtonsKey": "Mouse Back / Forward",
-    "shortcuts.help": "This help"
+    "shortcuts.help": "This help",
+    "button.downloadSelected": "Download Selected",
+    "tooltip.downloadSelected": "Download the selected files. Several files are packed into one ZIP archive.",
+    "status.archivePacking": "Packing...",
+    "menu.downloadZip": "Download selected as ZIP ({count})",
+    "toast.archivePreparing": "Packing {count} files into a ZIP...",
+    "toast.archiveSkipped": "{count} files were not added to the archive",
+    "toast.archiveSkippedHint": "They were moved or deleted, are open in another program, or their folder is no longer configured.",
+    "toast.archiveNoSpace": "Not enough disk space for the archive",
+    "toast.archiveEmpty": "None of the selected files could be found",
+    "toast.archiveFailed": "Could not create the ZIP archive",
+    "button.loop": "Loop",
+    "tooltip.loop": "Start again from the beginning when the end is reached",
+    "button.firstFrame": "First frame (Home)",
+    "button.lastFrame": "Last frame (End)",
+    "shortcuts.firstLastFrame": "First / last frame"
 }

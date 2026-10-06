@@ -27,8 +27,11 @@ import {
     tsResolveChannelLayoutLabel,
 } from "./ts-artius-browser-viewer-meta.js";
 import {
+    tsIsOnLastFrame,
     tsIsViewerTypedCompareMode,
+    tsResolveCarriedVideoTime,
     tsResolveCompareSyncCorrection,
+    tsResolveLastFrameTime,
     tsResolveWheelZoomFactor,
     tsResolveVideoFrameIndex,
     tsResolveVideoFrameTime,
@@ -89,6 +92,34 @@ function tsStoreVolume(tsMedia) {
         );
     } catch {
         // no-op
+    }
+}
+
+// Whether players start again at the end. Off by default: a clip that always
+// restarted never let anyone look at its last frame, which is the frame that
+// matters most when generations are compared. One preference for the single
+// player, the compare stage and audio.
+const TS_LIGHTBOX_LOOP_STORAGE_KEY = "tsArtiusBrowser.lightboxLoop";
+
+function tsReadLoopPreference() {
+    try {
+        return window.localStorage.getItem(TS_LIGHTBOX_LOOP_STORAGE_KEY) === "1";
+    } catch {
+        return false;
+    }
+}
+
+function tsStoreLoopPreference(tsLoop) {
+    try {
+        window.localStorage.setItem(TS_LIGHTBOX_LOOP_STORAGE_KEY, tsLoop ? "1" : "0");
+    } catch {
+        // no-op
+    }
+}
+
+function tsRenderLoopButton(tsButton, tsLoop) {
+    if (tsButton) {
+        tsButton.setAttribute("aria-pressed", String(Boolean(tsLoop)));
     }
 }
 
@@ -749,19 +780,28 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 }
                 .ts-video-transport {
                     display: grid;
-                    grid-template-columns: auto minmax(0, 1fr) auto auto;
+                    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
                     gap: 6px;
                     align-items: center;
                 }
                 .ts-video-play-toggle,
-                .ts-video-mute {
+                .ts-video-mute,
+                .ts-video-transport .ts-video-loop {
                     min-height: 30px;
                     min-width: 82px;
                     padding: 5px 10px;
                     font-size: 11px;
                 }
-                .ts-video-mute[aria-pressed="true"] {
+                .ts-video-mute[aria-pressed="true"],
+                .ts-media-loop[aria-pressed="true"] {
                     border-color: var(--ts-accent);
+                    color: var(--ts-text);
+                    background: color-mix(in srgb, var(--ts-accent) 22%, transparent);
+                }
+                .ts-video-step.ts-video-edge {
+                    min-width: 36px;
+                    font-size: 15px;
+                    line-height: 1;
                 }
                 /* The wipe slider is an invisible range over the picture;
                    with keyboard focus the divider itself lights up, or Tab
@@ -1273,6 +1313,11 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             // the user came from.
             this.tsReturnFocus = this.tsDeepActiveElement();
         }
+        if (!tsWasOpen) {
+            // A fresh lightbox starts its first clip playing, whatever the
+            // last session left paused.
+            this.tsVideoCarry = null;
+        }
         window.removeEventListener("keydown", this.tsBoundKeydown, true);
         window.addEventListener("keydown", this.tsBoundKeydown, true);
         this.tsRender();
@@ -1334,6 +1379,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
     tsFinishClose() {
         this.tsDropStageGhost();
         this.tsTeardownStage();
+        this.tsVideoCarry = null;
         if (this.tsRefs?.tsHelp) {
             this.tsRefs.tsHelp.hidden = true;
         }
@@ -1371,6 +1417,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         }
         this.tsStageCleanup = null;
         this.tsVideoFrameStepper = null;
+        this.tsMediaEdgeJumper = null;
         this.tsImageZoomHandler = null;
         // tsDetailRequestToken stays monotonic on purpose: a stale detail
         // fetch is rejected by the ++token guard, not by a reset here.
@@ -1472,6 +1519,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 ["Esc", this.tsT("shortcuts.closeOrReset", "Back to the whole picture, then close")],
                 ["← →", this.tsT("shortcuts.nav", "Previous / next asset")],
                 ["↑ ↓", this.tsT("shortcuts.frame", "Step one video frame")],
+                ["Home / End", this.tsT("shortcuts.firstLastFrame", "First / last frame")],
                 ["Space", this.tsT("shortcuts.playPause", "Play / pause")],
                 ["+ − / 1 / 0", this.tsT("shortcuts.zoomSingle", "Zoom / actual pixels / fit")],
                 [this.tsT("shortcuts.clickKey", "Click"), this.tsT("shortcuts.clickZoom", "Actual pixels at that point, click again to fit")],
@@ -1640,6 +1688,15 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             if (this.tsItems[this.tsIndex]?.type === "video" && typeof this.tsVideoFrameStepper === "function") {
                 tsEvent.preventDefault();
                 this.tsVideoFrameStepper(1);
+            }
+            return;
+        }
+        // First / last frame of a clip (every clip, in compare mode), start /
+        // end of an audio file.
+        if (tsEvent.key === "Home" || tsEvent.key === "End") {
+            if (!tsEvent.ctrlKey && !tsEvent.metaKey && !tsEvent.altKey && typeof this.tsMediaEdgeJumper === "function") {
+                tsEvent.preventDefault();
+                this.tsMediaEdgeJumper(tsEvent.key === "End" ? 1 : -1);
             }
             return;
         }
@@ -2210,6 +2267,11 @@ export class TSArtiusBrowserViewer extends HTMLElement {
     }
 
     tsBindStageInteractions(tsAsset) {
+        // A paused position is handed only from one single clip to the next;
+        // anything else in between (a picture, a comparison) breaks the chain.
+        if (tsAsset.type !== "video" || this.tsIsVideoCompareMode()) {
+            this.tsVideoCarry = null;
+        }
         if (tsAsset.type === "image") {
             this.tsStageCleanup = this.tsIsImageCompareMode()
                 ? this.tsSetupImageCompareStage()
@@ -2324,8 +2386,65 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             const tsFPS = Number(tsAsset?.technical_info?.fps || tsAsset?.fps || 0);
             return Number.isFinite(tsFPS) && tsFPS > 0 ? tsFPS : 30;
         };
+
+        const tsLoopButton = tsStage.querySelector(".ts-video-loop");
+        const tsFirstFrameButton = tsStage.querySelector(".ts-video-first-frame");
+        const tsLastFrameButton = tsStage.querySelector(".ts-video-last-frame");
+        tsVideo.loop = tsReadLoopPreference();
+        tsRenderLoopButton(tsLoopButton, tsVideo.loop);
+        const tsHandleLoopClick = () => {
+            tsVideo.loop = !tsVideo.loop;
+            tsStoreLoopPreference(tsVideo.loop);
+            tsRenderLoopButton(tsLoopButton, tsVideo.loop);
+        };
+
+        // Flipping from a clip the user left PAUSED opens the next one paused
+        // at the same moment - on its own last frame if the previous clip sat
+        // on its end. Stepping through generations that way compares the
+        // frames you are looking at instead of restarting every clip. A clip
+        // left playing hands nothing over, and the next one autoplays as before.
+        const tsCarry = this.tsVideoCarry || null;
+        this.tsVideoCarry = null;
+        // Set once the user has done something that makes a pause deliberate:
+        // the clip played, or they stepped or jumped. A clip still loading
+        // reports paused too, and quick flipping must not freeze autoplay.
+        let tsInspected = Boolean(tsCarry);
+        let tsCarryMetadataHandler = null;
+        if (tsCarry) {
+            tsVideo.autoplay = false;
+            tsVideo.removeAttribute?.("autoplay");
+            tsVideo.pause();
+            const tsApplyCarry = () => {
+                try {
+                    tsVideo.currentTime = tsResolveCarriedVideoTime(tsCarry, Number(tsVideo.duration || 0), tsResolveFPS());
+                } catch {
+                    // no-op
+                }
+                // A 0x0 picture is about to be swapped for the converted copy
+                // (tsBindDisplayFallback); the position belongs to THAT one.
+                if (tsCarryMetadataHandler && (tsVideo.videoWidth > 0 || tsVideo.videoHeight > 0)) {
+                    tsVideo.removeEventListener("loadedmetadata", tsCarryMetadataHandler);
+                    tsCarryMetadataHandler = null;
+                }
+            };
+            if (tsVideo.readyState >= 1) {
+                tsApplyCarry();
+            } else {
+                tsCarryMetadataHandler = tsApplyCarry;
+                tsVideo.addEventListener("loadedmetadata", tsCarryMetadataHandler);
+            }
+        }
+        const tsHandlePlaying = () => {
+            tsInspected = true;
+        };
         const tsFormatFrameText = () => {
-            const tsFrameIndex = tsResolveVideoFrameIndex(tsVideo.currentTime, tsResolveFPS());
+            // A finished clip sits exactly on `duration`, one frame past the
+            // last one there is; it reads as the last frame, like End.
+            const tsDuration = Number(tsVideo.duration || 0);
+            const tsTime = tsDuration > 0
+                ? Math.min(Number(tsVideo.currentTime || 0), tsResolveLastFrameTime(tsDuration, tsResolveFPS()))
+                : tsVideo.currentTime;
+            const tsFrameIndex = tsResolveVideoFrameIndex(tsTime, tsResolveFPS());
             return `${this.tsT("label.currentFrame", "Frame")} ${tsFrameIndex}`;
         };
         const tsUpdateFrameLabel = () => {
@@ -2358,6 +2477,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             }
         };
         const tsStepFrame = (tsDirection) => {
+            tsInspected = true;
             tsVideo.pause();
             tsVideo.currentTime = tsResolveVideoFrameTime(
                 tsVideo.currentTime,
@@ -2367,6 +2487,20 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             );
             tsUpdateFrameLabel();
         };
+        // Home / End and the ⇤ ⇥ buttons: first frame, or the middle of the
+        // last one (exactly `duration` is past it).
+        const tsJumpToEdge = (tsEdge) => {
+            const tsDuration = Number(tsVideo.duration || 0);
+            if (!(tsDuration > 0)) {
+                return;
+            }
+            tsInspected = true;
+            tsVideo.pause();
+            tsVideo.currentTime = tsEdge > 0 ? tsResolveLastFrameTime(tsDuration, tsResolveFPS()) : 0;
+            tsUpdateFrameLabel();
+        };
+        const tsHandleFirstFrame = () => tsJumpToEdge(-1);
+        const tsHandleLastFrame = () => tsJumpToEdge(1);
 
         const tsHandleLoadedMetadata = () => tsUpdateFrameLabel();
         const tsHandleTimeUpdate = () => tsUpdateFrameLabel();
@@ -2380,13 +2514,18 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsHandleNextFrame = () => tsStepFrame(1);
 
         this.tsVideoFrameStepper = tsStepFrame;
+        this.tsMediaEdgeJumper = tsJumpToEdge;
         tsPrevFrameButton.addEventListener("click", tsHandlePrevFrame);
         tsNextFrameButton.addEventListener("click", tsHandleNextFrame);
+        tsFirstFrameButton?.addEventListener("click", tsHandleFirstFrame);
+        tsLastFrameButton?.addEventListener("click", tsHandleLastFrame);
+        tsLoopButton?.addEventListener("click", tsHandleLoopClick);
         tsVideo.addEventListener("loadedmetadata", tsHandleLoadedMetadata);
         tsVideo.addEventListener("timeupdate", tsHandleTimeUpdate);
         tsVideo.addEventListener("seeked", tsHandleSeeked);
         tsVideo.addEventListener("pause", tsHandlePause);
         tsVideo.addEventListener("play", tsHandlePlay);
+        tsVideo.addEventListener("playing", tsHandlePlaying);
         tsVideo.addEventListener("ended", tsHandlePause);
         tsUpdateFrameLabel();
         if (!tsVideo.paused) {
@@ -2394,15 +2533,38 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         }
 
         return () => {
+            // What the next clip inherits (see tsCarry above). Read before the
+            // source is released, which resets the element.
+            const tsDuration = Number(tsVideo.duration || 0);
+            if (tsVideo.readyState >= 1 && tsDuration > 0) {
+                this.tsVideoCarry = tsInspected && (tsVideo.paused || tsVideo.ended)
+                    ? {
+                        tsTime: Number(tsVideo.currentTime || 0),
+                        tsAtEnd: tsVideo.ended || tsIsOnLastFrame(tsVideo.currentTime, tsDuration, tsResolveFPS()),
+                    }
+                    : null;
+            } else {
+                // Flipped past before it even loaded: pass the inherited
+                // position on unchanged.
+                this.tsVideoCarry = tsCarry;
+            }
             tsStopTicker();
             this.tsVideoFrameStepper = null;
+            this.tsMediaEdgeJumper = null;
+            if (tsCarryMetadataHandler) {
+                tsVideo.removeEventListener("loadedmetadata", tsCarryMetadataHandler);
+            }
             tsPrevFrameButton.removeEventListener("click", tsHandlePrevFrame);
             tsNextFrameButton.removeEventListener("click", tsHandleNextFrame);
+            tsFirstFrameButton?.removeEventListener("click", tsHandleFirstFrame);
+            tsLastFrameButton?.removeEventListener("click", tsHandleLastFrame);
+            tsLoopButton?.removeEventListener("click", tsHandleLoopClick);
             tsVideo.removeEventListener("loadedmetadata", tsHandleLoadedMetadata);
             tsVideo.removeEventListener("timeupdate", tsHandleTimeUpdate);
             tsVideo.removeEventListener("seeked", tsHandleSeeked);
             tsVideo.removeEventListener("pause", tsHandlePause);
             tsVideo.removeEventListener("play", tsHandlePlay);
+            tsVideo.removeEventListener("playing", tsHandlePlaying);
             tsVideo.removeEventListener("ended", tsHandlePause);
             tsVideo.removeEventListener("volumechange", tsHandleVolumeChange);
             tsReleaseFallback();
@@ -2489,13 +2651,36 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         };
         tsMuteButton?.addEventListener("click", tsHandleMuteClick);
         tsRenderMute();
+        // The group is driven by hand (the elements never loop themselves),
+        // so Loop decides what the end of the master clip does: start the
+        // group over, or park every clip on its own last frame.
+        const tsLoopButton = tsStage.querySelector(".ts-video-loop");
+        const tsFirstFrameButton = tsStage.querySelector(".ts-video-first-frame");
+        const tsLastFrameButton = tsStage.querySelector(".ts-video-last-frame");
+        let tsLoop = tsReadLoopPreference();
+        tsRenderLoopButton(tsLoopButton, tsLoop);
+        const tsHandleLoopClick = () => {
+            tsLoop = !tsLoop;
+            tsStoreLoopPreference(tsLoop);
+            tsRenderLoopButton(tsLoopButton, tsLoop);
+        };
+        tsLoopButton?.addEventListener("click", tsHandleLoopClick);
+        // True while every clip sits on its OWN last frame (End, or the end of
+        // playback). Clips of different lengths then show different
+        // timestamps on purpose, and the usual "snap the followers to the
+        // master" on seek must leave them there.
+        let tsEachAtOwnEnd = false;
 
         const tsResolveFPS = () => {
             const tsFPS = Number(tsAsset?.technical_info?.fps || tsAsset?.fps || 0);
             return Number.isFinite(tsFPS) && tsFPS > 0 ? tsFPS : 30;
         };
         const tsFormatFrameText = (tsCurrentTime = Number(tsPrimaryVideo.currentTime || 0)) => {
-            const tsFrameIndex = tsResolveVideoFrameIndex(tsCurrentTime, tsResolveFPS());
+            const tsDuration = Number(tsPrimaryVideo.duration || 0);
+            const tsTime = tsDuration > 0
+                ? Math.min(tsCurrentTime, tsResolveLastFrameTime(tsDuration, tsResolveFPS()))
+                : tsCurrentTime;
+            const tsFrameIndex = tsResolveVideoFrameIndex(tsTime, tsResolveFPS());
             return `${this.tsT("label.currentFrame", "Frame")} ${tsFrameIndex}`;
         };
         const tsGetDuration = () => {
@@ -2718,10 +2903,17 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsUpdateTransport();
         };
         const tsPlayAll = () => {
-            if (tsPrimaryVideo.ended || tsIsAtEnd(tsPrimaryVideo)) {
-                // Play on a finished group means replay, not a no-op.
+            if (
+                tsEachAtOwnEnd
+                || tsPrimaryVideo.ended
+                || tsIsAtEnd(tsPrimaryVideo)
+                || tsIsOnLastFrame(tsPrimaryVideo.currentTime, tsGetDuration(), tsResolveFPS())
+            ) {
+                // Play on a finished group means replay, not a no-op (nor a
+                // single frame and stop again).
                 tsSetAllCurrentTimes(0);
             }
+            tsEachAtOwnEnd = false;
             tsDesiredPlaying = true;
             tsBuffering = !tsAllVideosReady();
             tsStartTicker();
@@ -2739,6 +2931,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsPlayAll();
         };
         const tsHandleSeekPointerDown = () => {
+            tsEachAtOwnEnd = false;
             tsSeekDragging = true;
             tsResumeAfterSeek = tsDesiredPlaying;
             if (tsResumeAfterSeek) {
@@ -2746,6 +2939,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             }
         };
         const tsHandleSeekInput = () => {
+            tsEachAtOwnEnd = false;
             const tsNextTime = Math.max(0, Number(tsSeekInput.value || 0));
             tsSetAllCurrentTimes(tsNextTime);
             tsUpdateTransport();
@@ -2768,14 +2962,41 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 tsGetDuration(),
             );
             tsPauseAll(false);
+            tsEachAtOwnEnd = false;
             tsSetAllCurrentTimes(tsTargetTime, 1 / tsFPS);
             tsUpdateTransport();
         };
+        // Home / End and the ⇤ ⇥ buttons. End puts EVERY clip on its own last
+        // frame, not on the master's timestamp: comparing how each generation
+        // ends is the point, and a shorter clip has no frame at a longer
+        // clip's last timestamp.
+        const tsJumpToEdge = (tsEdge) => {
+            tsPauseAll(false);
+            const tsFPS = tsResolveFPS();
+            tsSyncing = true;
+            try {
+                tsVideos.forEach((tsVideo) => {
+                    try {
+                        tsVideo.currentTime = tsEdge > 0
+                            ? tsResolveLastFrameTime(Number(tsVideo.duration || 0), tsFPS)
+                            : 0;
+                    } catch {
+                        // no-op
+                    }
+                });
+            } finally {
+                tsSyncing = false;
+            }
+            tsEachAtOwnEnd = tsEdge > 0;
+            tsUpdateTransport();
+        };
+        const tsHandleFirstFrame = () => tsJumpToEdge(-1);
+        const tsHandleLastFrame = () => tsJumpToEdge(1);
         const tsHandlePrimaryLoadedMetadata = () => tsUpdateTransport();
         const tsHandlePrimaryDurationChange = () => tsUpdateTransport();
         const tsHandlePrimaryTimeUpdate = () => tsUpdateTransport();
         const tsHandlePrimarySeeked = () => {
-            if (!tsSeekDragging && !tsDesiredPlaying) {
+            if (!tsSeekDragging && !tsDesiredPlaying && !tsEachAtOwnEnd) {
                 tsApplySync("align");
             }
             tsUpdateTransport();
@@ -2789,7 +3010,13 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsUpdateTransport();
         };
         const tsHandlePrimaryEnded = () => {
-            tsPauseAll(true);
+            if (tsLoop) {
+                tsPauseAll(false);
+                tsSetAllCurrentTimes(0);
+                tsPlayAll();
+                return;
+            }
+            tsJumpToEdge(1);
         };
         const tsHandlePrimaryRateChange = () => {
             tsApplySync("resume");
@@ -2820,6 +3047,9 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsHandleNextFrame = () => tsStepFrame(1);
 
         this.tsVideoFrameStepper = tsStepFrame;
+        this.tsMediaEdgeJumper = tsJumpToEdge;
+        tsFirstFrameButton?.addEventListener("click", tsHandleFirstFrame);
+        tsLastFrameButton?.addEventListener("click", tsHandleLastFrame);
         tsPlayToggleButton.addEventListener("click", tsHandleTogglePlay);
         tsSeekInput.addEventListener("pointerdown", tsHandleSeekPointerDown);
         tsSeekInput.addEventListener("pointerup", tsHandleSeekCommit);
@@ -2849,8 +3079,12 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         return () => {
             tsStopTicker();
             this.tsVideoFrameStepper = null;
+            this.tsMediaEdgeJumper = null;
             document.removeEventListener("visibilitychange", tsHandleVisibilityChange);
             tsMuteButton?.removeEventListener("click", tsHandleMuteClick);
+            tsLoopButton?.removeEventListener("click", tsHandleLoopClick);
+            tsFirstFrameButton?.removeEventListener("click", tsHandleFirstFrame);
+            tsLastFrameButton?.removeEventListener("click", tsHandleLastFrame);
             tsPlayToggleButton.removeEventListener("click", tsHandleTogglePlay);
             tsSeekInput.removeEventListener("pointerdown", tsHandleSeekPointerDown);
             tsSeekInput.removeEventListener("pointerup", tsHandleSeekCommit);
@@ -3960,6 +4194,29 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsAudio.currentTime = 0;
             tsUpdateUI();
         };
+        const tsLoopButton = this.tsRefs.tsStage.querySelector(".ts-audio-loop");
+        tsAudio.loop = tsReadLoopPreference();
+        tsRenderLoopButton(tsLoopButton, tsAudio.loop);
+        const tsHandleLoopClick = () => {
+            tsAudio.loop = !tsAudio.loop;
+            tsStoreLoopPreference(tsAudio.loop);
+            tsRenderLoopButton(tsLoopButton, tsAudio.loop);
+        };
+        // Home / End from anywhere in the lightbox, not only with the
+        // waveform focused (that one handles its own keys).
+        const tsJumpToEdge = (tsEdge) => {
+            const tsDuration = Number.isFinite(tsAudio.duration) && tsAudio.duration > 0
+                ? tsAudio.duration
+                : Number(tsAsset.duration || 0);
+            if (!(tsDuration > 0)) {
+                return;
+            }
+            tsAudio.pause();
+            tsAudio.currentTime = tsEdge > 0 ? tsDuration : 0;
+            tsUpdateUI();
+        };
+        this.tsMediaEdgeJumper = tsJumpToEdge;
+        tsLoopButton?.addEventListener("click", tsHandleLoopClick);
 
         tsWaveform.addEventListener("keydown", tsHandleWaveformKeydown);
         tsWaveform.addEventListener("pointerdown", tsHandlePointerDown);
@@ -3986,6 +4243,8 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         tsUpdateUI();
 
         return () => {
+            this.tsMediaEdgeJumper = null;
+            tsLoopButton?.removeEventListener("click", tsHandleLoopClick);
             tsAudio.removeEventListener("volumechange", tsHandleVolumeChange);
             tsReleaseFallback();
             tsWaveform.removeEventListener("keydown", tsHandleWaveformKeydown);

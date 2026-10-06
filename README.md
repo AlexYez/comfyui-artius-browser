@@ -56,6 +56,7 @@
 | 🔄 **Autoscan / Rebuild Cache** | Refresh on demand, or rebuild from scratch |
 | 🏷️ **Version label + update badge** | Current version next to the title; checks GitHub once a day, surfaces a `New version available` chip when a newer release ships |
 | 🧲 **Multi-select drag** | Drag a whole selection onto the canvas — one native node per asset, auto-arranged in a grid |
+| 📦 **Download selected** | Select any mix of images, videos, audio and 3D, press `Download Selected` — several files arrive as one ZIP, a single file as itself |
 | 🔔 **Action feedback** | Toast notifications when a copy / delete / load / rescan succeeds or fails — no more silent failures |
 | 🌍 **Localized UI** | Follows ComfyUI's own language setting — English, Russian, Chinese and Japanese ship today |
 | ♿ **Accessible grid** | Screen-reader listbox semantics with selection state, plus a keyboard focus ring |
@@ -113,6 +114,7 @@ Then **restart ComfyUI** and **hard refresh** the browser with `Ctrl+F5`.
 | <kbd>Esc</kbd> | Close |
 | <kbd>←</kbd> <kbd>→</kbd> | Previous / next asset *(steps frames in video compare mode)* |
 | <kbd>↑</kbd> <kbd>↓</kbd> | Step one video frame |
+| <kbd>Home</kbd> <kbd>End</kbd> | First / last frame of a video (each clip's own, in compare); Loop is off by default, so clips stop on their last frame |
 | <kbd>Delete</kbd> | Send to system trash |
 
 #### Card buttons
@@ -300,6 +302,7 @@ See [CHANGELOG.md](CHANGELOG.md). Format: [Keep a Changelog](https://keepachange
 | 🔄 **Autoscan / Rebuild Cache** | Обновление по запросу или полная пересборка |
 | 🏷️ **Версия + бейдж обновления** | Текущая версия рядом с заголовком; раз в сутки проверяется GitHub, появляется чип `New version available` при выходе нового релиза |
 | 🧲 **Drag выделения** | Перетащите всё выделение на канвас — по одной нативной ноде на ассет, автоматически разложенные сеткой |
+| 📦 **Скачать выбранные** | Выделите любые картинки, видео, аудио и 3D и нажмите `Download Selected` — несколько файлов приходят одним ZIP-архивом, один файл скачивается как есть |
 | 🔔 **Обратная связь** | Всплывающие уведомления при копировании / удалении / загрузке / сканировании — больше никаких «молчаливых» ошибок |
 | 🌍 **Локализация** | Следует языку, выбранному в ComfyUI — есть английский, русский, китайский и японский |
 | ♿ **Доступность** | Семантика listbox для скринридеров с состоянием выбора и кольцо фокуса для клавиатуры |
@@ -348,6 +351,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | <kbd>Esc</kbd> | Закрыть |
 | <kbd>←</kbd> <kbd>→</kbd> | Предыдущий / следующий ассет *(покадрово в режиме сравнения видео)* |
 | <kbd>↑</kbd> <kbd>↓</kbd> | Шаг на один кадр видео |
+| <kbd>Home</kbd> <kbd>End</kbd> | Первый / последний кадр видео (в сравнении — у каждого клипа свой); повтор по умолчанию выключен, клип останавливается на последнем кадре |
 | <kbd>Delete</kbd> | В системную корзину |
 
 #### Кнопки на карточке
@@ -446,6 +450,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | 🔄 **Autoscan / Rebuild Cache** | Refresco bajo demanda, o reconstrucción desde cero |
 | 🏷️ **Etiqueta de versión + chip de actualización** | Versión actual junto al título; comprueba GitHub una vez al día y muestra `New version available` cuando hay una nueva |
 | 🧲 **Arrastre de selección múltiple** | Arrastra toda la selección al canvas — un nodo nativo por asset, colocados automáticamente en cuadrícula |
+| 📦 **Descargar selección** | Selecciona cualquier mezcla de imágenes, vídeos, audio y 3D y pulsa `Download Selected` — varios archivos llegan en un único ZIP, uno solo se descarga tal cual |
 | 🔔 **Feedback de acciones** | Notificaciones cuando copiar / borrar / cargar / reescanear tiene éxito o falla — se acabaron los fallos silenciosos |
 | 🌍 **Interfaz localizada** | Sigue el idioma configurado en ComfyUI — inglés, ruso, chino y japonés disponibles |
 | ♿ **Cuadrícula accesible** | Semántica de listbox para lectores de pantalla con estado de selección, y anillo de foco de teclado |
@@ -503,6 +508,7 @@ Luego **reinicia ComfyUI** y haz un **hard refresh** del navegador con `Ctrl+F5`
 | <kbd>Esc</kbd> | Cerrar |
 | <kbd>←</kbd> <kbd>→</kbd> | Asset anterior / siguiente *(avanza fotogramas en modo comparación de vídeo)* |
 | <kbd>↑</kbd> <kbd>↓</kbd> | Avanzar un fotograma de vídeo |
+| <kbd>Home</kbd> <kbd>End</kbd> | Primer / último fotograma del vídeo (en comparación, el de cada clip); el bucle está desactivado por defecto |
 | <kbd>Delete</kbd> | Enviar a la papelera |
 
 #### Botones de la tarjeta
@@ -679,6 +685,7 @@ Consulta [CHANGELOG.md](CHANGELOG.md). Formato: [Keep a Changelog](https://keepa
 | 🔄 **自动扫描 / 重建缓存** | 按需刷新或从零重建 |
 | 🏷️ **版本标签 + 更新提示** | 标题旁显示当前版本;每天检查一次 GitHub,新版本发布时显示 `New version available` |
 | 🧲 **多选拖拽** | 将整个选择拖到画布 — 每个资产一个原生节点,自动网格排列 |
+| 📦 **下载所选** | 任意选择图片、视频、音频和 3D,点击 `Download Selected` — 多个文件打包为一个 ZIP,单个文件直接下载 |
 | 🔔 **操作反馈** | 复制 / 删除 / 加载 / 扫描成功或失败时弹出提示 — 不再有静默失败 |
 | 🌍 **界面本地化** | 跟随 ComfyUI 的语言设置 — 目前提供英文、俄文、中文与日文 |
 | ♿ **无障碍网格** | 面向屏幕阅读器的 listbox 语义(含选中状态),以及键盘焦点环 |
@@ -736,6 +743,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | <kbd>Esc</kbd> | 关闭 |
 | <kbd>←</kbd> <kbd>→</kbd> | 上一个 / 下一个资产 *(视频对比模式下为逐帧)* |
 | <kbd>↑</kbd> <kbd>↓</kbd> | 视频逐帧步进 |
+| <kbd>Home</kbd> <kbd>End</kbd> | 视频第一帧 / 最后一帧(对比模式下为各片段自己的);循环默认关闭,播放结束停在最后一帧 |
 | <kbd>Delete</kbd> | 移至系统回收站 |
 
 #### 卡片按钮
@@ -913,6 +921,7 @@ ComfyUI/output/.ts_artius_browser/
 | 🔄 **自動スキャン / キャッシュ再構築** | オンデマンドの更新、またはゼロからの再構築 |
 | 🏷️ **バージョンラベル + 更新通知** | タイトル横に現在のバージョン;1 日 1 回 GitHub をチェックし、新しいリリースがあれば `New version available` チップを表示 |
 | 🧲 **複数選択のドラッグ** | 選択全体をキャンバスにドラッグ — アセットごとにネイティブノードを 1 つ、自動でグリッド配置 |
+| 📦 **選択項目をダウンロード** | 画像・動画・音声・3D を自由に選んで `Download Selected` を押す — 複数なら 1 つの ZIP、1 つならそのままダウンロード |
 | 🔔 **操作フィードバック** | コピー / 削除 / 読み込み / 再スキャンの成功・失敗をトースト表示 — 無言の失敗をなくします |
 | 🌍 **UI ローカライズ** | ComfyUI の言語設定に追従 — 現在は英語・ロシア語・中国語・日本語を同梱 |
 | ♿ **アクセシブルなグリッド** | 選択状態を持つスクリーンリーダー向け listbox セマンティクスとキーボードフォーカスリング |
@@ -970,6 +979,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | <kbd>Esc</kbd> | 閉じる |
 | <kbd>←</kbd> <kbd>→</kbd> | 前 / 次のアセット *(動画比較モードではフレーム送り)* |
 | <kbd>↑</kbd> <kbd>↓</kbd> | 動画を 1 フレーム送る |
+| <kbd>Home</kbd> <kbd>End</kbd> | 動画の最初 / 最後のフレーム(比較では各クリップ自身のもの)。ループは既定でオフ |
 | <kbd>Delete</kbd> | システムのゴミ箱へ |
 
 #### カードのボタン
@@ -1147,6 +1157,7 @@ ComfyUI/output/.ts_artius_browser/
 | 🔄 **자동 스캔 / 캐시 재구성** | 필요시 새로고침, 또는 처음부터 재구성 |
 | 🏷️ **버전 라벨 + 업데이트 칩** | 제목 옆에 현재 버전; GitHub 을 하루 1 회 확인하고 새 릴리스가 있으면 `New version available` 칩 표시 |
 | 🧲 **다중 선택 드래그** | 선택 전체를 캔버스로 드래그 — 에셋마다 네이티브 노드 1 개, 자동 격자 배치 |
+| 📦 **선택 항목 다운로드** | 이미지·비디오·오디오·3D를 자유롭게 선택하고 `Download Selected` 클릭 — 여러 파일은 ZIP 하나로, 파일 하나는 그대로 다운로드 |
 | 🔔 **동작 피드백** | 복사 / 삭제 / 불러오기 / 재스캔의 성공·실패를 토스트로 알림 — 조용한 실패 없음 |
 | 🌍 **UI 현지화** | ComfyUI 의 언어 설정을 따름 — 현재 영어, 러시아어, 중국어, 일본어 제공 |
 | ♿ **접근성 그리드** | 선택 상태를 포함한 스크린 리더용 listbox 시맨틱과 키보드 포커스 링 |
@@ -1204,6 +1215,7 @@ pip install -r ComfyUI/custom_nodes/comfyui-artius-browser/requirements.txt
 | <kbd>Esc</kbd> | 닫기 |
 | <kbd>←</kbd> <kbd>→</kbd> | 이전 / 다음 에셋 *(영상 비교 모드에서는 프레임 이동)* |
 | <kbd>↑</kbd> <kbd>↓</kbd> | 영상 한 프레임 이동 |
+| <kbd>Home</kbd> <kbd>End</kbd> | 영상의 첫 / 마지막 프레임 (비교 모드에서는 각 클립 자신의 것); 반복은 기본적으로 꺼져 있음 |
 | <kbd>Delete</kbd> | 시스템 휴지통으로 |
 
 #### 카드 버튼
@@ -1381,6 +1393,7 @@ ComfyUI/output/.ts_artius_browser/
 | 🔄 **Autoscan / Cache neu aufbauen** | Aktualisierung auf Abruf oder kompletter Neuaufbau |
 | 🏷️ **Versionslabel + Update-Chip** | Aktuelle Version neben dem Titel; prüft GitHub einmal täglich und blendet `New version available` ein, wenn eine neuere Version erscheint |
 | 🧲 **Mehrfachauswahl ziehen** | Ganze Auswahl auf die Canvas ziehen — ein nativer Node pro Asset, automatisch im Raster angeordnet |
+| 📦 **Auswahl herunterladen** | Beliebige Bilder, Videos, Audio- und 3D-Dateien auswählen, `Download Selected` drücken — mehrere Dateien kommen als ein ZIP, eine einzelne Datei unverändert |
 | 🔔 **Aktions-Feedback** | Toast-Meldungen, wenn Kopieren / Löschen / Laden / Rescan gelingt oder fehlschlägt — keine stillen Fehler mehr |
 | 🌍 **Lokalisierte Oberfläche** | Folgt der Spracheinstellung von ComfyUI — Englisch, Russisch, Chinesisch und Japanisch sind enthalten |
 | ♿ **Barrierefreies Raster** | Listbox-Semantik für Screenreader inkl. Auswahlstatus, plus Tastatur-Fokusring |
@@ -1438,6 +1451,7 @@ Danach **ComfyUI neu starten** und im Browser mit `Ctrl+F5` einen **Hard Refresh
 | <kbd>Esc</kbd> | Schließen |
 | <kbd>←</kbd> <kbd>→</kbd> | Vorheriges / nächstes Asset *(im Video-Vergleich Einzelbildschritte)* |
 | <kbd>↑</kbd> <kbd>↓</kbd> | Ein Videobild weiter |
+| <kbd>Home</kbd> <kbd>End</kbd> | Erstes / letztes Bild eines Videos (im Vergleich das jedes Clips); Wiederholen ist standardmäßig aus |
 | <kbd>Delete</kbd> | In den Systempapierkorb |
 
 #### Karten-Buttons
@@ -1615,6 +1629,7 @@ Siehe [CHANGELOG.md](CHANGELOG.md). Format: [Keep a Changelog](https://keepachan
 | 🔄 **Autoscan / Ricostruzione cache** | Aggiornamento on-demand, o ricostruzione da zero |
 | 🏷️ **Etichetta versione + chip aggiornamento** | Versione corrente accanto al titolo; controlla GitHub una volta al giorno e mostra `New version available` quando esce una nuova release |
 | 🧲 **Trascinamento multi-selezione** | Trascina l'intera selezione sul canvas — un nodo nativo per asset, disposti automaticamente a griglia |
+| 📦 **Scarica selezionati** | Seleziona qualsiasi mix di immagini, video, audio e 3D e premi `Download Selected` — più file arrivano in un unico ZIP, un file singolo così com'è |
 | 🔔 **Feedback delle azioni** | Notifiche quando copia / elimina / carica / riscansione riesce o fallisce — niente più errori silenziosi |
 | 🌍 **Interfaccia localizzata** | Segue la lingua impostata in ComfyUI — inglese, russo, cinese e giapponese già inclusi |
 | ♿ **Griglia accessibile** | Semantica listbox per screen reader con stato di selezione, più anello di focus da tastiera |
@@ -1672,6 +1687,7 @@ Poi **riavvia ComfyUI** e fai un **hard refresh** del browser con `Ctrl+F5`.
 | <kbd>Esc</kbd> | Chiudi |
 | <kbd>←</kbd> <kbd>→</kbd> | Asset precedente / successivo *(avanza per fotogrammi nel confronto video)* |
 | <kbd>↑</kbd> <kbd>↓</kbd> | Avanza di un fotogramma video |
+| <kbd>Home</kbd> <kbd>End</kbd> | Primo / ultimo fotogramma del video (nel confronto, quello di ogni clip); la ripetizione è disattivata per impostazione predefinita |
 | <kbd>Delete</kbd> | Invia al cestino di sistema |
 
 #### Pulsanti della card
@@ -1850,6 +1866,7 @@ Vedi [CHANGELOG.md](CHANGELOG.md). Formato: [Keep a Changelog](https://keepachan
 | 🔄 **Autoscan / Reconstruction du cache** | Rafraîchissement à la demande, ou reconstruction depuis zéro |
 | 🏷️ **Étiquette de version + chip de mise à jour** | Version actuelle à côté du titre ; vérifie GitHub une fois par jour et affiche `New version available` quand une nouvelle release sort |
 | 🧲 **Glisser une sélection multiple** | Glissez toute la sélection sur le canvas — un nœud natif par asset, disposés automatiquement en grille |
+| 📦 **Télécharger la sélection** | Sélectionnez n'importe quel mélange d'images, vidéos, audio et 3D, puis `Download Selected` — plusieurs fichiers arrivent dans un seul ZIP, un fichier seul tel quel |
 | 🔔 **Retour d'action** | Notifications quand copier / supprimer / charger / rescanner réussit ou échoue — fini les échecs silencieux |
 | 🌍 **Interface localisée** | Suit la langue configurée dans ComfyUI — anglais, russe, chinois et japonais déjà fournis |
 | ♿ **Grille accessible** | Sémantique listbox pour lecteurs d'écran avec état de sélection, plus un anneau de focus clavier |
@@ -1907,6 +1924,7 @@ Puis **redémarrez ComfyUI** et faites un **rafraîchissement forcé** du naviga
 | <kbd>Esc</kbd> | Fermer |
 | <kbd>←</kbd> <kbd>→</kbd> | Asset précédent / suivant *(image par image en mode comparaison vidéo)* |
 | <kbd>↑</kbd> <kbd>↓</kbd> | Avancer d'une image vidéo |
+| <kbd>Home</kbd> <kbd>End</kbd> | Première / dernière image de la vidéo (en comparaison, celle de chaque clip) ; la lecture en boucle est désactivée par défaut |
 | <kbd>Delete</kbd> | Envoyer à la corbeille système |
 
 #### Boutons de la carte
@@ -2085,6 +2103,7 @@ Voir [CHANGELOG.md](CHANGELOG.md). Format : [Keep a Changelog](https://keepachan
 | 🔄 **Autoscan / Reconstruir cache** | Refresh on-demand ou reconstrução do zero |
 | 🏷️ **Etiqueta de versão + chip de actualização** | Versão actual ao lado do título; verifica o GitHub uma vez por dia e mostra `New version available` quando sai uma versão mais recente |
 | 🧲 **Arrastar selecção múltipla** | Arraste toda a selecção para o canvas — um nó nativo por asset, dispostos automaticamente em grelha |
+| 📦 **Transferir selecção** | Seleccione qualquer mistura de imagens, vídeos, áudio e 3D e prima `Download Selected` — vários ficheiros chegam num único ZIP, um ficheiro sozinho tal como está |
 | 🔔 **Feedback das acções** | Notificações quando copiar / eliminar / carregar / reanalisar tem sucesso ou falha — sem falhas silenciosas |
 | 🌍 **Interface localizada** | Segue o idioma configurado no ComfyUI — inglês, russo, chinês e japonês já incluídos |
 | ♿ **Grelha acessível** | Semântica listbox para leitores de ecrã com estado de selecção, e anel de foco de teclado |
@@ -2142,6 +2161,7 @@ Depois **reinicia o ComfyUI** e faz um **hard refresh** no browser com `Ctrl+F5`
 | <kbd>Esc</kbd> | Fechar |
 | <kbd>←</kbd> <kbd>→</kbd> | Asset anterior / seguinte *(avança fotogramas no modo de comparação de vídeo)* |
 | <kbd>↑</kbd> <kbd>↓</kbd> | Avançar um fotograma de vídeo |
+| <kbd>Home</kbd> <kbd>End</kbd> | Primeiro / último fotograma do vídeo (na comparação, o de cada clip); a repetição está desligada por omissão |
 | <kbd>Delete</kbd> | Enviar para o lixo do sistema |
 
 #### Botões do card

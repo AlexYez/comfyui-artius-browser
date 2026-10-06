@@ -183,5 +183,20 @@
     "toast.scanIndexed": "{count} 件を索引",
     "toast.scanRemoved": "{count} 件を削除",
     "sidebar.label": "ブラウザ",
-    "sidebar.tooltip": "Timesaver Artius Browser — アセットとワークフロー"
+    "sidebar.tooltip": "Timesaver Artius Browser — アセットとワークフロー",
+    "button.downloadSelected": "選択項目をダウンロード",
+    "tooltip.downloadSelected": "選択したファイルをダウンロードします。複数のファイルは 1 つの ZIP アーカイブにまとめられます。",
+    "status.archivePacking": "パッケージ中...",
+    "menu.downloadZip": "選択項目を ZIP でダウンロード（{count}）",
+    "toast.archivePreparing": "{count} 個のファイルを ZIP にまとめています...",
+    "toast.archiveSkipped": "{count} 個のファイルはアーカイブに追加されませんでした",
+    "toast.archiveSkippedHint": "移動・削除された、他のプログラムで開かれている、またはフォルダーが設定されていない可能性があります。",
+    "toast.archiveNoSpace": "アーカイブを作成するためのディスク容量が不足しています",
+    "toast.archiveEmpty": "選択したファイルが見つかりません",
+    "toast.archiveFailed": "ZIP アーカイブを作成できませんでした",
+    "button.loop": "ループ",
+    "tooltip.loop": "最後まで再生したら最初から再生し直す",
+    "button.firstFrame": "最初のフレーム（Home）",
+    "button.lastFrame": "最後のフレーム（End）",
+    "shortcuts.firstLastFrame": "最初 / 最後のフレーム"
 }

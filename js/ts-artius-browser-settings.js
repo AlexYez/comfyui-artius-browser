@@ -83,6 +83,11 @@ export const tsPanelSettings = Object.freeze({
         ttlMs: 30000,
         capacity: 10,
     },
+    // "Download selected": the "packing..." toast waits this long, so a
+    // selection that is packed at once does not flash a message.
+    archive: {
+        preparingToastDelayMs: 700,
+    },
     threeDThumbnails: {
         concurrency: 1,
         visibleLimit: 4,

@@ -183,5 +183,20 @@
     "toast.scanIndexed": "已索引 {count}",
     "toast.scanRemoved": "已移除 {count}",
     "sidebar.label": "浏览器",
-    "sidebar.tooltip": "Timesaver Artius Browser — 素材与工作流"
+    "sidebar.tooltip": "Timesaver Artius Browser — 素材与工作流",
+    "button.downloadSelected": "下载所选",
+    "tooltip.downloadSelected": "下载所选文件。多个文件会打包成一个 ZIP 压缩包。",
+    "status.archivePacking": "正在打包...",
+    "menu.downloadZip": "将所选下载为 ZIP（{count}）",
+    "toast.archivePreparing": "正在将 {count} 个文件打包为 ZIP...",
+    "toast.archiveSkipped": "有 {count} 个文件未加入压缩包",
+    "toast.archiveSkippedHint": "这些文件已被移动或删除、正被其他程序占用，或其所在文件夹已不再配置。",
+    "toast.archiveNoSpace": "磁盘空间不足，无法创建压缩包",
+    "toast.archiveEmpty": "找不到任何所选文件",
+    "toast.archiveFailed": "无法创建 ZIP 压缩包",
+    "button.loop": "循环",
+    "tooltip.loop": "播放到结尾时从头重新开始",
+    "button.firstFrame": "第一帧（Home）",
+    "button.lastFrame": "最后一帧（End）",
+    "shortcuts.firstLastFrame": "第一帧 / 最后一帧"
 }

@@ -16,6 +16,24 @@ function tsBuildMediaStatusMarkup(tsAsset, tsDeps) {
     return `<div class="ts-media-status" role="status">${tsDeps.escapeHTML(tsDeps.t("status.preparingPreview", "Preparing a viewable copy..."))}</div>`;
 }
 
+// Jump-to-first/last-frame buttons, shared by the single and compare video
+// stages. The arrows are plain text glyphs, not emoji: Windows draws
+// U+23EE/U+23ED as coloured pictures.
+function tsBuildEdgeButtonMarkup(tsEdge, tsDeps) {
+    const tsFirst = tsEdge === "first";
+    const tsLabel = tsFirst
+        ? tsDeps.t("button.firstFrame", "First frame (Home)")
+        : tsDeps.t("button.lastFrame", "Last frame (End)");
+    return `<button class="ts-video-step ts-video-edge ts-video-${tsFirst ? "first" : "last"}-frame" type="button" title="${tsDeps.escapeAttribute(tsLabel)}" aria-label="${tsDeps.escapeAttribute(tsLabel)}">${tsFirst ? "⇤" : "⇥"}</button>`;
+}
+
+// One "Loop" toggle for every player; its state is a single remembered
+// preference, so turning it off once keeps every clip parked on its last
+// frame from then on.
+function tsBuildLoopButtonMarkup(tsClassName, tsDeps) {
+    return `<button class="${tsClassName} ts-media-loop" type="button" aria-pressed="false" title="${tsDeps.escapeAttribute(tsDeps.t("tooltip.loop", "Start again from the beginning when the end is reached"))}">${tsDeps.escapeHTML(tsDeps.t("button.loop", "Loop"))}</button>`;
+}
+
 export function tsBuildStageMarkup(tsAsset, tsDeps) {
     // Asset/preview URLs are backend-generated and safe today, but they are
     // interpolated into HTML attributes just like alt/aria-label — escape them
@@ -98,12 +116,15 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                             <input class="ts-video-seek" type="range" min="0" max="0" step="0.001" value="0" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.playbackPosition", "Playback position"))}">
                             <div class="ts-video-time">0:00 / 0:00</div>
                             <button class="ts-video-mute" type="button" aria-pressed="false">${tsDeps.t("button.mute", "Mute")}</button>
+                            ${tsBuildLoopButtonMarkup("ts-video-loop", tsDeps)}
                         </div>
                         <div class="ts-video-compare-status" data-active="false" role="status"></div>
                         <div class="ts-video-stepper">
+                            ${tsBuildEdgeButtonMarkup("first", tsDeps)}
                             <button class="ts-video-step ts-video-prev-frame" type="button">${tsDeps.t("button.prevFrame", "Previous Frame")}</button>
                             <div class="ts-video-frame">${tsDeps.t("label.currentFrame", "Frame")} 0</div>
                             <button class="ts-video-step ts-video-next-frame" type="button">${tsDeps.t("button.nextFrame", "Next Frame")}</button>
+                            ${tsBuildEdgeButtonMarkup("last", tsDeps)}
                         </div>
                     </div>
                 </div>
@@ -111,17 +132,21 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
         }
         // The poster fills the frame while the file loads (it used to be a
         // black box that jumped to the video's size); the size attributes
-        // reserve the right shape up front. loop: most generated clips are a
-        // few seconds long and are watched on repeat.
+        // reserve the right shape up front. No loop attribute: whether the
+        // clip repeats is the remembered Loop preference, applied by the stage
+        // setup - a clip that always restarted hid its own last frame.
         const tsPosterAttribute = tsAsset.preview_url && !tsAsset.preview_is_placeholder ? ` poster="${tsPreviewURL}"` : "";
         return `
             <div class="ts-video-shell">
-                <video${tsSizeAttributes}${tsPosterAttribute} src="${tsFileURL}" controls autoplay loop playsinline preload="auto"></video>
+                <video${tsSizeAttributes}${tsPosterAttribute} src="${tsFileURL}" controls autoplay playsinline preload="auto"></video>
                 ${tsBuildMediaStatusMarkup(tsAsset, tsDeps)}
                 <div class="ts-video-controls">
+                    ${tsBuildEdgeButtonMarkup("first", tsDeps)}
                     <button class="ts-video-step ts-video-prev-frame" type="button">${tsDeps.t("button.prevFrame", "Previous Frame")}</button>
                     <div class="ts-video-frame">${tsDeps.t("label.currentFrame", "Frame")} 0</div>
                     <button class="ts-video-step ts-video-next-frame" type="button">${tsDeps.t("button.nextFrame", "Next Frame")}</button>
+                    ${tsBuildEdgeButtonMarkup("last", tsDeps)}
+                    ${tsBuildLoopButtonMarkup("ts-video-loop", tsDeps)}
                 </div>
             </div>
         `;
@@ -137,6 +162,7 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                 <div class="ts-audio-controls">
                     <button class="ts-audio-play" type="button">${tsDeps.t("button.play", "Play")}</button>
                     <button class="ts-audio-stop" type="button">${tsDeps.t("button.stop", "Stop")}</button>
+                    ${tsBuildLoopButtonMarkup("ts-audio-loop", tsDeps)}
                     <span class="ts-audio-time">0:00 / 0:00</span>
                 </div>
                 <audio class="ts-audio-element" src="${tsFileURL}" preload="metadata"></audio>

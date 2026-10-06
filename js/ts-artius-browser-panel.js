@@ -903,6 +903,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         </button>
                         <button class="ts-rescan" type="button"></button>
                         <button class="ts-compare-selected" type="button"></button>
+                        <button class="ts-download-selected" type="button"></button>
                         <button class="ts-delete-selected" type="button"></button>
                         <button class="ts-rebuild-cache" type="button"></button>
                     </div>
@@ -1002,6 +1003,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsFilterLabelHeight: this.shadowRoot.querySelector(".ts-filter-label-height"),
             tsRebuildCache: this.shadowRoot.querySelector(".ts-rebuild-cache"),
             tsCompareSelected: this.shadowRoot.querySelector(".ts-compare-selected"),
+            tsDownloadSelected: this.shadowRoot.querySelector(".ts-download-selected"),
             tsDeleteSelected: this.shadowRoot.querySelector(".ts-delete-selected"),
             tsProgress: this.shadowRoot.querySelector(".ts-progress"),
             tsProgressFill: this.shadowRoot.querySelector(".ts-progress-fill"),
@@ -1171,6 +1173,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRescan.addEventListener("click", () => this.tsRequestRescan());
         this.tsRefs.tsRebuildCache.addEventListener("click", () => this.tsRequestRebuildCache());
         this.tsRefs.tsCompareSelected.addEventListener("click", () => this.tsCompareSelected());
+        this.tsRefs.tsDownloadSelected.addEventListener("click", () => this.tsDownloadSelected());
         this.tsRefs.tsDeleteSelected.addEventListener("click", () => this.tsDeleteSelected());
         this.tsBindToolbarResizer();
         this.tsRefs.tsGalleryScroll.addEventListener("scroll", () => this.tsHandleGalleryScroll(), { passive: true });
@@ -1442,6 +1445,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRebuildCache.title = this.tsT("tooltip.rebuildCache", "Delete the current browser cache and rebuild it from scratch.");
         this.tsRefs.tsDeleteSelected.textContent = this.tsT("button.deleteSelected", "Delete Selected");
         this.tsRefs.tsDeleteSelected.title = this.tsT("tooltip.deleteSelected", "Delete selected assets from allowed roots.");
+        this.tsRefs.tsDownloadSelected.title = this.tsT("tooltip.downloadSelected", "Download the selected files. Several files are packed into one ZIP archive.");
         this.tsRenderSelectionButtons();
         this.tsRefs.tsToolbarResizer.title = this.tsT("tooltip.toolbarResize", "Drag to resize the toolbar.");
         this.tsRefs.tsGalleryContent.setAttribute("aria-label", this.tsT("aria.gallery", "Asset grid"));
@@ -1515,6 +1519,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRescan.hidden = tsWorkflowSection;
         this.tsRefs.tsRebuildCache.hidden = tsWorkflowSection;
         this.tsRefs.tsCompareSelected.hidden = tsWorkflowSection;
+        this.tsRefs.tsDownloadSelected.hidden = tsWorkflowSection;
         this.tsRefs.tsDeleteSelected.hidden = tsWorkflowSection;
         this.tsRefs.tsSearchScope.hidden = tsWorkflowSection;
         this.tsRefs.tsSearchScope.style.display = tsWorkflowHiddenDisplay;
@@ -1528,6 +1533,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsRescan.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsRebuildCache.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsCompareSelected.style.display = tsWorkflowHiddenDisplay;
+        this.tsRefs.tsDownloadSelected.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsDeleteSelected.style.display = tsWorkflowHiddenDisplay;
         // Assets <-> Workflows toggles a large block of controls (root, type
         // chips, autoscan, rescan, rebuild, delete), which changes the
@@ -3177,7 +3183,83 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (this.tsRefs.tsDeleteSelected.textContent !== tsDeleteText) {
             this.tsRefs.tsDeleteSelected.textContent = tsDeleteText;
         }
+        this.tsRenderDownloadButton(tsSelectedItems, tsWorkflowSection);
         this.tsRenderCompareButton(tsSelectedItems, tsWorkflowSection);
+    }
+
+    tsRenderDownloadButton(tsSelectedItems, tsWorkflowSection) {
+        const tsButton = this.tsRefs.tsDownloadSelected;
+        if (!tsButton) {
+            return;
+        }
+        const tsCount = tsWorkflowSection ? 0 : tsSelectedItems.length;
+        const tsLabel = this.tsT("button.downloadSelected", "Download Selected");
+        let tsText = tsCount > 1 ? `${tsLabel} (${tsCount})` : tsLabel;
+        if (this.tsArchiveBusy) {
+            tsText = this.tsT("status.archivePacking", "Packing...");
+        }
+        tsButton.disabled = tsCount === 0 || Boolean(this.tsArchiveBusy);
+        if (tsButton.textContent !== tsText) {
+            tsButton.textContent = tsText;
+        }
+    }
+
+    tsDownloadSelected() {
+        const tsSelectedItems = this.tsGetSelectedItems();
+        if (tsSelectedItems.length === 1) {
+            // One file needs no archive: the original downloads as it is.
+            tsOpenDownload(tsSelectedItems[0]);
+            return;
+        }
+        void this.tsDownloadAssetsAsArchive(tsSelectedItems);
+    }
+
+    async tsDownloadAssetsAsArchive(tsAssets) {
+        const tsIds = (Array.isArray(tsAssets) ? tsAssets : [])
+            .map((tsAsset) => Number(tsAsset?.id))
+            .filter((tsId) => Number.isInteger(tsId) && tsId > 0);
+        if (tsIds.length === 0 || this.tsArchiveBusy) {
+            return;
+        }
+        this.tsArchiveBusy = true;
+        this.tsRenderSelectionButtons();
+        // A handful of images is packed before anyone could read a toast; it
+        // only appears when the packing is long enough to need explaining.
+        const tsPreparingTimer = window.setTimeout(() => {
+            tsShowToast(
+                "info",
+                this.tsT("toast.archivePreparing", "Packing {count} files into a ZIP...").replace("{count}", String(tsIds.length)),
+            );
+        }, tsPanelSettings.archive.preparingToastDelayMs);
+        try {
+            const tsResult = await tsPostJSON(`${tsRouteBase}/archive`, { ids: tsIds });
+            // A plain link to the finished file, so the browser's own download
+            // manager takes it: progress, pause, no copy of the archive in
+            // page memory.
+            tsOpenDownload({ file_url: tsResult?.url, filename: tsResult?.filename || "artius-browser.zip" });
+            const tsSkipped = Number(tsResult?.skipped) || 0;
+            if (tsSkipped > 0) {
+                tsShowToast(
+                    "warn",
+                    this.tsT("toast.archiveSkipped", "{count} files were not added to the archive").replace("{count}", String(tsSkipped)),
+                    this.tsT("toast.archiveSkippedHint", "They were moved or deleted, are open in another program, or their folder is no longer configured."),
+                );
+            }
+        } catch (tsError) {
+            tsConsoleWarn("Timesaver Artius Browser failed to build the ZIP archive", tsError);
+            const tsStatus = String(tsError?.message || "").split(" ", 1)[0];
+            if (tsStatus === "507") {
+                tsShowToast("error", this.tsT("toast.archiveNoSpace", "Not enough disk space for the archive"));
+            } else if (tsStatus === "404") {
+                tsShowToast("error", this.tsT("toast.archiveEmpty", "None of the selected files could be found"));
+            } else {
+                tsShowToast("error", this.tsT("toast.archiveFailed", "Could not create the ZIP archive"), String(tsError?.message || tsError || ""));
+            }
+        } finally {
+            window.clearTimeout(tsPreparingTimer);
+            this.tsArchiveBusy = false;
+            this.tsRenderSelectionButtons();
+        }
     }
 
     tsRenderCompareButton(tsSelectedItems, tsWorkflowSection) {
@@ -3490,6 +3572,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             });
         }
         tsItems.push({ tsAction: "download", tsLabel: this.tsT("menu.download", "Download") });
+        // Right-clicking inside a multi-selection keeps it, so the menu can
+        // offer the whole selection as one archive.
+        const tsSelectionCount = this.tsState.tsSelection.has(tsAsset.id) ? this.tsGetSelectedItems().length : 0;
+        if (tsSelectionCount > 1) {
+            tsItems.push({
+                tsAction: "download-zip",
+                tsLabel: this.tsT("menu.downloadZip", "Download selected as ZIP ({count})").replace("{count}", String(tsSelectionCount)),
+                tsDisabled: Boolean(this.tsArchiveBusy),
+            });
+        }
         if (tsAsset.type !== "3d") {
             tsItems.push({ tsAction: "open-tab", tsLabel: this.tsT("menu.openInNewTab", "Open in new tab") });
         }
@@ -3693,6 +3785,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             void this.tsOpenWorkflowById(tsAsset.id);
         } else if (tsAction === "download") {
             tsOpenDownload(tsAsset);
+        } else if (tsAction === "download-zip") {
+            void this.tsDownloadAssetsAsArchive(this.tsGetSelectedItems());
         } else if (tsAction === "open-tab") {
             tsOpenAssetInNewTab(tsAsset);
         } else if (tsAction === "reveal") {
@@ -3730,6 +3824,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     ["Esc", this.tsT("shortcuts.closeOrReset", "Back to the whole picture, then close")],
                     ["← →", this.tsT("shortcuts.nav", "Previous / next asset")],
                     ["↑ ↓", this.tsT("shortcuts.frame", "Step one video frame")],
+                    ["Home / End", this.tsT("shortcuts.firstLastFrame", "First / last frame")],
                     ["Space", this.tsT("shortcuts.playPause", "Play / pause")],
                     ["+ − / 1 / 0", this.tsT("shortcuts.zoomSingle", "Zoom / actual pixels / fit")],
                     [this.tsT("shortcuts.clickKey", "Click"), this.tsT("shortcuts.clickZoom", "Actual pixels at that point, click again to fit")],

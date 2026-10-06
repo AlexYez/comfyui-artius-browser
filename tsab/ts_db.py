@@ -703,6 +703,20 @@ class TSDatabase:
             (ts_asset_id,),
         ).fetchone()
 
+    def TSGetAssetFileRows(self, ts_asset_ids: list[int]) -> dict[int, sqlite3.Row]:
+        # "Download selected" needs where each file is and what it is called;
+        # the full row would drag every selected asset's workflow JSON along.
+        ts_rows_by_id: dict[int, sqlite3.Row] = {}
+        ts_connection = self.TSGetConnection()
+        for ts_id_batch in self._TSChunkedValues(list(ts_asset_ids), 500):
+            ts_placeholders = ",".join("?" for _ in ts_id_batch)
+            for ts_row in ts_connection.execute(
+                f"SELECT id, path, filename, root_id FROM assets_view WHERE id IN ({ts_placeholders})",
+                ts_id_batch,
+            ).fetchall():
+                ts_rows_by_id[int(ts_row["id"])] = ts_row
+        return ts_rows_by_id
+
     def TSGetAssetByPath(self, ts_path: str) -> sqlite3.Row | None:
         return self.TSGetConnection().execute(
             "SELECT * FROM assets_view WHERE path = ?",

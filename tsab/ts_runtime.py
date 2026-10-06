@@ -8,6 +8,7 @@ from typing import Any
 from aiohttp import web as TSWeb
 
 from .ts_3d_thumbnail import TSSave3DThumbnail
+from .ts_archive import TSArchiveEntry, TSArchiveNoSpaceError, TSArchiveService
 from .ts_asset_catalog import TSAssetCatalogService
 from .ts_asset_processing import TSAssetProcessingService
 from .ts_browser_settings import TSBrowserSettingsService
@@ -58,6 +59,8 @@ class TSAssetBrowserRuntime:
         self.ts_preview_cache = TSPreviewCache(self.ts_storage_paths, self.ts_config_store)
         self.ts_handler_registry = TSHandlerRegistry(self.ts_preview_cache, self.ts_tools)
         self.ts_display_proxy = TSDisplayProxyService(self.ts_storage_paths.ts_cache_directory, self.ts_tools)
+        # Beside cache/, not inside it: Rebuild Cache deletes cache/ wholesale.
+        self.ts_archive_service = TSArchiveService(self.ts_storage_paths.ts_asset_browser_directory / "archives")
         self.ts_delete_service = TSDeleteService(
             ts_database=self.ts_database,
             ts_preview_cache=self.ts_preview_cache,
@@ -521,6 +524,50 @@ class TSAssetBrowserRuntime:
         if not ts_workflow_path.is_file():
             raise TSWeb.HTTPNotFound()
         return {"revealed": TSRevealInFileManager(ts_workflow_path)}
+
+    def TSBuildAssetArchive(self, ts_asset_ids: list[int]) -> dict[str, Any]:
+        """Pack the selected assets into one ZIP and say where to fetch it.
+
+        Every file passes the same root re-check as /file: a ZIP must not
+        become a way around it. Assets that are gone or no longer under a
+        configured root are left out and counted in ``skipped``.
+        """
+        ts_unique_ids = list(dict.fromkeys(ts_asset_ids))
+        ts_rows = self.ts_database.TSGetAssetFileRows(ts_unique_ids)
+        ts_files: list[tuple[Path, str]] = []
+        ts_skipped = 0
+        for ts_asset_id in ts_unique_ids:
+            ts_row = ts_rows.get(ts_asset_id)
+            if ts_row is None:
+                ts_skipped += 1
+                continue
+            try:
+                ts_file_path = self._TSAuthorizeAssetPath(ts_row)
+            except TSWeb.HTTPNotFound:
+                ts_skipped += 1
+                continue
+            ts_files.append((ts_file_path, str(ts_row["filename"] or ts_file_path.name)))
+        if not ts_files:
+            raise TSWeb.HTTPNotFound(reason="No files to archive")
+        try:
+            ts_archive = self.ts_archive_service.TSBuild(ts_files)
+        except TSArchiveNoSpaceError:
+            raise TSWeb.HTTPInsufficientStorage(reason="Not enough disk space for the archive") from None
+        if ts_archive is None:
+            raise TSWeb.HTTPNotFound(reason="No files to archive")
+        return {
+            "url": f"/asset_browser/archive/{ts_archive['token']}",
+            "filename": ts_archive["filename"],
+            "count": ts_archive["count"],
+            "skipped": ts_skipped + ts_archive["skipped"],
+            "size_bytes": ts_archive["size_bytes"],
+        }
+
+    def TSGetAssetArchive(self, ts_token: str) -> TSArchiveEntry | None:
+        return self.ts_archive_service.TSGet(ts_token)
+
+    def TSReleaseAssetArchive(self, ts_token: str) -> None:
+        self.ts_archive_service.TSRelease(ts_token)
 
     def TSDeleteAssets(self, ts_asset_ids: list[int]) -> dict[str, Any]:
         return self.ts_delete_service.TSDeleteAssets(ts_asset_ids)
