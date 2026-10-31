@@ -1391,6 +1391,10 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         const tsIndex = this.tsItemIndexById.get(tsAssetPatch.id);
         if (tsIndex === undefined || tsIndex < 0) {
+            // Targeted generation indexing emits upserts, not scan-complete.
+            // Fetch through the active query so new cards honor its filters,
+            // sort order and pagination instead of being appended blindly.
+            this.tsDebouncedRealtimeRefresh();
             return;
         }
         this.tsState.tsItems[tsIndex] = {

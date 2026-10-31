@@ -29,6 +29,7 @@ function tsReadClaim(tsStorage, tsKey) {
 
 export function tsClaimExecutionRescan(tsOptions = {}) {
     const tsWindowMs = Math.max(0, Number(tsOptions.tsWindowMs) || 0);
+    const tsPromptId = String(tsOptions.tsPromptId || "");
     const tsNow = typeof tsOptions.tsNow === "function" ? tsOptions.tsNow : () => Date.now();
     const tsRandom = typeof tsOptions.tsRandom === "function" ? tsOptions.tsRandom : Math.random;
     const tsKey = tsOptions.tsKey || TS_RESCAN_CLAIM_STORAGE_KEY;
@@ -50,16 +51,20 @@ export function tsClaimExecutionRescan(tsOptions = {}) {
     const tsCurrentTime = tsNow();
     const tsExisting = tsReadClaim(tsStorage, tsKey);
     if (tsExisting) {
-        const tsExistingTime = Number(String(tsExisting).split(":")[0]) || 0;
+        const tsParts = String(tsExisting).split(":");
+        const tsExistingTime = Number(tsParts[0]) || 0;
+        const tsExistingPromptId = tsParts.slice(2).join(":");
         // A live claim from another tab. A claim older than the window is
         // treated as abandoned, so a tab that was closed mid-generation cannot
         // suppress every future rescan.
-        if (tsExistingTime > 0 && tsCurrentTime - tsExistingTime < tsWindowMs) {
+        // The window deduplicates tabs reacting to the SAME prompt. It must
+        // not drop the next generation just because that one finished quickly.
+        if (tsExistingPromptId === tsPromptId && tsExistingTime > 0 && tsCurrentTime - tsExistingTime < tsWindowMs) {
             return false;
         }
     }
 
-    const tsToken = `${tsCurrentTime}:${tsRandom()}`;
+    const tsToken = `${tsCurrentTime}:${tsRandom()}:${tsPromptId}`;
     try {
         tsStorage.setItem(tsKey, tsToken);
     } catch {

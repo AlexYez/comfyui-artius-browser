@@ -5,6 +5,24 @@ All notable changes to **Timesaver Artius Browser** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.2] - 2026-10-31
+
+### Changed
+
+- Video comparison uses the available screen area without fixed width or height
+  caps. Two clips can switch between side-by-side and wipe comparison while
+  keeping their playback position, synchronization and frame controls.
+- Autoscan indexes the files from each completed generation while the rest of
+  the queue continues. Requests run one at a time, rapid completions are batched,
+  and full-directory fallback scans wait until the queue is idle.
+
+### Fixed
+
+- Newly indexed assets now appear in the panel without a manual rescan, with
+  the current filters, sort order and selection preserved.
+- Different generations finishing less than eight seconds apart no longer
+  suppress each other's indexing. A busy indexer retries the named files.
+
 ## [1.20.1] - 2026-10-06
 
 ### Added

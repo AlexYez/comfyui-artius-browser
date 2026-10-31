@@ -28,20 +28,30 @@ import {
 
 let tsExecutionRescanTimer = 0;
 let tsExecutionRescanFirstEventAt = 0;
+let tsExecutionRescanPromptId = "";
+let tsExecutionIndexInFlight = false;
+let tsExecutionFullScanPending = false;
 let tsAutoscanEnabled = true;
-// Authoritative "is ComfyUI busy?" signal sourced from the WebSocket
-// `status` event's exec_info.queue_remaining counter. Falls back to 0 if
-// ComfyUI never emits a status update (older builds, broken socket),
-// which makes the gate degrade to the plain debounce path instead of
-// hanging forever.
+// Only a full directory scan waits for an idle queue. Named files from a
+// completed prompt can be indexed while the next prompt is generating.
 let tsComfyQueueRemaining = 0;
 // What the running prompt has written so far, so the post-generation index can
 // name those files instead of asking the server to walk the whole output root.
-// tsExecutionOutputsOverflowed is the honest escape hatch: past the cap the
-// list is no longer known to be complete, so the caller falls back to the full
-// rescan it always did rather than indexing a truncated set.
+// Both the running prompt and completed backlog are bounded. Known files are
+// indexed immediately; an overflow requests one full scan after the queue ends.
 const tsPendingExecutionFiles = new Set();
 let tsExecutionOutputsOverflowed = false;
+const tsReadyExecutionFiles = new Set();
+
+function tsQueueReadyExecutionFiles(tsFiles) {
+    for (const tsPath of tsFiles) {
+        if (tsReadyExecutionFiles.size >= TS_MAX_TRACKED_EXECUTION_FILES) {
+            tsExecutionFullScanPending = true;
+            return;
+        }
+        tsReadyExecutionFiles.add(tsPath);
+    }
+}
 
 function tsTrackExecutedOutputs(tsOutput) {
     for (const tsPath of tsExtractExecutedOutputPaths(tsOutput)) {
@@ -54,7 +64,7 @@ function tsTrackExecutedOutputs(tsOutput) {
 }
 
 function tsTakePendingExecutionFiles() {
-    const tsFiles = tsExecutionOutputsOverflowed ? [] : [...tsPendingExecutionFiles];
+    const tsFiles = [...tsPendingExecutionFiles];
     tsPendingExecutionFiles.clear();
     tsExecutionOutputsOverflowed = false;
     return tsFiles;
@@ -84,52 +94,73 @@ function tsSetAutoscanEnabled(tsEnabled) {
     if (!tsAutoscanEnabled) {
         tsClearExecutionRescanTimer();
         tsExecutionRescanFirstEventAt = 0;
+        tsExecutionRescanPromptId = "";
+        tsExecutionFullScanPending = false;
+        tsReadyExecutionFiles.clear();
+        tsTakePendingExecutionFiles();
     }
 }
 
-function tsAttemptRescanNow() {
+async function tsAttemptRescanNow() {
     if (!tsAutoscanEnabled) {
         tsExecutionRescanFirstEventAt = 0;
         return;
     }
-    if (tsComfyQueueRemaining > 0) {
-        // Queue still has prompts. Re-arm a short retry instead of
-        // POSTing /rescan — the backend scan would contend with whatever
-        // ComfyUI is currently sampling. The next status event with
-        // queue_remaining=0 unblocks this branch.
-        const tsRetryMs = Number(tsBrowserRuntimeSettings.executionRescanIdleRetryMs) || 250;
-        tsArmExecutionRescanTimer(tsRetryMs);
+    if (tsExecutionIndexInFlight) {
+        // The in-flight request's finally block picks up completed prompts
+        // accumulated meanwhile. Never run several indexing jobs in parallel.
+        return;
+    }
+    const tsFiles = [...tsReadyExecutionFiles];
+    if (tsFiles.length === 0 && (!tsExecutionFullScanPending || tsComfyQueueRemaining > 0)) {
+        // A status event restarts the deferred full scan when the queue drains;
+        // there is no polling or directory walk while generation is active.
         return;
     }
     tsExecutionRescanFirstEventAt = 0;
-    // One rescan per browser, not one per tab. Two ComfyUI tabs on the same
-    // machine used to ask the server for two full walks of the output root
-    // after every generation.
-    const tsWonClaim = tsClaimExecutionRescan({ tsWindowMs: tsBrowserRuntimeSettings.executionRescanClaimWindowMs });
-    const tsFiles = tsTakePendingExecutionFiles();
-    if (!tsWonClaim) {
-        return;
-    }
+    // Tabs reacting to the same prompt share a claim for its targeted request.
+    // Without an execution id, preferring a redundant scan is safer than
+    // treating two different generations as the same one and dropping files.
     const tsRootId = tsBrowserRuntimeSettings.executionRescanRootId;
-    if (tsFiles.length > 0) {
-        // ComfyUI named what it wrote, so index exactly that: a handful of
-        // stat() calls instead of a walk of the whole output root. The full
-        // rescan below stays the fallback for everything else - a prompt that
-        // saved through a node we could not read, an older ComfyUI, or more
-        // files than the tracker will vouch for.
-        tsPostJSON(`${tsApiSettings.routeBase}/index_files`, { root_id: tsRootId, files: tsFiles }).catch((tsError) => {
-            tsConsoleWarn("Timesaver Artius Browser targeted index failed", tsError);
-            // The files stay unindexed until something else scans; ask for the
-            // walk we would have done anyway.
-            tsPostJSON(`${tsApiSettings.routeBase}/rescan`, { root_id: tsRootId }).catch((tsFallbackError) => {
-                tsConsoleWarn("Timesaver Artius Browser execution rescan failed", tsFallbackError);
+    let tsBusy = false;
+    tsExecutionIndexInFlight = true;
+    try {
+        if (tsFiles.length > 0) {
+            const tsWonClaim = !tsExecutionRescanPromptId || tsClaimExecutionRescan({
+                tsWindowMs: tsBrowserRuntimeSettings.executionRescanClaimWindowMs,
+                tsPromptId: tsExecutionRescanPromptId,
             });
-        });
-        return;
+            tsExecutionRescanPromptId = "";
+            tsReadyExecutionFiles.clear();
+            if (!tsWonClaim) {
+                return;
+            }
+            const tsResult = await tsPostJSON(`${tsApiSettings.routeBase}/index_files`, { root_id: tsRootId, files: tsFiles });
+            if (tsResult?.busy) {
+                // Retry just these names after the current indexer job. A full
+                // rescan would compete with the still-running generation queue.
+                tsBusy = true;
+                tsQueueReadyExecutionFiles(tsFiles);
+            }
+        } else {
+            tsExecutionFullScanPending = false;
+            tsExecutionRescanPromptId = "";
+            await tsPostJSON(`${tsApiSettings.routeBase}/rescan`, { root_id: tsRootId });
+        }
+    } catch (tsError) {
+        if (tsFiles.length > 0) {
+            tsExecutionFullScanPending = true;
+            tsConsoleWarn("Timesaver Artius Browser targeted index failed", tsError);
+        } else {
+            tsConsoleWarn("Timesaver Artius Browser execution rescan failed", tsError);
+        }
+    } finally {
+        tsExecutionIndexInFlight = false;
+        if (tsAutoscanEnabled && (tsReadyExecutionFiles.size > 0 || (tsExecutionFullScanPending && tsComfyQueueRemaining === 0))) {
+            const tsRetryMs = Number(tsBrowserRuntimeSettings.executionRescanIdleRetryMs) || 250;
+            tsArmExecutionRescanTimer(tsBusy ? Math.max(1000, tsRetryMs) : tsRetryMs);
+        }
     }
-    tsPostJSON(`${tsApiSettings.routeBase}/rescan`, { root_id: tsRootId }).catch((tsError) => {
-        tsConsoleWarn("Timesaver Artius Browser execution rescan failed", tsError);
-    });
 }
 
 function tsDebouncedExecutionRescan() {
@@ -160,13 +191,23 @@ function tsHandleStatusEvent(tsEvent) {
         // If the queue just drained and we were retrying, fire the next
         // tick immediately so users see new assets right after the queue
         // settles instead of waiting another debounce cycle.
-        if (tsComfyQueueRemaining === 0 && tsExecutionRescanTimer) {
+        if (tsComfyQueueRemaining === 0 && (tsExecutionRescanTimer || tsExecutionFullScanPending)) {
             tsArmExecutionRescanTimer(0);
         }
     }
 }
 
-function tsHandleExecutionEnd() {
+function tsHandleExecutionEnd(tsEvent) {
+    const tsNeedsFullScan = tsExecutionOutputsOverflowed || tsPendingExecutionFiles.size === 0;
+    const tsFiles = tsTakePendingExecutionFiles();
+    if (!tsAutoscanEnabled) {
+        return;
+    }
+    // Snapshot at completion: files emitted by the next running prompt must
+    // not be mixed into this prompt's delayed request.
+    tsExecutionFullScanPending ||= tsNeedsFullScan;
+    tsQueueReadyExecutionFiles(tsFiles);
+    tsExecutionRescanPromptId = String(tsEvent?.detail?.prompt_id || "");
     tsDebouncedExecutionRescan();
 }
 
@@ -364,8 +405,8 @@ app.registerExtension({
 
         api.addEventListener("status", (tsEvent) => tsHandleStatusEvent(tsEvent));
         api.addEventListener("executed", (tsEvent) => tsTrackExecutedOutputs(tsEvent?.detail?.output));
-        api.addEventListener("execution_success", () => tsHandleExecutionEnd());
-        api.addEventListener("execution_error", () => tsHandleExecutionEnd());
-        api.addEventListener("execution_interrupted", () => tsHandleExecutionEnd());
+        api.addEventListener("execution_success", (tsEvent) => tsHandleExecutionEnd(tsEvent));
+        api.addEventListener("execution_error", (tsEvent) => tsHandleExecutionEnd(tsEvent));
+        api.addEventListener("execution_interrupted", (tsEvent) => tsHandleExecutionEnd(tsEvent));
     },
 });

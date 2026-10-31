@@ -97,7 +97,7 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
             const tsCompareItems = tsDeps.compareItems.slice(0, 4);
             const tsVideoLabel = tsDeps.t("type.video", "Video");
             return `
-                <div class="ts-video-compare-shell" data-count="${tsCompareItems.length}">
+                <div class="ts-video-compare-shell" data-count="${tsCompareItems.length}" data-layout="grid">
                     <div class="ts-video-compare-grid">
                         ${tsCompareItems.map((tsCompareItem) => {
                             const tsCompareURL = tsDeps.escapeAttribute(tsDeps.apiURL(tsResolveDisplayURL(tsCompareItem)));
@@ -109,8 +109,18 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                                 </div>
                             `;
                         }).join("")}
+                        ${tsCompareItems.length === 2 ? `
+                            <div class="ts-image-compare-divider ts-video-compare-divider"></div>
+                            <input class="ts-image-compare-range ts-video-compare-range" type="range" min="0" max="100" value="50" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.videoCompareWipe", "Video comparison slider"))}">
+                        ` : ""}
                     </div>
                     <div class="ts-video-compare-controls">
+                        ${tsCompareItems.length === 2 ? `
+                            <div class="ts-video-compare-modes" role="group" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.videoCompareMode", "Video comparison mode"))}">
+                                <button class="ts-video-compare-mode" type="button" data-layout="grid" aria-pressed="true">${tsDeps.t("button.compareSideBySide", "Side by side")}</button>
+                                <button class="ts-video-compare-mode" type="button" data-layout="wipe" aria-pressed="false">${tsDeps.t("button.compareWipe", "Wipe")}</button>
+                            </div>
+                        ` : ""}
                         <div class="ts-video-transport">
                             <button class="ts-video-play-toggle" type="button">${tsDeps.t("button.play", "Play")}</button>
                             <input class="ts-video-seek" type="range" min="0" max="0" step="0.001" value="0" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.playbackPosition", "Playback position"))}">
