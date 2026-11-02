@@ -226,6 +226,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.ts3DQueue.tsResume();
         window.addEventListener("tsab:locale-changed", this.tsLocaleChangedListener);
         if (this.tsConnectedOnce) {
+            void this.tsRefreshLocale();
             this.tsBindApiEvents();
             this.tsStartWidthTracking();
             // The gallery/toolbar observers were disconnected in
@@ -287,6 +288,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return;
         }
         this.tsState.tsLocale = tsLocale;
+        this.tsLocaleRevision = (this.tsLocaleRevision || 0) + 1;
         if (!this.tsRefs) {
             return;
         }
@@ -294,13 +296,29 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         // Card buttons, badges and the empty state all carry translated text.
         this.tsScheduleGridRender(true);
         this.tsRenderTree(true);
+        this.tsRenderProgress();
+        this.tsRenderHealth();
+        if (!this.tsRefs.tsShortcuts.hidden) {
+            this.tsRenderShortcutHelp();
+        }
+        // Close a menu whose labels and external-action locale map are stale.
+        this.tsCloseContextMenu();
+    }
+
+    async tsRefreshLocale() {
+        const tsRevision = this.tsLocaleRevision || 0;
+        const tsLocaleCode = tsResolveLocaleCode(this.tsState.tsLanguage, tsResolveComfyLocale());
+        const tsLocale = await tsLoadLocale(tsLocaleCode);
+        if (tsRevision !== (this.tsLocaleRevision || 0)
+            || tsLocaleCode !== tsResolveLocaleCode(this.tsState.tsLanguage, tsResolveComfyLocale())) {
+            return;
+        }
+        this.tsHandleLocaleChanged({ detail: { locale: tsLocale } });
     }
 
     async tsInitAsync() {
         await this.tsLoadUISettings();
-        const tsLocaleCode = tsResolveLocaleCode(this.tsState.tsLanguage, tsResolveComfyLocale());
-        this.tsState.tsLocale = await tsLoadLocale(tsLocaleCode);
-        this.tsHydrateText();
+        await this.tsRefreshLocale();
         await this.tsFetchAssets(true);
         void this.tsMaybeBootstrapScan();
         void this.tsCheckForNewVersion();
@@ -2109,7 +2127,6 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsItem?.width,
             tsItem?.height,
             tsItem?.duration,
-            tsItem?.studio?.mode || "",
             tsItem?.filename,
         ].join(",")).join("|");
     }
@@ -3067,9 +3084,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsWorkflowFolderBadge = tsWorkflowSection
             ? String(tsItem.folder_path || "").replaceAll("\\", "/").replace(/^\/+|\/+$/g, "")
             : "";
-        const tsBadges = tsWorkflowSection ? [] : [tsItem.type.toUpperCase()];
-        // [AI agent] Renders only for assets carrying a studio session tag.
-        const tsStudioBadge = tsWorkflowSection ? null : this.tsStudioBadge(tsItem);
+        const tsBadges = tsWorkflowSection ? [] : [this.tsT(`type.${tsItem.type}`, tsItem.type).toUpperCase()];
         const tsResolutionBadge = Number(tsItem.width) > 0 && Number(tsItem.height) > 0
             ? `${tsItem.width}x${tsItem.height}`
             : "";
@@ -3100,16 +3115,6 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsShowCopyAction = !tsWorkflowSection
             && (tsItem.type === "video" || tsItem.type === "audio" ? Boolean(tsItem.has_prompt) : true);
         const tsShowWorkflowAction = !tsWorkflowSection && Boolean(tsItem.has_workflow);
-        // [AI agent] Studio renders can be reopened in the session that
-        // made them; the button only exists where that is possible.
-        const tsExternalIds = new Set(
-            this.tsExternalAssetActions(tsItem).map((tsAction) => tsAction.id));
-        const tsShowRecreate = !tsWorkflowSection && Boolean(tsItem.studio?.mode)
-            && tsExternalIds.has("ts-image-studio.recreate");
-        // [AI agent] Send the picture into the studio's current mode —
-        // the same thing a drag does, for when dragging is not an option.
-        const tsShowUseInStudio = !tsWorkflowSection
-            && tsExternalIds.has("ts-image-studio.use-source");
         const tsPreviewURL = this.tsResolveCardPreviewURL(tsItem);
         const tsMediaMarkup = this.tsBuildCardMediaMarkup(tsItem, tsPreviewURL);
         const tsDeleteAllowed = tsWorkflowSection || tsItem.allow_delete;
@@ -3144,8 +3149,6 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     `}
                     <div class="ts-card-actions">
                         ${tsWorkflowSection ? tsActionButton("load-workflow", "L", this.tsT("button.loadWorkflow", "Load Workflow")) : ""}
-                        ${tsShowUseInStudio ? tsActionButton("use-in-studio", "S", this.tsT("button.useInStudio", "Use in the studio")) : ""}
-                        ${tsShowRecreate ? tsActionButton("recreate", "R", this.tsT("button.recreate", "Restore studio session")) : ""}
                         ${tsShowCopyAction ? tsActionButton("copy", "P", this.tsT("button.copyPrompt", "Copy Prompt")) : ""}
                         ${tsShowWorkflowAction ? tsActionButton("workflow", "W", this.tsT("button.copyWorkflow", "Copy Workflow")) : ""}
                         ${tsActionButton("download", "D", this.tsT("button.download", "Download"))}
@@ -3159,9 +3162,6 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         )}
                     </div>
                     <div class="ts-card-badges">
-                        ${tsStudioBadge ? `
-                            <div class="ts-card-badge" data-kind="studio" title="${this.tsEscapeAttribute(tsStudioBadge.tsTitle)}">${this.tsEscapeHTML(tsStudioBadge.tsText)}</div>
-                        ` : ""}
                         ${tsWorkflowFolderBadge ? `
                             <div class="ts-card-badge" data-kind="workflow-folder" title="${this.tsEscapeAttribute(tsWorkflowFolderBadge)}">${this.tsEscapeHTML(tsWorkflowFolderBadge)}</div>
                         ` : ""}
@@ -3387,12 +3387,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 return;
             }
             const tsAction = tsActionButton.dataset.action;
-            if (tsAction === "recreate") {
-                // [AI agent] Same command the context menu offers.
-                void this.tsRunExternalAction("ts-image-studio.recreate", tsAsset);
-            } else if (tsAction === "use-in-studio") {
-                void this.tsRunExternalAction("ts-image-studio.use-source", tsAsset);
-            } else if (tsAction === "copy") {
+            if (tsAction === "copy") {
                 void this.tsCopyAssetPrompt(tsAsset.id);
             } else if (tsAction === "workflow") {
                 void this.tsCopyAssetWorkflow(tsAsset.id);
@@ -3443,43 +3438,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefreshCardSelection();
     }
 
-    // [AI agent] Label for a render made in TS Image Studio: which mode
-    // produced it and with which model, plus the settings worth seeing on
-    // hover. Anything made elsewhere returns null and the card is unchanged.
-    tsStudioBadge(tsItem) {
-        const tsStudio = tsItem?.studio;
-        if (!tsStudio || typeof tsStudio !== "object" || !tsStudio.mode) {
-            return null;
-        }
-        const tsMode = String(tsStudio.mode);
-        const tsModeLabel = this.tsT(
-            `studio.mode.${tsMode}`,
-            tsMode.charAt(0).toUpperCase() + tsMode.slice(1),
-        );
-        const tsModel = String(tsStudio.family_label || tsStudio.family || "");
-        const tsDetails = [];
-        for (const tsKey of ["seed", "steps", "cfg", "denoise"]) {
-            if (tsStudio[tsKey] !== undefined && tsStudio[tsKey] !== "") {
-                tsDetails.push(`${tsKey} ${tsStudio[tsKey]}`);
-            }
-        }
-        if (Number(tsStudio.lora_count) > 0) {
-            tsDetails.push(`LoRA ×${tsStudio.lora_count}`);
-        }
-        const tsHeading = [this.tsT("studio.badge", "TS Image Studio"), tsModeLabel, tsModel]
-            .filter(Boolean)
-            .join(" · ");
-        return {
-            tsText: tsModel ? `${tsModeLabel} · ${tsModel}` : tsModeLabel,
-            tsTitle: tsDetails.length ? `${tsHeading}\n${tsDetails.join("  ")}` : tsHeading,
-        };
-    }
-
     // ── external asset actions ──────────────────────────────────────────── //
-    // [AI agent] Other packs can offer commands on an asset by publishing them
-    // to `window.tsAssetActions` (TS Image Studio uses this to rebuild the
-    // session an image was made in). The browser stays unaware of what the
-    // action does: it passes a plain descriptor and shows whatever comes back.
+    // Other packs can publish commands in window.tsAssetActions. The browser
+    // passes a plain descriptor and shows the result without owning the action.
 
     tsExternalAssetPayload(tsAsset) {
         return {
@@ -3818,8 +3779,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     ["Enter", this.tsT("shortcuts.open", "Open the lightbox / load the workflow")],
                     ["Esc", this.tsT("shortcuts.clearSelection", "Clear the selection")],
                     ["Menu / Shift + F10", this.tsT("shortcuts.menu", "Open the context menu")],
-                    ["Ctrl + click", this.tsT("shortcuts.clickToggle", "Add to or remove from the selection")],
-                    ["Shift + click", this.tsT("shortcuts.clickRange", "Select a range")],
+                    [`Ctrl + ${this.tsT("shortcuts.clickKey", "Click")}`, this.tsT("shortcuts.clickToggle", "Add to or remove from the selection")],
+                    [`Shift + ${this.tsT("shortcuts.clickKey", "Click")}`, this.tsT("shortcuts.clickRange", "Select a range")],
                 ],
             },
             {
@@ -3844,14 +3805,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     ["D", this.tsT("shortcuts.download", "Download")],
                     ["X", this.tsT("shortcuts.delete", "Send to trash")],
                     ["L", this.tsT("shortcuts.loadWorkflow", "Load workflow")],
-                    ["S / R", this.tsT("shortcuts.studio", "TS Image Studio: use as source / restore the session (when installed)")],
                 ],
             },
             {
                 tsHeading: this.tsT("shortcuts.compareHeading", "Compare"),
                 tsRows: [
                     [this.tsT("shortcuts.selectN", "Select 2-4"), this.tsT("shortcuts.compare", "Compare images or videos in the lightbox")],
-                    ["Wheel / + -", this.tsT("shortcuts.zoom", "Zoom both images at once")],
+                    [this.tsT("shortcuts.wheelKey", "Wheel / + −"), this.tsT("shortcuts.zoom", "Zoom both images at once")],
                     ["1 / 0", this.tsT("shortcuts.zoomNative", "Actual pixels / fit to view")],
                     ["← ↑ ↓ →", this.tsT("shortcuts.pan", "Pan the zoomed comparison")],
                 ],

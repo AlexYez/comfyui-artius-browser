@@ -34,20 +34,6 @@ def TSResolveTechnicalInfo(ts_row) -> dict[str, Any]:
     return ts_result
 
 
-def TSResolveStudioTag(ts_row) -> dict[str, Any]:
-    """The studio tag stored with a render, or {} when it has none.
-
-    [AI agent] Read from the metadata blob the row already carries, so the
-    grid can label studio work without a second query or a schema change.
-    Assets from anywhere else return {} and render exactly as before.
-    """
-    ts_metadata = TSJsonLoads(TSRowValue(ts_row, "metadata", "") or "", {})
-    if not isinstance(ts_metadata, dict):
-        return {}
-    ts_studio = ts_metadata.get("studio")
-    return ts_studio if isinstance(ts_studio, dict) else {}
-
-
 def TSFormatChannelLayout(ts_channels: Any) -> str:
     ts_channel_count = int(ts_channels or 0) if str(ts_channels or "").strip() else 0
     if ts_channel_count <= 0:
@@ -152,8 +138,6 @@ def TSBuildAssetCard(ts_row, ts_roots: dict[str, dict[str, Any]], ts_preview_cac
         # action on a video card is offered only when there is something
         # to copy, rather than always, the way it is for an image.
         "has_prompt": _TSRowHasText(ts_row, "has_prompt", "prompt_text"),
-        # [AI agent] Empty for every asset not made in TS Image Studio.
-        "studio": TSResolveStudioTag(ts_row),
         "codec_name": str(ts_technical_info.get("codec_name") or ""),
         "audio_codec_name": str(ts_technical_info.get("audio_codec_name") or ""),
         "channel_layout": TSFormatChannelLayout(ts_technical_info.get("channels")),

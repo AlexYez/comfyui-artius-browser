@@ -57,6 +57,8 @@ const tsNativeWorkflowTargets = tsApiSettings.nativeWorkflowTargets;
 const tsFallbackWorkflowTargets = tsApiSettings.fallbackWorkflowTargets;
 const tsPreferredWorkflowTargets = tsApiSettings.preferredWorkflowTargets || {};
 const tsLocaleCache = new Map();
+const tsLocaleRequests = new Map();
+let tsLocaleRequestId = 0;
 const tsEnableConsoleDebug = Boolean(tsBrowserRuntimeSettings.enableConsoleDebug);
 const tsWorkflowUserdataRoot = "workflows";
 
@@ -178,7 +180,9 @@ export function tsResolveComfyLocale() {
     // build, setting service absent) degrades to "" so the caller falls back.
     try {
         const tsSetting = app?.extensionManager?.setting;
-        const tsValue = typeof tsSetting?.get === "function" ? tsSetting.get("Comfy.Locale") : "";
+        const tsValue = typeof tsSetting?.get === "function"
+            ? tsSetting.get("Comfy.Locale")
+            : app?.ui?.settings?.getSettingValue?.("Comfy.Locale");
         return typeof tsValue === "string" ? tsValue : "";
     } catch {
         return "";
@@ -334,29 +338,58 @@ function tsT(tsKey, tsFallback) {
 }
 
 export async function tsLoadLocale(tsLocaleCode = tsProjectSettings.defaultLocale) {
-    const tsResolvedCode = tsLocaleCode || tsProjectSettings.defaultLocale;
-    if (tsLocaleCache.has(tsResolvedCode)) {
-        tsActiveLocale = tsLocaleCache.get(tsResolvedCode);
-        return tsActiveLocale;
+    const tsResolvedCode = String(tsLocaleCode || tsProjectSettings.defaultLocale).trim().toLowerCase().split(/[-_]/)[0];
+    const tsRequestId = ++tsLocaleRequestId;
+    const tsTable = await tsReadLocaleTable(tsResolvedCode);
+    // A slow previous language must not change canvas-drop toasts back.
+    if (tsRequestId === tsLocaleRequestId) {
+        tsActiveLocale = tsTable;
     }
-    const tsLocaleURL = new URL(`./localization/${tsResolvedCode}.json`, import.meta.url);
+    return tsTable;
+}
+
+async function tsReadLocaleTable(tsCode) {
+    if (tsLocaleCache.has(tsCode)) {
+        return tsLocaleCache.get(tsCode);
+    }
+    if (tsLocaleRequests.has(tsCode)) {
+        return tsLocaleRequests.get(tsCode);
+    }
+    const tsRequest = (async () => {
+        const tsDefault = tsProjectSettings.defaultLocale;
+        const tsBase = tsCode === tsDefault ? {} : await tsReadLocaleTable(tsDefault);
+        try {
+            // Restrict codes to language identifiers before constructing a URL.
+            if (!/^[a-z]{2,3}$/.test(tsCode)) {
+                return tsBase;
+            }
+            const tsResponse = await fetch(new URL(`./localization/${tsCode}.json`, import.meta.url));
+            if (!tsResponse.ok) {
+                if (tsResponse.status === 404 && tsCode !== tsDefault) {
+                    tsLocaleCache.set(tsCode, tsBase);
+                    return tsBase;
+                }
+                throw new Error(`Locale ${tsCode}: HTTP ${tsResponse.status}`);
+            }
+            const tsPayload = await tsResponse.json();
+            if (!tsPayload || typeof tsPayload !== "object" || Array.isArray(tsPayload)) {
+                throw new Error(`Invalid locale ${tsCode}`);
+            }
+            const tsStrings = Object.fromEntries(Object.entries(tsPayload).filter(([, tsValue]) => typeof tsValue === "string" && tsValue.trim()));
+            const tsTable = { ...tsBase, ...tsStrings };
+            tsLocaleCache.set(tsCode, tsTable);
+            return tsTable;
+        } catch (tsError) {
+            // Transient failures are not cached: a later switch can retry.
+            tsConsoleWarn("Timesaver Artius Browser locale load failed", tsError);
+            return tsBase;
+        }
+    })();
+    tsLocaleRequests.set(tsCode, tsRequest);
     try {
-        const tsResponse = await fetch(tsLocaleURL);
-        if (!tsResponse.ok) {
-            throw new Error(`Locale ${tsResolvedCode} not found`);
-        }
-        const tsPayload = await tsResponse.json();
-        tsLocaleCache.set(tsResolvedCode, tsPayload);
-        tsActiveLocale = tsPayload;
-        return tsPayload;
-    } catch (tsError) {
-        if (tsResolvedCode !== tsProjectSettings.defaultLocale) {
-            return tsLoadLocale(tsProjectSettings.defaultLocale);
-        }
-        tsConsoleWarn("Timesaver Artius Browser locale fallback failed", tsError);
-        const tsFallback = {};
-        tsLocaleCache.set(tsProjectSettings.defaultLocale, tsFallback);
-        return tsFallback;
+        return await tsRequest;
+    } finally {
+        tsLocaleRequests.delete(tsCode);
     }
 }
 
@@ -404,7 +437,6 @@ export function tsOpenAssetInNewTab(tsAsset) {
 // A fetchable address for an asset's own file. Used where something other
 // than the browser has to read the bytes — external asset actions, which get
 // a plain descriptor and no access to this module's URL rules.
-// [AI agent] Added for the TS Image Studio session-restore action.
 export function tsAssetFileURL(tsAsset) {
     return tsResolveOpenableURLImpl(tsAsset?.file_url, tsApiURL);
 }

@@ -114,8 +114,9 @@ TS_WORKFLOW_PATH_FORBIDDEN_CHARACTERS = frozenset('<>|"?*') | (frozenset(":") if
 
 # Version stamp of the stored image prompt-metadata blob. Bumping it makes
 # TSEnsureMetadata re-extract older blobs once, on the next detail view.
-# 5 added seed + split positive/negative, 6 added the model/LoRA list,
-# 7 added the TS Image Studio session tag. [AI agent]
+# 5 added seed + split positive/negative, 6 added the model/LoRA list.
+# Keep the existing stamp when dropping optional producer metadata: ordinary
+# prompts do not need a library-wide refresh for that removal.
 TS_PROMPT_PARTS_VERSION = 7
 
 # Decompression-bomb guard for the image thumbnail path: images above this

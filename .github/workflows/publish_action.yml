@@ -49,13 +49,12 @@ jobs:
           done
 
       - name: Verify localization files
-        # en.json is the canonical key set. A locale carrying a key en.json does
-        # not have is a typo that renders as a raw key for that language only,
-        # which is exactly the class of defect a release must not ship.
+        # Every shipped language must cover the canonical keys and parameters.
         run: |
           python - <<'TS_EOF'
           import json
           import pathlib
+          import re
           import sys
 
           ts_directory = pathlib.Path("js/localization")
@@ -67,8 +66,22 @@ jobs:
                   ts_failures.append(f"{ts_path.name}: not a JSON object")
                   continue
               ts_unknown = sorted(set(ts_data) - set(ts_english))
+              ts_missing = sorted(set(ts_english) - set(ts_data))
               if ts_unknown:
                   ts_failures.append(f"{ts_path.name}: keys absent from en.json: {', '.join(ts_unknown)}")
+              if ts_missing:
+                  ts_failures.append(f"{ts_path.name}: missing translations: {', '.join(ts_missing)}")
+              ts_pairs = json.loads(ts_path.read_text(encoding="utf-8"), object_pairs_hook=list)
+              if len(ts_pairs) != len(ts_data):
+                  ts_failures.append(f"{ts_path.name}: duplicate keys")
+              for ts_key, ts_text in ts_data.items():
+                  if not isinstance(ts_text, str) or not ts_text.strip():
+                      ts_failures.append(f"{ts_path.name}: empty/non-string {ts_key}")
+                      continue
+                  ts_params = sorted(re.findall(r"\{[A-Za-z_][A-Za-z_0-9]*\}", ts_text))
+                  ts_expected = sorted(re.findall(r"\{[A-Za-z_][A-Za-z_0-9]*\}", ts_english.get(ts_key, "")))
+                  if ts_params != ts_expected:
+                      ts_failures.append(f"{ts_path.name}: placeholder mismatch {ts_key}")
           if ts_failures:
               print("\n".join(ts_failures))
               sys.exit(1)

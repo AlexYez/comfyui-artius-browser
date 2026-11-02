@@ -36,6 +36,7 @@ dist/
 *.tmp
 *.bak
 CLAUDE.md
+AGENTS.md
 doc/
 code-review-report.md
 

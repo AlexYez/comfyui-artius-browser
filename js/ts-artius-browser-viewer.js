@@ -161,10 +161,16 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsStageMarkup = "";
         this.tsStageGhost = null;
         this.tsBoundKeydown = (tsEvent) => this.tsHandleWindowKeydown(tsEvent);
+        this.tsBoundLocaleChange = (tsEvent) => {
+            if (tsEvent?.detail?.locale && typeof tsEvent.detail.locale === "object") {
+                this.tsSetLocale(tsEvent.detail.locale);
+            }
+        };
         this.attachShadow({ mode: "open" });
     }
 
     connectedCallback() {
+        window.addEventListener("tsab:locale-changed", this.tsBoundLocaleChange);
         if (this.tsConnectedOnce) {
             return;
         }
@@ -1291,9 +1297,44 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsRender();
     }
 
+    disconnectedCallback() {
+        window.removeEventListener("tsab:locale-changed", this.tsBoundLocaleChange);
+    }
+
     tsSetLocale(tsLocale) {
+        if (tsLocale === this.tsLocale) {
+            return;
+        }
+        const tsAsset = this.tsItems?.[this.tsIndex];
+        const tsPreviousLocale = this.tsLocale;
+        const tsSameStage = tsAsset && this.tsStageMarkup === this.tsBuildStageMarkup(tsAsset);
         this.tsLocale = tsLocale || {};
+        if (tsSameStage && this.tsRefs?.tsStage) {
+            // Only labels changed. Keep the same media, playback, zoom and wipe.
+            this.tsStageMarkup = this.tsBuildStageMarkup(tsAsset);
+            const tsStage = this.tsRefs.tsStage;
+            for (const tsElement of tsStage.querySelectorAll("[data-ts-i18n]")) {
+                tsElement.textContent = this.tsT(tsElement.dataset.tsI18n, tsElement.textContent);
+            }
+            for (const tsAttribute of ["title", "aria-label"]) {
+                for (const tsElement of tsStage.querySelectorAll(`[data-ts-i18n-${tsAttribute}]`)) {
+                    const tsKey = tsElement.getAttribute(`data-ts-i18n-${tsAttribute}`);
+                    tsElement.setAttribute(tsAttribute, this.tsT(tsKey, tsElement.getAttribute(tsAttribute)));
+                }
+            }
+            // Runtime status nodes can show loading, failure, or context loss.
+            for (const tsElement of tsStage.querySelectorAll(".ts-media-status, .ts-3d-status")) {
+                const tsKey = Object.keys(tsPreviousLocale || {}).find((tsCandidate) => tsCandidate.startsWith("status.") && tsPreviousLocale[tsCandidate] === tsElement.textContent);
+                if (tsKey) {
+                    tsElement.textContent = this.tsT(tsKey, tsElement.textContent);
+                }
+            }
+            this.tsStageLocaleRefresh?.();
+        }
         this.tsRender();
+        if (this.tsRefs?.tsHelp && !this.tsRefs.tsHelp.hidden) {
+            this.tsToggleHelp(true, false);
+        }
     }
 
     tsT(tsKey, tsFallback) {
@@ -1469,6 +1510,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsVideoFrameStepper = null;
         this.tsMediaEdgeJumper = null;
         this.tsImageZoomHandler = null;
+        this.tsStageLocaleRefresh = null;
         // tsDetailRequestToken stays monotonic on purpose: a stale detail
         // fetch is rejected by the ++token guard, not by a reset here.
         // Resetting it let a concurrent tsRender() (e.g. prefetch) drop the
@@ -1559,7 +1601,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
     // The lightbox's own shortcut card. The panel's "?" help lives in the
     // panel's shadow root, under this overlay, so "?" pressed here did
     // nothing at all.
-    tsToggleHelp(tsShow) {
+    tsToggleHelp(tsShow, tsFocus = true) {
         const tsHelp = this.tsRefs?.tsHelp;
         if (!tsHelp) {
             return;
@@ -1584,7 +1626,9 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 .map(([tsKeys, tsText]) => `<div class="ts-help-row"><kbd>${this.tsEscapeHTML(tsKeys)}</kbd><span>${this.tsEscapeHTML(tsText)}</span></div>`)
                 .join("");
             tsHelp.hidden = false;
-            this.tsRefs.tsHelpClose.focus({ preventScroll: true });
+            if (tsFocus) {
+                this.tsRefs.tsHelpClose.focus({ preventScroll: true });
+            }
             return;
         }
         tsHelp.hidden = true;
@@ -2552,6 +2596,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsHandleFirstFrame = () => tsJumpToEdge(-1);
         const tsHandleLastFrame = () => tsJumpToEdge(1);
 
+        this.tsStageLocaleRefresh = tsUpdateFrameLabel;
         const tsHandleLoadedMetadata = () => tsUpdateFrameLabel();
         const tsHandleTimeUpdate = () => tsUpdateFrameLabel();
         const tsHandleSeeked = () => tsUpdateFrameLabel();
@@ -2722,6 +2767,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 ? this.tsT("button.unmute", "Unmute")
                 : this.tsT("button.mute", "Mute");
             tsMuteButton.setAttribute("aria-pressed", String(Boolean(tsPrimaryVideo.muted)));
+            tsMuteButton.dataset.tsI18n = tsPrimaryVideo.muted ? "button.unmute" : "button.mute";
         };
         const tsHandleMuteClick = () => {
             tsPrimaryVideo.muted = !tsPrimaryVideo.muted;
@@ -2892,6 +2938,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             if (tsNextKey !== tsTransportKey) {
                 tsTransportKey = tsNextKey;
                 tsPlayToggleButton.textContent = tsToggleText;
+                tsPlayToggleButton.dataset.tsI18n = tsDesiredPlaying ? "button.pause" : "button.play";
                 tsTimeLabel.textContent = tsTimeText;
                 tsFrameLabel.textContent = tsFrameText;
                 tsSeekInput.max = String(Math.max(0, tsDuration));
@@ -2904,6 +2951,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             if (!tsSeekDragging) {
                 tsSeekInput.value = String(tsDuration > 0 ? Math.min(tsDuration, tsCurrentTime) : 0);
             }
+        };
+        this.tsStageLocaleRefresh = () => {
+            tsRenderMute();
+            tsUpdateTransport();
         };
         const tsStopTicker = () => {
             if (tsTickerId) {
@@ -3504,6 +3555,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsRetryButton = document.createElement("button");
         tsRetryButton.type = "button";
         tsRetryButton.className = "ts-3d-retry";
+        tsRetryButton.dataset.tsI18n = "empty.retryAction";
         tsRetryButton.textContent = this.tsT("empty.retryAction", "Try again");
         tsRetryButton.hidden = true;
         tsShell.append(tsRetryButton);
@@ -3571,9 +3623,9 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 return;
             }
             tsDisposeController();
-            tsFail(tsContextLostText);
+            tsFail(tsContextLostText());
         }
-        const tsContextLostText = this.tsT("status.3dContextLost", "The 3D view was lost (the graphics card reset or ran out of memory).");
+        const tsContextLostText = () => this.tsT("status.3dContextLost", "The 3D view was lost (the graphics card reset or ran out of memory).");
 
         const tsLoad = async () => {
             const tsToken = ++tsLoadToken;
@@ -4188,8 +4240,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsWaveform.setAttribute("aria-valuenow", String(Math.round(tsCurrent)));
             tsWaveform.setAttribute("aria-valuetext", tsTime.textContent);
             tsPlayButton.textContent = tsAudio.paused ? this.tsT("button.play", "Play") : this.tsT("button.pause", "Pause");
+            tsPlayButton.dataset.tsI18n = tsAudio.paused ? "button.play" : "button.pause";
         };
 
+        this.tsStageLocaleRefresh = tsUpdateUI;
         const tsSeekFromClientX = (tsClientX) => {
             const tsDuration = Number.isFinite(tsAudio.duration) && tsAudio.duration > 0
                 ? tsAudio.duration

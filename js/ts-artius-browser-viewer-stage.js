@@ -24,14 +24,14 @@ function tsBuildEdgeButtonMarkup(tsEdge, tsDeps) {
     const tsLabel = tsFirst
         ? tsDeps.t("button.firstFrame", "First frame (Home)")
         : tsDeps.t("button.lastFrame", "Last frame (End)");
-    return `<button class="ts-video-step ts-video-edge ts-video-${tsFirst ? "first" : "last"}-frame" type="button" title="${tsDeps.escapeAttribute(tsLabel)}" aria-label="${tsDeps.escapeAttribute(tsLabel)}">${tsFirst ? "⇤" : "⇥"}</button>`;
+    return `<button class="ts-video-step ts-video-edge ts-video-${tsFirst ? "first" : "last"}-frame" type="button" data-ts-i18n-title="${tsFirst ? "button.firstFrame" : "button.lastFrame"}" data-ts-i18n-aria-label="${tsFirst ? "button.firstFrame" : "button.lastFrame"}" title="${tsDeps.escapeAttribute(tsLabel)}" aria-label="${tsDeps.escapeAttribute(tsLabel)}">${tsFirst ? "⇤" : "⇥"}</button>`;
 }
 
 // One "Loop" toggle for every player; its state is a single remembered
 // preference, so turning it off once keeps every clip parked on its last
 // frame from then on.
 function tsBuildLoopButtonMarkup(tsClassName, tsDeps) {
-    return `<button class="${tsClassName} ts-media-loop" type="button" aria-pressed="false" title="${tsDeps.escapeAttribute(tsDeps.t("tooltip.loop", "Start again from the beginning when the end is reached"))}">${tsDeps.escapeHTML(tsDeps.t("button.loop", "Loop"))}</button>`;
+    return `<button class="${tsClassName} ts-media-loop" type="button" aria-pressed="false" data-ts-i18n="button.loop" data-ts-i18n-title="tooltip.loop" title="${tsDeps.escapeAttribute(tsDeps.t("tooltip.loop", "Start again from the beginning when the end is reached"))}">${tsDeps.escapeHTML(tsDeps.t("button.loop", "Loop"))}</button>`;
 }
 
 export function tsBuildStageMarkup(tsAsset, tsDeps) {
@@ -64,7 +64,7 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                                 <img class="ts-compare-image" src="${tsDeps.escapeAttribute(tsDeps.apiURL(tsResolveDisplayURL(tsAfterItem)))}" alt="${tsDeps.escapeAttribute(tsAfterItem.filename || tsImageLabel)}">
                             </div>
                             <div class="ts-image-compare-divider"></div>
-                            <input class="ts-image-compare-range" type="range" min="0" max="100" value="50" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.imageCompareWipe", "Image comparison slider"))}">
+                            <input class="ts-image-compare-range" type="range" min="0" max="100" value="50" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.imageCompareWipe", "Image comparison slider"))}" data-ts-i18n-aria-label="label.imageCompareWipe">
                         </div>
                         <div class="ts-image-compare-zoom" data-active="false"></div>
                     </div>
@@ -111,29 +111,29 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                         }).join("")}
                         ${tsCompareItems.length === 2 ? `
                             <div class="ts-image-compare-divider ts-video-compare-divider"></div>
-                            <input class="ts-image-compare-range ts-video-compare-range" type="range" min="0" max="100" value="50" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.videoCompareWipe", "Video comparison slider"))}">
+                            <input class="ts-image-compare-range ts-video-compare-range" type="range" min="0" max="100" value="50" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.videoCompareWipe", "Video comparison slider"))}" data-ts-i18n-aria-label="label.videoCompareWipe">
                         ` : ""}
                     </div>
                     <div class="ts-video-compare-controls">
                         ${tsCompareItems.length === 2 ? `
-                            <div class="ts-video-compare-modes" role="group" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.videoCompareMode", "Video comparison mode"))}">
-                                <button class="ts-video-compare-mode" type="button" data-layout="grid" aria-pressed="true">${tsDeps.t("button.compareSideBySide", "Side by side")}</button>
-                                <button class="ts-video-compare-mode" type="button" data-layout="wipe" aria-pressed="false">${tsDeps.t("button.compareWipe", "Wipe")}</button>
+                            <div class="ts-video-compare-modes" role="group" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.videoCompareMode", "Video comparison mode"))}" data-ts-i18n-aria-label="label.videoCompareMode">
+                                <button class="ts-video-compare-mode" type="button" data-layout="grid" aria-pressed="true" data-ts-i18n="button.compareSideBySide">${tsDeps.t("button.compareSideBySide", "Side by side")}</button>
+                                <button class="ts-video-compare-mode" type="button" data-layout="wipe" aria-pressed="false" data-ts-i18n="button.compareWipe">${tsDeps.t("button.compareWipe", "Wipe")}</button>
                             </div>
                         ` : ""}
                         <div class="ts-video-transport">
-                            <button class="ts-video-play-toggle" type="button">${tsDeps.t("button.play", "Play")}</button>
-                            <input class="ts-video-seek" type="range" min="0" max="0" step="0.001" value="0" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.playbackPosition", "Playback position"))}">
+                            <button class="ts-video-play-toggle" type="button" data-ts-i18n="button.play">${tsDeps.t("button.play", "Play")}</button>
+                            <input class="ts-video-seek" type="range" min="0" max="0" step="0.001" value="0" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.playbackPosition", "Playback position"))}" data-ts-i18n-aria-label="label.playbackPosition">
                             <div class="ts-video-time">0:00 / 0:00</div>
-                            <button class="ts-video-mute" type="button" aria-pressed="false">${tsDeps.t("button.mute", "Mute")}</button>
+                            <button class="ts-video-mute" type="button" aria-pressed="false" data-ts-i18n="button.mute">${tsDeps.t("button.mute", "Mute")}</button>
                             ${tsBuildLoopButtonMarkup("ts-video-loop", tsDeps)}
                         </div>
                         <div class="ts-video-compare-status" data-active="false" role="status"></div>
                         <div class="ts-video-stepper">
                             ${tsBuildEdgeButtonMarkup("first", tsDeps)}
-                            <button class="ts-video-step ts-video-prev-frame" type="button">${tsDeps.t("button.prevFrame", "Previous Frame")}</button>
+                            <button class="ts-video-step ts-video-prev-frame" type="button" data-ts-i18n="button.prevFrame">${tsDeps.t("button.prevFrame", "Previous Frame")}</button>
                             <div class="ts-video-frame">${tsDeps.t("label.currentFrame", "Frame")} 0</div>
-                            <button class="ts-video-step ts-video-next-frame" type="button">${tsDeps.t("button.nextFrame", "Next Frame")}</button>
+                            <button class="ts-video-step ts-video-next-frame" type="button" data-ts-i18n="button.nextFrame">${tsDeps.t("button.nextFrame", "Next Frame")}</button>
                             ${tsBuildEdgeButtonMarkup("last", tsDeps)}
                         </div>
                     </div>
@@ -152,9 +152,9 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                 ${tsBuildMediaStatusMarkup(tsAsset, tsDeps)}
                 <div class="ts-video-controls">
                     ${tsBuildEdgeButtonMarkup("first", tsDeps)}
-                    <button class="ts-video-step ts-video-prev-frame" type="button">${tsDeps.t("button.prevFrame", "Previous Frame")}</button>
+                    <button class="ts-video-step ts-video-prev-frame" type="button" data-ts-i18n="button.prevFrame">${tsDeps.t("button.prevFrame", "Previous Frame")}</button>
                     <div class="ts-video-frame">${tsDeps.t("label.currentFrame", "Frame")} 0</div>
-                    <button class="ts-video-step ts-video-next-frame" type="button">${tsDeps.t("button.nextFrame", "Next Frame")}</button>
+                    <button class="ts-video-step ts-video-next-frame" type="button" data-ts-i18n="button.nextFrame">${tsDeps.t("button.nextFrame", "Next Frame")}</button>
                     ${tsBuildEdgeButtonMarkup("last", tsDeps)}
                     ${tsBuildLoopButtonMarkup("ts-video-loop", tsDeps)}
                 </div>
@@ -164,14 +164,14 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
     if (tsAsset.type === "audio") {
         return `
             <div class="ts-audio-shell">
-                <div class="ts-audio-waveform-shell" data-audio-seek="true" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.playbackPosition", "Playback position"))}">
+                <div class="ts-audio-waveform-shell" data-audio-seek="true" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-label="${tsDeps.escapeAttribute(tsDeps.t("label.playbackPosition", "Playback position"))}" data-ts-i18n-aria-label="label.playbackPosition">
                     <div class="ts-audio-waveform-image" style="background-image:url('${tsPreviewURL}')" aria-label="${tsDeps.escapeAttribute(tsAsset.filename || tsDeps.t("label.audioWaveform", "Audio waveform"))}"></div>
                     <div class="ts-audio-progress"></div>
                     <div class="ts-audio-playhead"></div>
                 </div>
                 <div class="ts-audio-controls">
-                    <button class="ts-audio-play" type="button">${tsDeps.t("button.play", "Play")}</button>
-                    <button class="ts-audio-stop" type="button">${tsDeps.t("button.stop", "Stop")}</button>
+                    <button class="ts-audio-play" type="button" data-ts-i18n="button.play">${tsDeps.t("button.play", "Play")}</button>
+                    <button class="ts-audio-stop" type="button" data-ts-i18n="button.stop">${tsDeps.t("button.stop", "Stop")}</button>
                     ${tsBuildLoopButtonMarkup("ts-audio-loop", tsDeps)}
                     <span class="ts-audio-time">0:00 / 0:00</span>
                 </div>
