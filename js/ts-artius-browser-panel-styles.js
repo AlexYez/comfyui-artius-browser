@@ -7,7 +7,6 @@ export const tsPanelStyles = `<style>
                     color: var(--input-text, var(--fg-color, inherit));
                     font-family: var(--font-family, "Segoe UI", sans-serif);
                     --ts-accent: var(--p-button-primary-background, var(--theme-color, var(--input-text, var(--fg-color, currentColor))));
-                    --ts-accent-contrast: var(--p-button-primary-color, var(--comfy-menu-bg, var(--bg-color, inherit)));
                     --ts-bg-0: var(--comfy-menu-bg, var(--bg-color, transparent));
                     --ts-bg-1: var(--comfy-input-bg, var(--comfy-menu-secondary-bg, var(--ts-bg-0)));
                     --ts-bg-2: var(--content-bg, var(--comfy-input-bg, var(--ts-bg-1)));
@@ -358,9 +357,45 @@ export const tsPanelStyles = `<style>
 
                 .ts-toolbar-main {
                     display: flex;
-                    align-items: center;
-                    gap: 8px;
+                    flex-direction: column;
+                    gap: calc(10px * var(--ts-toolbar-scale, 1));
+                    font-size: 12px;
+                    min-width: 0;
+                }
+
+                .ts-toolbar-navigation,
+                .ts-toolbar-view,
+                .ts-toolbar-actions,
+                .ts-toolbar-selection {
+                    display: flex;
                     flex-wrap: wrap;
+                    align-items: center;
+                    gap: calc(8px * var(--ts-toolbar-scale, 1));
+                    min-width: 0;
+                }
+
+                .ts-toolbar-maintenance {
+                    border-top: 1px solid var(--ts-border);
+                    padding-top: calc(8px * var(--ts-toolbar-scale, 1));
+                }
+
+                .ts-shell[data-section="workflows"] .ts-toolbar-actions,
+                .ts-shell[data-section="workflows"] .ts-toolbar-maintenance {
+                    display: none;
+                }
+
+                .ts-selection-status,
+                .ts-operation-status {
+                    font-size: 12px;
+                    line-height: 1.5;
+                    overflow-wrap: anywhere;
+                    color: var(--ts-muted);
+                }
+
+                .ts-operation-status {
+                    border-left: 3px solid var(--ts-danger);
+                    padding: 6px 8px;
+                    color: var(--ts-text);
                 }
 
                 .ts-toolbar-cluster {
@@ -369,20 +404,51 @@ export const tsPanelStyles = `<style>
                     gap: 6px;
                     flex-wrap: wrap;
                     min-height: 32px;
-                    padding: 3px;
+                    min-width: 0;
+                    max-width: 100%;
+                    padding: calc(4px * var(--ts-toolbar-scale, 1));
                     border: 1px solid var(--ts-border);
                     border-radius: 10px;
                     background: color-mix(in srgb, var(--ts-bg-2) 78%, transparent);
                 }
 
                 .ts-toolbar-main-wrap {
-                    overflow: hidden;
+                    overflow: auto;
+                    max-height: min(46vh, 440px);
+                    scrollbar-width: thin;
+                    overscroll-behavior: contain;
                 }
 
                 .ts-toolbar-main-wrap > .ts-toolbar-main {
-                    transform: scale(var(--ts-toolbar-scale, 1));
-                    transform-origin: top left;
-                    width: calc(100% / var(--ts-toolbar-scale, 1));
+                    width: 100%;
+                }
+
+                .ts-toolbar-navigation > .ts-search-cluster {
+                    flex: 1 1 240px;
+                    min-width: min(220px, 100%);
+                }
+
+                .ts-toolbar-view > .ts-root-group {
+                    flex: 1 1 180px;
+                }
+
+                .ts-toolbar-main button,
+                .ts-toolbar-main .ts-toolbar-cluster button,
+                .ts-toolbar-main .ts-toolbar-cluster select,
+                .ts-toolbar-main select {
+                    min-height: 30px;
+                    font-size: 12px;
+                    max-width: 100%;
+                }
+
+                .ts-toolbar-main select,
+                .ts-toolbar-main .ts-search {
+                    min-width: 0;
+                    width: 100%;
+                }
+
+                .ts-toolbar-main [hidden] {
+                    display: none !important;
                 }
 
                 .ts-toolbar-resizer {
@@ -526,7 +592,7 @@ export const tsPanelStyles = `<style>
 
                 .ts-toggle-button[data-active="true"] {
                     border-color: color-mix(in srgb, var(--ts-accent) 58%, transparent);
-                    color: var(--ts-accent-contrast);
+                    color: var(--ts-text);
                     background: color-mix(in srgb, var(--ts-accent) 22%, var(--ts-bg-2));
                 }
 
@@ -580,14 +646,14 @@ export const tsPanelStyles = `<style>
                     top: 50%;
                     right: 4px;
                     transform: translateY(-50%);
-                    min-height: 22px;
-                    height: 22px;
+                    min-height: 28px;
+                    height: 28px;
                     padding: 0 9px;
                     gap: 5px;
                     border: 1px solid var(--ts-border);
                     border-radius: 999px;
                     background: var(--ts-bg-3);
-                    font-size: 11px;
+                    font-size: 12px;
                     line-height: 1;
                     white-space: nowrap;
                 }
@@ -605,7 +671,7 @@ export const tsPanelStyles = `<style>
                 .ts-toolbar-cluster.ts-search-cluster .ts-search-scope[data-active="true"] {
                     border-color: color-mix(in srgb, var(--ts-accent) 58%, transparent);
                     background: color-mix(in srgb, var(--ts-accent) 24%, var(--ts-bg-2));
-                    color: var(--ts-accent-contrast);
+                    color: var(--ts-text);
                 }
 
                 .ts-search,
@@ -690,7 +756,7 @@ export const tsPanelStyles = `<style>
                 .ts-mode-button[data-active="true"] {
                     background: color-mix(in srgb, var(--ts-accent) 20%, var(--ts-bg-2));
                     border-color: var(--ts-accent);
-                    color: var(--ts-accent-contrast);
+                    color: var(--ts-text);
                 }
 
                 .ts-status,
@@ -920,6 +986,7 @@ export const tsPanelStyles = `<style>
                 }
 
                 .ts-card {
+                    container-type: inline-size;
                     position: absolute;
                     border-radius: var(--ts-card-radius, 10px);
                     border: 1px solid var(--ts-border);
@@ -1044,8 +1111,9 @@ export const tsPanelStyles = `<style>
                     position: absolute;
                     top: var(--ts-card-inset, 8px);
                     right: var(--ts-card-inset, 8px);
-                    display: flex;
-                    gap: var(--ts-card-action-gap, 4px);
+                    display: grid;
+                    grid-template-columns: repeat(2, 24px);
+                    gap: 4px;
                     opacity: 0;
                     transform: translateY(-2px);
                     transition: opacity 0.14s ease, transform 0.14s ease;
@@ -1061,19 +1129,19 @@ export const tsPanelStyles = `<style>
                     transform: translateY(0);
                 }
                 .ts-card-actions button {
-                    min-height: var(--ts-card-action-size, 22px);
-                    width: var(--ts-card-action-size, 22px);
+                    min-height: 24px;
+                    width: 24px;
                     padding: 0;
                     border-radius: var(--ts-card-action-radius, 5px);
                     background: var(--ts-surface-overlay-strong);
-                    font-size: var(--ts-card-action-font-size, 10px);
+                    font-size: 11px;
                     font-weight: 700;
                 }
 
                 /* Trash sits apart from Download: at the default size the two
                    were 3px apart, one slip from sending a file to the trash. */
                 .ts-card-actions button[data-action="delete"] {
-                    margin-left: calc(var(--ts-card-action-gap, 4px) * 1.5);
+                    color: var(--ts-danger);
                 }
 
                 .ts-card-actions button[data-action="delete"]:not([disabled]):hover {
@@ -1088,6 +1156,13 @@ export const tsPanelStyles = `<style>
                     opacity: 1;
                 }
 
+                @container (min-width: 180px) {
+                    .ts-card-actions { display: flex; }
+                    .ts-card-actions button,
+                    .ts-card-favorite { width: 26px; min-height: 26px; }
+                    .ts-card-actions button[data-action="delete"] { margin-left: 6px; }
+                }
+
                 /* Top-left star, opposite the hover action cluster. Unlike those
                    actions it stays visible once set, so a starred asset reads
                    as starred at a glance while scrolling. */
@@ -1095,8 +1170,8 @@ export const tsPanelStyles = `<style>
                     position: absolute;
                     top: var(--ts-card-inset, 8px);
                     left: var(--ts-card-inset, 8px);
-                    min-height: var(--ts-card-action-size, 22px);
-                    width: var(--ts-card-action-size, 22px);
+                    min-height: 24px;
+                    width: 24px;
                     padding: 0;
                     border: 0;
                     border-radius: 999px;

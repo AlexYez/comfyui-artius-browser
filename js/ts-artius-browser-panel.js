@@ -11,6 +11,7 @@ import {
     tsEscapeAttribute,
     tsEscapeHTML,
     tsFetchAssetDetail,
+    tsExplainError,
     tsFetchVersionInfo,
     tsFetchWorkflowBrowserLibrary,
     tsEnsureCanvasDropBridge,
@@ -368,6 +369,29 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsT(tsKey, tsFallback) {
         return this.tsState.tsLocale?.[tsKey] || tsFallback;
+    }
+
+    tsReportActionFailure(tsSummary, tsError) {
+        const tsSummaryKey = Object.keys(this.tsState.tsLocale || {}).find((tsKey) => this.tsState.tsLocale[tsKey] === tsSummary);
+        this.tsLastActionError = { tsSummaryKey, tsSummary, tsError };
+        this.tsRenderActionFeedback();
+        tsShowToast("error", tsSummary, tsExplainError(tsError));
+    }
+
+    tsRenderActionFeedback() {
+        const tsElement = this.tsRefs?.tsOperationStatus;
+        if (!tsElement) return;
+        const tsFailure = this.tsLastActionError;
+        tsElement.hidden = !tsFailure;
+        const tsText = tsFailure
+            ? `${this.tsT(tsFailure.tsSummaryKey, tsFailure.tsSummary)}. ${tsExplainError(tsFailure.tsError)}`
+            : "";
+        if (tsElement.textContent !== tsText) tsElement.textContent = tsText;
+    }
+
+    tsClearActionFeedback() {
+        this.tsLastActionError = null;
+        this.tsRenderActionFeedback();
     }
 
     tsAttachMountPoint(tsMountPoint) {
@@ -759,22 +783,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         const tsScale = Math.max(0.6, Math.min(1, Number(this.tsState.tsToolbarScale) || 1));
         tsShell.style.setProperty("--ts-toolbar-scale", String(tsScale));
-        const tsRawNaturalHeight = tsMain.scrollHeight || tsMain.offsetHeight || 0;
-        if (tsRawNaturalHeight <= 0) {
-            // Layout has not produced a measurable size yet (typically the
-            // first paint with a hidden sidebar). Skip rather than locking
-            // the wrap to a misleading hard-coded fallback — the
-            // ResizeObserver below will re-fire as soon as the toolbar
-            // gets laid out and call us again with a real height.
-            return;
-        }
-        this.tsToolbarNaturalHeight = tsRawNaturalHeight;
-        // Ceil, not round: the scaled content is exactly tsRawNaturalHeight *
-        // tsScale tall, and overflow:hidden on the wrap crops anything past
-        // its pixel height. Rounding down by up to half a pixel can shave the
-        // last button row; ceil guarantees the wrap never sits below the
-        // content it must show.
-        tsWrap.style.height = `${Math.ceil(tsRawNaturalHeight * tsScale)}px`;
+        // Preserve the existing density preference, but apply it to spacing.
+        // Text and hit targets keep their real size, including in narrow tabs.
+        tsWrap.style.height = "";
     }
 
     tsBindToolbarResizer() {
@@ -785,12 +796,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         let tsDragStartY = 0;
         let tsDragStartScale = 1;
         let tsActivePointerId = null;
-        // Fixed sensitivity (scale units per drag pixel). A full 0.4-unit
-        // range (0.6 → 1.0) takes ~100 px of drag regardless of the
-        // current toolbar layout. Using a constant avoids the
-        // 1.2.0 bug where scrollHeight (captured at drag start) shrank
-        // with the inverse-scale width hack, making the slider feel
-        // ~2× more sensitive when the user dragged toward larger scale.
+        // The same stored 0.6–1 density range now adjusts gaps and padding.
         const tsSensitivity = 0.005;
         const tsOnPointerMove = (tsEvent) => {
             if (tsEvent.pointerId !== tsActivePointerId) {
@@ -847,15 +853,30 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     async tsEnsureWorkflowLibrary(tsForce = false) {
+        if (this.tsWorkflowLibraryPromise) {
+            return this.tsWorkflowLibraryPromise;
+        }
         if (this.tsWorkflowLibraryLoaded && !tsForce) {
             return this.tsWorkflowLibrary;
         }
-        this.tsWorkflowLibrary = await tsFetchWorkflowBrowserLibrary().catch((tsError) => {
-            tsConsoleWarn("Timesaver Artius Browser workflow fetch failed", tsError);
-            return [];
-        });
-        this.tsWorkflowLibraryLoaded = true;
-        return this.tsWorkflowLibrary;
+        // Queries share one source library. Superseding a query must not start
+        // another directory listing while its first load is still in flight.
+        const tsRequest = tsFetchWorkflowBrowserLibrary()
+            .then((tsItems) => {
+                this.tsWorkflowLibrary = tsItems;
+                this.tsWorkflowLibraryLoaded = true;
+                return tsItems;
+            })
+            .catch((tsError) => {
+                tsConsoleWarn("Timesaver Artius Browser workflow fetch failed", tsError);
+                this.tsWorkflowLibraryLoaded = false;
+                throw tsError;
+            })
+            .finally(() => {
+                if (this.tsWorkflowLibraryPromise === tsRequest) this.tsWorkflowLibraryPromise = null;
+            });
+        this.tsWorkflowLibraryPromise = tsRequest;
+        return tsRequest;
     }
 
     tsBuildWorkflowFolders(tsItems) {
@@ -891,6 +912,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a><span class="ts-version" hidden></span><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a><a class="ts-update-badge" href="https://github.com/AlexYez/comfyui-artius-browser/releases" target="_blank" rel="noreferrer noopener" hidden></a><button class="ts-help-toggle" type="button">?</button></div>
                     <div class="ts-toolbar-main-wrap">
                     <div class="ts-toolbar-main">
+                        <div class="ts-toolbar-navigation">
                         <div class="ts-toolbar-cluster ts-section-group">
                             <button class="ts-section-button ts-section-assets" type="button"></button>
                             <button class="ts-section-button ts-section-workflows" type="button"></button>
@@ -899,6 +921,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                             <input class="ts-search" type="search">
                             <button class="ts-toggle-button ts-search-scope" type="button" data-active="false"></button>
                         </div>
+                        </div>
+                        <div class="ts-toolbar-view">
                         <div class="ts-toolbar-cluster ts-root-group">
                             <select class="ts-root-select"></select>
                         </div>
@@ -916,17 +940,26 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         <input class="ts-preview-size" type="range" min="${tsPreviewSizeRange.min}" max="${tsPreviewSizeRange.max}" step="${tsPreviewSizeRange.step}" value="${tsPreviewSizeRange.default}">
                         <button class="ts-toggle-button ts-favorites-toggle" type="button" data-active="false"></button>
                         <button class="ts-toggle-button ts-filters-toggle" type="button" data-active="false"></button>
+                        </div>
+                        <div class="ts-toolbar-actions">
                         <button class="ts-toggle-button ts-autoscan" type="button" data-active="true">
                             <span class="ts-autoscan-label"></span>
                         </button>
                         <button class="ts-rescan" type="button"></button>
-                        <button class="ts-compare-selected" type="button"></button>
+                        <div class="ts-toolbar-selection">
+                        <button class="ts-compare-selected" type="button" aria-describedby="ts-selection-status"></button>
                         <button class="ts-download-selected" type="button"></button>
-                        <button class="ts-delete-selected" type="button"></button>
+                        <button class="ts-delete-selected" type="button" aria-describedby="ts-selection-status"></button>
+                        </div>
+                        </div>
+                        <div id="ts-selection-status" class="ts-selection-status" role="status" aria-live="polite" hidden></div>
+                        <div class="ts-toolbar-maintenance">
                         <button class="ts-rebuild-cache" type="button"></button>
+                        </div>
                     </div>
                     </div>
                     <div class="ts-toolbar-resizer" role="separator" aria-orientation="horizontal" title=""></div>
+                    <div class="ts-operation-status" role="alert" hidden></div>
                     <div class="ts-filter-panel" data-open="false" hidden>
                         <div class="ts-filter-field ts-filter-dates">
                             <span class="ts-filter-label ts-filter-label-date"></span>
@@ -984,6 +1017,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsToolbarMainWrap: this.shadowRoot.querySelector(".ts-toolbar-main-wrap"),
             tsToolbarMain: this.shadowRoot.querySelector(".ts-toolbar-main"),
             tsToolbarResizer: this.shadowRoot.querySelector(".ts-toolbar-resizer"),
+            tsSelectionStatus: this.shadowRoot.querySelector(".ts-selection-status"),
+            tsOperationStatus: this.shadowRoot.querySelector(".ts-operation-status"),
             tsTitle: this.shadowRoot.querySelector(".ts-title"),
             tsTitleLink: this.shadowRoot.querySelector(".ts-title-link"),
             tsVersion: this.shadowRoot.querySelector(".ts-version"),
@@ -1505,6 +1540,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRenderRootOptions();
         this.tsRenderSortDirection();
         this.tsViewer?.tsSetLocale(this.tsState.tsLocale);
+        this.tsRenderActionFeedback();
     }
 
     tsApplySearchScopeInset() {
@@ -1530,6 +1566,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsRenderToolbarForSection() {
         const tsWorkflowSection = this.tsIsWorkflowSection();
+        this.tsRefs.tsShell?.setAttribute?.("data-section", this.tsState.tsSection);
         const tsWorkflowHiddenDisplay = tsWorkflowSection ? "none" : "";
         this.tsRenderSearchHint();
         this.tsRefs.tsSearch.value = String(this.tsState.tsSearch || "");
@@ -1557,14 +1594,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsCompareSelected.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsDownloadSelected.style.display = tsWorkflowHiddenDisplay;
         this.tsRefs.tsDeleteSelected.style.display = tsWorkflowHiddenDisplay;
-        // Assets <-> Workflows toggles a large block of controls (root, type
-        // chips, autoscan, rescan, rebuild, delete), which changes the
-        // toolbar's natural unscaled height. The scaled wrap clips to a
-        // measured pixel height, so without a fresh measure the stale value
-        // from the previous section can crop the freshly shown controls
-        // (buttons "disappear"). Re-measure on an actual section change and
-        // reset the ResizeObserver dedup baseline so the re-measure is never
-        // skipped as a no-op.
+        // Section changes keep the same density and let layout size itself.
         if (this.tsLastRenderedToolbarSection !== tsWorkflowSection) {
             this.tsLastRenderedToolbarSection = tsWorkflowSection;
             this.tsLastObservedToolbarHeight = 0;
@@ -1749,6 +1779,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     tsRenderFiltersToggle() {
         this.tsSetToggleState(this.tsRefs.tsFiltersToggle, Boolean(this.tsState.tsFiltersOpen));
         this.tsRefs.tsFiltersToggle.dataset.applied = String(this.tsHasActiveFilters());
+        this.tsRefs.tsFiltersToggle.title = this.tsHasActiveFilters()
+            ? this.tsBuildFilterContext().join(" · ")
+            : this.tsT("tooltip.filters", "Filter assets by date and resolution.");
     }
 
     tsSetToggleState(tsButton, tsActive) {
@@ -1797,6 +1830,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     async tsToggleAssetFavorite(tsAssetId) {
+        this.tsClearActionFeedback();
         const tsAsset = this.tsFindItemById(Number(tsAssetId));
         if (!tsAsset) {
             return;
@@ -1821,7 +1855,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         } catch (tsError) {
             tsAsset.is_favorite = !tsNextFavorite;
             this.tsRefreshCardFavorite(tsAsset.id, !tsNextFavorite);
-            tsShowToast("error", this.tsT("toast.favoriteFailed", "Could not update favorite"), String(tsError?.message || tsError || ""));
+            this.tsReportActionFailure(this.tsT("toast.favoriteFailed", "Could not update favorite"), tsError);
         }
     }
 
@@ -1870,6 +1904,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         if (!tsIsBrowserSection(tsSection) || this.tsState.tsSection === tsSection) {
             return;
         }
+        this.tsClearActionFeedback();
         this.tsSyncSectionSettingsFromActive();
         if (!this.tsIsWorkflowSection()) {
             this.tsRememberAssetLocation();
@@ -1910,6 +1945,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     async tsRequestRescan(tsOverridePayload = undefined) {
+        this.tsClearActionFeedback();
         if (this.tsState.tsScanStatus?.running) {
             return;
         }
@@ -1942,7 +1978,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             await tsPostJSON(`${tsRouteBase}/rescan`, tsPayload);
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser rescan failed", tsError);
-            tsShowToast("error", this.tsT("toast.rescanFailed", "Rescan failed"), String(tsError?.message || tsError || ""));
+            this.tsReportActionFailure(this.tsT("toast.rescanFailed", "Rescan failed"), tsError);
             this.tsPendingScanSummary = false;
             // The optimistic local status above never gets corrected by
             // tsab:index-* events when the POST itself failed (no scan
@@ -1955,6 +1991,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     async tsRequestRebuildCache() {
+        this.tsClearActionFeedback();
         if (this.tsIsWorkflowSection()) {
             return;
         }
@@ -2008,7 +2045,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             await this.tsFetchAssets(true);
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser rebuild cache failed", tsError);
-            tsShowToast("error", this.tsT("toast.rebuildFailed", "Rebuild cache failed"), String(tsError?.message || tsError || ""));
+            this.tsReportActionFailure(this.tsT("toast.rebuildFailed", "Rebuild cache failed"), tsError);
             this.tsPendingScanSummary = false;
             if (!tsRebuildStarted) {
                 // POST failed — no scan is running server-side, so no
@@ -2133,6 +2170,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     async tsFetchAssets(tsReset = true, tsOptions = {}) {
         const tsPreserveView = Boolean(tsReset && tsOptions?.tsPreserveView && this.tsState.tsItems.length > 0);
+        const tsQueryKey = `${this.tsState.tsSection}:${this.tsBuildRequestPath(null)}`;
+        if (this.tsState.tsLoading && tsReset && tsQueryKey !== this.tsActiveQueryKey) {
+            this.tsFetchController?.abort();
+            // A changed query owns the UI immediately, even if the old host
+            // ignores AbortSignal. Its token cannot commit or finish our state.
+            this.tsState.tsLoading = false;
+            this.tsState.tsQueuedFetchReset = false;
+            this.tsState.tsQueuedFetchAppend = false;
+            this.tsState.tsQueuedFetchPreserve = false;
+        }
         if (this.tsState.tsLoading) {
             if (tsReset) {
                 // A hard reset queued behind a soft one must win: it means the
@@ -2148,6 +2195,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             }
             return this.tsCurrentFetchPromise || false;
         }
+        const tsFetchId = (this.tsFetchId || 0) + 1;
+        this.tsFetchId = tsFetchId;
+        this.tsActiveQueryKey = tsQueryKey;
+        const tsController = typeof AbortController === "function" ? new AbortController() : null;
+        this.tsFetchController = tsController;
+        const tsIsCurrent = () => tsFetchId === this.tsFetchId
+            && tsQueryKey === `${this.tsState.tsSection}:${this.tsBuildRequestPath(null)}`;
         const tsFetchPromise = (async () => {
             let tsDidMutate = false;
             this.tsState.tsLoading = true;
@@ -2190,10 +2244,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     const tsRequestPath = tsPreserveView
                         ? this.tsBuildRequestPath(null, { limit: this.tsResolvePreservedFetchLimit() })
                         : this.tsBuildRequestPath(tsCursorForFetch);
-                    tsPayload = await tsFetchJSON(tsRequestPath);
+                    tsPayload = await tsFetchJSON(tsRequestPath, tsController ? { signal: tsController.signal } : undefined);
+                    if (!tsIsCurrent()) {
+                        return false;
+                    }
                     if (tsCacheKey && tsRequestPath === tsCacheKey && tsFetchEpoch === this.tsResponseCacheEpoch) {
                         this.tsResponseCache.tsSet(tsCacheKey, tsPayload);
                     }
+                }
+                if (!tsIsCurrent()) {
+                    return false;
                 }
                 const tsIncomingItems = Array.isArray(tsPayload.items) ? tsPayload.items : [];
                 const tsFocusId = this.tsState.tsItems[this.tsState.tsLastSelectedIndex]?.id ?? null;
@@ -2270,13 +2330,16 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     this.tsScheduleRevalidation(tsCacheKey);
                 }
             } catch (tsError) {
+                if (!tsIsCurrent() || tsError?.name === "AbortError") {
+                    return false;
+                }
                 tsConsoleWarn("Timesaver Artius Browser fetch failed", tsError);
                 // An unreachable backend used to look exactly like an empty
                 // library. Only a failed FIRST page is worth a screen of its
                 // own: a failed scroll page or background refresh leaves the
                 // cards the user is looking at alone.
                 if (tsReset && (!tsPreserveView || this.tsState.tsItems.length === 0)) {
-                    this.tsState.tsFetchError = String(tsError?.message || tsError || "");
+                    this.tsState.tsFetchError = tsError;
                     if (!tsPreserveView) {
                         this.tsState.tsItems = [];
                         this.tsRebuildItemIndex();
@@ -2285,29 +2348,32 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     this.tsScheduleGridRender(true);
                 }
             } finally {
-                this.tsState.tsLoading = false;
-                this.tsRenderLoadingState();
-                // The first fetch has settled: from now on an empty grid is a
-                // real "no matches" state, so skeletons stop and the empty
-                // message takes over.
-                this.tsHasLoadedOnce = true;
-                // A grid rendered mid-fetch (while loading) may be showing
-                // skeletons or a stale empty; once settled, force one render so
-                // the correct empty message / cards replace them.
-                if (this.tsState.tsItems.length === 0) {
-                    this.tsScheduleGridRender(true);
-                }
-                this.tsRenderSelectionButtons();
-                const tsShouldReset = this.tsState.tsQueuedFetchReset;
-                const tsShouldAppend = !tsShouldReset && this.tsState.tsQueuedFetchAppend;
-                const tsQueuedPreserve = Boolean(this.tsState.tsQueuedFetchPreserve);
-                this.tsState.tsQueuedFetchReset = false;
-                this.tsState.tsQueuedFetchAppend = false;
-                this.tsState.tsQueuedFetchPreserve = false;
-                if (tsShouldReset) {
-                    tsDidMutate = Boolean(await this.tsFetchAssets(true, { tsPreserveView: tsQueuedPreserve })) || tsDidMutate;
-                } else if (tsShouldAppend) {
-                    tsDidMutate = Boolean(await this.tsFetchAssets(false)) || tsDidMutate;
+                if (tsFetchId === this.tsFetchId) {
+                    this.tsFetchController = null;
+                    this.tsState.tsLoading = false;
+                    this.tsRenderLoadingState();
+                    // The first fetch has settled: from now on an empty grid is a
+                    // real "no matches" state, so skeletons stop and the empty
+                    // message takes over.
+                    this.tsHasLoadedOnce = true;
+                    // A grid rendered mid-fetch (while loading) may be showing
+                    // skeletons or a stale empty; once settled, force one render so
+                    // the correct empty message / cards replace them.
+                    if (this.tsState.tsItems.length === 0) {
+                        this.tsScheduleGridRender(true);
+                    }
+                    this.tsRenderSelectionButtons();
+                    const tsShouldReset = this.tsState.tsQueuedFetchReset;
+                    const tsShouldAppend = !tsShouldReset && this.tsState.tsQueuedFetchAppend;
+                    const tsQueuedPreserve = Boolean(this.tsState.tsQueuedFetchPreserve);
+                    this.tsState.tsQueuedFetchReset = false;
+                    this.tsState.tsQueuedFetchAppend = false;
+                    this.tsState.tsQueuedFetchPreserve = false;
+                    if (tsShouldReset) {
+                        tsDidMutate = Boolean(await this.tsFetchAssets(true, { tsPreserveView: tsQueuedPreserve })) || tsDidMutate;
+                    } else if (tsShouldAppend) {
+                        tsDidMutate = Boolean(await this.tsFetchAssets(false)) || tsDidMutate;
+                    }
                 }
             }
             return tsDidMutate;
@@ -2653,7 +2719,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         this.tsPendingScanSummary = false;
         if (tsStatus?.error) {
-            tsShowToast("error", this.tsT("toast.scanFailed", "Scan failed"), String(tsStatus.error));
+            this.tsReportActionFailure(this.tsT("toast.scanFailed", "Scan failed"), { message: String(tsStatus.error) });
             return;
         }
         const tsChanged = Number(tsStatus?.changed || 0);
@@ -2824,42 +2890,63 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         // run with an empty library needs onboarding, a fruitless filename
         // search needs the prompt-scope escape hatch, and an over-filtered view
         // needs a way back — three very different next actions.
+        if (this.tsState.tsFetchError) {
+            return {
+                tsTitle: this.tsT("empty.errorTitle", "Could not load the library."),
+                tsLines: [tsExplainError(this.tsState.tsFetchError)],
+                tsAction: { tsAction: "retry", tsLabel: this.tsT("empty.retryAction", "Try again") },
+            };
+        }
+        const tsContext = this.tsBuildFilterContext();
         if (this.tsIsWorkflowSection()) {
-            return { tsTitle: this.tsT("empty.workflows", "No workflows match the current filters."), tsLines: [], tsAction: null };
+            return {
+                tsTitle: this.tsT("empty.workflows", "No workflows match the current filters."),
+                tsLines: tsContext,
+                tsAction: this.tsState.tsSearch
+                    ? { tsAction: "clear-search", tsLabel: this.tsT("empty.clearSearchAction", "Clear search") }
+                    : null,
+            };
         }
         const tsSearchText = String(this.tsState.tsSearch || "").trim();
         const tsScanStatus = this.tsState.tsScanStatus;
         const tsNeverScanned = !tsScanStatus?.running && !tsScanStatus?.started_at;
-        if (this.tsState.tsFetchError) {
-            // Unreachable backend: say so, rather than "your library is empty".
-            return {
-                tsTitle: this.tsT("empty.errorTitle", "Could not load the library."),
-                tsLines: [this.tsT("empty.errorHint", "ComfyUI did not answer. Check that it is still running, then try again.")],
-                tsAction: { tsAction: "retry", tsLabel: this.tsT("empty.retryAction", "Try again") },
-            };
-        }
         const tsHasFilters = this.tsState.tsFavoritesOnly || this.tsHasActiveFilters() || this.tsState.tsTypes.size > 0;
         if (tsSearchText && this.tsState.tsSearchScope !== "all" && !tsHasFilters) {
             return {
                 tsTitle: this.tsT("empty.searchTitle", "Nothing found by filename."),
-                tsLines: [this.tsT("empty.searchHint", "This search only looks at filenames.")],
+                tsLines: [this.tsT("empty.searchHint", "This search only looks at filenames."), ...tsContext],
                 tsAction: { tsAction: "search-prompts", tsLabel: this.tsT("empty.searchPromptsAction", "Search prompts and models too") },
             };
         }
         if (tsHasFilters) {
             // Filters and the search are separate things: resetting the
             // filters keeps what the user typed.
+            const tsTypes = [...this.tsState.tsTypes];
+            const tsTypeTitles = {
+                image: this.tsT("empty.filteredImage", "No images match these conditions."),
+                video: this.tsT("empty.filteredVideo", "No videos match these conditions."),
+                audio: this.tsT("empty.filteredAudio", "No audio files match these conditions."),
+                "3d": this.tsT("empty.filtered3d", "No 3D assets match these conditions."),
+            };
             return {
-                tsTitle: this.tsT("empty.title", "No assets match the current filters."),
-                tsLines: [],
+                tsTitle: tsTypes.length === 1 ? tsTypeTitles[tsTypes[0]] : this.tsT("empty.title", "No assets match the current filters."),
+                tsLines: [...tsContext, ...(tsSearchText ? [this.tsT("empty.filtersKeepSearch", "Resetting filters keeps your search text.")] : [])],
                 tsAction: { tsAction: "clear-filters", tsLabel: this.tsT("empty.clearFiltersAction", "Reset filters") },
             };
         }
         if (tsSearchText) {
             return {
                 tsTitle: this.tsT("empty.searchAllTitle", "Nothing found in filenames, prompts or models."),
-                tsLines: [],
+                tsLines: tsContext,
                 tsAction: { tsAction: "clear-search", tsLabel: this.tsT("empty.clearSearchAction", "Clear search") },
+            };
+        }
+        if ((this.tsState.tsRootId && this.tsState.tsRootId !== "all")
+            || (this.tsState.tsMode === "tree" && this.tsState.tsFolder)) {
+            return {
+                tsTitle: this.tsT("empty.folder", "No assets have been found in the selected folder."),
+                tsLines: tsContext,
+                tsAction: { tsAction: "rescan", tsLabel: this.tsT("button.rescan", "Rescan") },
             };
         }
         if (tsNeverScanned || this.tsState.tsItems.length === 0) {
@@ -2874,6 +2961,31 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             };
         }
         return { tsTitle: this.tsT("empty.title", "No assets match the current filters."), tsLines: [], tsAction: null };
+    }
+
+    tsBuildFilterContext() {
+        const tsState = this.tsState;
+        const tsLines = [];
+        if (tsState.tsSearch) tsLines.push(this.tsT("filter.contextSearch", "Search: “{query}”").replace("{query}", () => tsState.tsSearch));
+        if (!this.tsIsWorkflowSection()) {
+            if (tsState.tsTypes?.size) tsLines.push(this.tsT("filter.contextTypes", "Types: {types}").replace("{types}", [...tsState.tsTypes].map((tsType) => this.tsT(`type.${tsType}`, tsType)).join(", ")));
+            if (tsState.tsFavoritesOnly) tsLines.push(this.tsT("button.favorites", "Favorites"));
+            const tsAny = this.tsT("filter.any", "any");
+            if (tsState.tsFilterDateFrom || tsState.tsFilterDateTo) {
+                tsLines.push(this.tsT("filter.contextDate", "Date: {from} – {to}")
+                    .replace("{from}", tsState.tsFilterDateFrom || tsAny).replace("{to}", tsState.tsFilterDateTo || tsAny));
+            }
+            for (const [tsLabel, tsMin, tsMax] of [
+                [this.tsT("filter.width", "Width"), tsState.tsFilterMinWidth, tsState.tsFilterMaxWidth],
+                [this.tsT("filter.height", "Height"), tsState.tsFilterMinHeight, tsState.tsFilterMaxHeight],
+            ]) {
+                if (tsMin || tsMax) tsLines.push(`${tsLabel}: ${tsMin || tsAny} – ${tsMax || tsAny}`);
+            }
+        }
+        const tsRoot = tsState.tsRoots?.find((tsItem) => tsItem.root_id === tsState.tsRootId);
+        if (!this.tsIsWorkflowSection() && tsState.tsRootId !== "all" && tsRoot?.label) tsLines.push(tsRoot.label);
+        if (tsState.tsMode === "tree" && tsState.tsFolder) tsLines.push(tsState.tsFolder);
+        return tsLines;
     }
 
     tsBuildEmptyStateMarkup() {
@@ -3189,6 +3301,22 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         this.tsRenderDownloadButton(tsSelectedItems, tsWorkflowSection);
         this.tsRenderCompareButton(tsSelectedItems, tsWorkflowSection);
+        const tsDeleteHint = tsSelectedItems.length > tsDeletableCount && !tsWorkflowSection
+            ? this.tsT("selection.deleteSubset", "Can move {count} of {total} selected files to trash; deletion is disabled in the other folders.")
+                .replace("{count}", String(tsDeletableCount)).replace("{total}", String(tsSelectedItems.length))
+            : this.tsT("tooltip.deleteSelected", "Delete selected assets from allowed roots.");
+        this.tsRefs.tsDeleteSelected.title = tsDeleteHint;
+        if (this.tsRefs.tsSelectionStatus) {
+            const tsCompare = this.tsResolveCompareSelection(tsSelectedItems);
+            const tsParts = [this.tsT("selection.count", "Selected: {count}").replace("{count}", String(tsSelectedItems.length))];
+            if (!tsWorkflowSection && tsSelectedItems.length > 0) {
+                tsParts.push(this.tsBuildCompareHint(tsSelectedItems, tsCompare));
+                if (tsDeletableCount < tsSelectedItems.length) tsParts.push(tsDeleteHint);
+            }
+            const tsText = tsParts.join(" ");
+            this.tsRefs.tsSelectionStatus.hidden = tsSelectedItems.length === 0;
+            if (this.tsRefs.tsSelectionStatus.textContent !== tsText) this.tsRefs.tsSelectionStatus.textContent = tsText;
+        }
     }
 
     tsRenderDownloadButton(tsSelectedItems, tsWorkflowSection) {
@@ -3219,6 +3347,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     async tsDownloadAssetsAsArchive(tsAssets) {
+        this.tsClearActionFeedback();
         const tsIds = (Array.isArray(tsAssets) ? tsAssets : [])
             .map((tsAsset) => Number(tsAsset?.id))
             .filter((tsId) => Number.isInteger(tsId) && tsId > 0);
@@ -3253,11 +3382,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsConsoleWarn("Timesaver Artius Browser failed to build the ZIP archive", tsError);
             const tsStatus = String(tsError?.message || "").split(" ", 1)[0];
             if (tsStatus === "507") {
-                tsShowToast("error", this.tsT("toast.archiveNoSpace", "Not enough disk space for the archive"));
+                this.tsReportActionFailure(this.tsT("toast.archiveNoSpace", "Not enough disk space for the archive"), tsError);
             } else if (tsStatus === "404") {
-                tsShowToast("error", this.tsT("toast.archiveEmpty", "None of the selected files could be found"));
+                this.tsReportActionFailure(this.tsT("toast.archiveEmpty", "None of the selected files could be found"), tsError);
             } else {
-                tsShowToast("error", this.tsT("toast.archiveFailed", "Could not create the ZIP archive"), String(tsError?.message || tsError || ""));
+                this.tsReportActionFailure(this.tsT("toast.archiveFailed", "Could not create the ZIP archive"), tsError);
             }
         } finally {
             window.clearTimeout(tsPreparingTimer);
@@ -3277,13 +3406,26 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         // too small: a control that only appears once you already know the
         // trick teaches nobody. Disabled, with the tooltip, it IS the hint.
         tsButton.textContent = tsCompareSelection.length >= TS_COMPARE_MIN_ITEMS
-            ? `${tsLabel} (${tsCompareSelection.length})`
+            ? tsCompareSelection.length < tsSelectedItems.length
+                ? this.tsT("selection.compareSubset", "Compare {count} of {total}")
+                    .replace("{count}", String(tsCompareSelection.length)).replace("{total}", String(tsSelectedItems.length))
+                : `${tsLabel} (${tsCompareSelection.length})`
             : tsLabel;
         tsButton.disabled = tsCompareSelection.length < TS_COMPARE_MIN_ITEMS;
-        tsButton.title = this.tsT(
-            "tooltip.compareSelected",
-            `Select ${TS_COMPARE_MIN_ITEMS}-${TS_COMPARE_MAX_ITEMS} images or videos, then compare them side by side. Videos share one transport and play in sync.`,
-        );
+        tsButton.title = tsSelectedItems.length === 0
+            ? this.tsT("tooltip.compareSelected", "Select 2–4 images or videos to compare them.")
+            : this.tsBuildCompareHint(tsSelectedItems, tsCompareSelection);
+        tsButton.setAttribute?.("aria-label", `${tsButton.textContent}. ${tsButton.title}`);
+    }
+
+    tsBuildCompareHint(tsSelectedItems, tsCompareSelection) {
+        if (tsCompareSelection.length < TS_COMPARE_MIN_ITEMS) {
+            return this.tsT("selection.compareRequires", "Comparison needs at least two images or two videos of the same type.");
+        }
+        const tsHint = tsCompareSelection[0].type === "image"
+            ? this.tsT("selection.compareImages", "Images to compare: {count} of {total} selected files.")
+            : this.tsT("selection.compareVideos", "Videos to compare: {count} of {total} selected files.");
+        return tsHint.replace("{count}", String(tsCompareSelection.length)).replace("{total}", String(tsSelectedItems.length));
     }
 
     tsResolveCompareSelection(tsSelectedItems = this.tsGetSelectedItems()) {
@@ -3318,7 +3460,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         return tsFindItemById(this.tsState.tsItems, this.tsItemIndexById, tsAssetId);
     }
 
-    async tsEnsureAssetDetail(tsAssetId) {
+    async tsEnsureAssetDetail(tsAssetId, tsOptions = {}) {
         const tsIndex = this.tsItemIndexById.get(tsAssetId);
         if (tsIndex === undefined || tsIndex < 0) {
             return null;
@@ -3332,38 +3474,61 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             if (!tsDetail) {
                 return tsAsset;
             }
-            this.tsState.tsItems[tsIndex] = { ...tsAsset, ...tsDetail };
+            const tsCurrentIndex = this.tsItemIndexById.get(tsAssetId);
+            if (tsCurrentIndex === undefined || this.tsState.tsItems[tsCurrentIndex]?.id !== tsAssetId) {
+                // The copy still belongs to the clicked file, but a new query
+                // may now own its old grid index. Never write over that row.
+                return { ...tsAsset, ...tsDetail };
+            }
+            this.tsState.tsItems[tsCurrentIndex] = { ...this.tsState.tsItems[tsCurrentIndex], ...tsDetail };
             this.tsItemsRevision += 1;
-            return this.tsState.tsItems[tsIndex];
-        } catch {
+            return this.tsState.tsItems[tsCurrentIndex];
+        } catch (tsError) {
+            if (tsOptions.tsThrowOnError) throw tsError;
             return tsAsset;
         }
     }
 
-    async tsCopyAssetPrompt(tsAssetId) {
-        const tsAsset = await this.tsEnsureAssetDetail(tsAssetId);
-        if (!tsAsset?.prompt_text) {
-            tsShowToast("info", this.tsT("toast.noPrompt", "No prompt to copy"));
-            return;
-        }
-        const tsCopied = await tsCopyText(tsAsset.prompt_text);
-        tsShowToast(
-            tsCopied ? "success" : "error",
-            tsCopied ? this.tsT("toast.promptCopied", "Prompt copied") : this.tsT("toast.copyFailed", "Copy failed"),
-        );
+    async tsCopyAssetPrompt(tsAssetId, tsButton = null) {
+        return this.tsCopyAssetField(tsAssetId, "prompt_text", this.tsT("toast.promptCopied", "Prompt copied"), this.tsT("toast.noPrompt", "No prompt to copy"), tsButton);
     }
 
-    async tsCopyAssetWorkflow(tsAssetId) {
-        const tsAsset = await this.tsEnsureAssetDetail(tsAssetId);
-        if (!tsAsset?.workflow_text) {
-            tsShowToast("info", this.tsT("toast.noWorkflow", "No workflow to copy"));
-            return;
+    async tsCopyAssetWorkflow(tsAssetId, tsButton = null) {
+        return this.tsCopyAssetField(tsAssetId, "workflow_text", this.tsT("toast.workflowCopied", "Workflow copied"), this.tsT("toast.noWorkflow", "No workflow to copy"), tsButton);
+    }
+
+    async tsCopyAssetField(tsAssetId, tsField, tsSuccess, tsEmpty, tsButton) {
+        this.tsClearActionFeedback();
+        if (tsButton) tsButton.disabled = true;
+        try {
+            const tsAsset = await this.tsEnsureAssetDetail(tsAssetId, { tsThrowOnError: true });
+            if (!tsAsset?.[tsField]) {
+                tsShowToast("info", tsEmpty);
+                return;
+            }
+            const tsCopied = await tsCopyText(tsAsset[tsField]);
+            if (!tsCopied) {
+                this.tsReportActionFailure(this.tsT("toast.copyFailed", "Copy failed"), { code: "CLIPBOARD" });
+                return;
+            }
+            tsShowToast("success", tsSuccess);
+            if (tsButton?.isConnected) {
+                tsButton.textContent = "✓";
+                tsButton.title = this.tsT("toast.copied", "Copied");
+                window.setTimeout(() => {
+                    if (!tsButton.isConnected) return;
+                    tsButton.textContent = tsButton.dataset.action === "workflow" ? "W" : "P";
+                    tsButton.title = tsButton.dataset.action === "workflow"
+                        ? this.tsT("button.copyWorkflow", "Copy Workflow")
+                        : this.tsT("button.copyPrompt", "Copy Prompt");
+                }, 1200);
+            }
+        } catch (tsError) {
+            tsConsoleWarn("Timesaver Artius Browser copy failed", tsError);
+            this.tsReportActionFailure(this.tsT("toast.copyFailed", "Copy failed"), tsError);
+        } finally {
+            if (tsButton) tsButton.disabled = false;
         }
-        const tsCopied = await tsCopyText(tsAsset.workflow_text);
-        tsShowToast(
-            tsCopied ? "success" : "error",
-            tsCopied ? this.tsT("toast.workflowCopied", "Workflow copied") : this.tsT("toast.copyFailed", "Copy failed"),
-        );
     }
     tsRefreshCardSelection(tsOnlyIds = null) {
         const tsCards = Array.isArray(tsOnlyIds)
@@ -3387,10 +3552,11 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                 return;
             }
             const tsAction = tsActionButton.dataset.action;
+            this.tsClearActionFeedback();
             if (tsAction === "copy") {
-                void this.tsCopyAssetPrompt(tsAsset.id);
+                void this.tsCopyAssetPrompt(tsAsset.id, tsActionButton);
             } else if (tsAction === "workflow") {
-                void this.tsCopyAssetWorkflow(tsAsset.id);
+                void this.tsCopyAssetWorkflow(tsAsset.id, tsActionButton);
             } else if (tsAction === "load-workflow") {
                 void this.tsOpenWorkflowById(tsAsset.id);
             } else if (tsAction === "favorite") {
@@ -4242,6 +4408,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     async tsOpenWorkflowById(tsWorkflowId) {
+        this.tsClearActionFeedback();
         const tsWorkflow = this.tsFindItemById(tsWorkflowId);
         if (!tsWorkflow?.relative_path) {
             return;
@@ -4254,12 +4421,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             }
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser failed to load workflow", tsError);
-            tsShowToast("error", this.tsT("toast.workflowLoadFailed", "Failed to load workflow"), String(tsError?.message || tsError || ""));
+            this.tsReportActionFailure(this.tsT("toast.workflowLoadFailed", "Failed to load workflow"), tsError);
         }
     }
 
 
     async tsDeleteWorkflowById(tsWorkflowId) {
+        this.tsClearActionFeedback();
         const tsWorkflow = this.tsFindItemById(tsWorkflowId);
         if (!tsWorkflow?.relative_path) {
             return;
@@ -4268,7 +4436,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             await tsDeleteWorkflowFile(tsWorkflow.relative_path);
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser failed to delete workflow", tsError);
-            tsShowToast("error", this.tsT("toast.workflowDeleteFailed", "Failed to delete workflow"), String(tsError?.message || tsError || ""));
+            this.tsReportActionFailure(this.tsT("toast.workflowDeleteFailed", "Failed to delete workflow"), tsError);
             return;
         }
         // Surgically remove from the workflow library cache so re-entering the
@@ -4287,6 +4455,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     async tsDeleteAssets(tsAssets) {
+        this.tsClearActionFeedback();
         const tsDeletableAssets = tsAssets.filter((tsAsset) => tsAsset.allow_delete);
         const tsProtectedCount = tsAssets.length - tsDeletableAssets.length;
         if (tsDeletableAssets.length === 0) {
@@ -4313,7 +4482,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsResult = await tsPostJSON(`${tsRouteBase}/delete`, { ids: tsRequestedIds });
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser failed to delete assets", tsError);
-            tsShowToast("error", this.tsT("toast.deleteFailed", "Delete failed"), String(tsError?.message || tsError || ""));
+            this.tsReportActionFailure(this.tsT("toast.deleteFailed", "Delete failed"), tsError);
             return;
         }
         const tsOutcome = tsResolveDeleteOutcome(tsRequestedIds, tsResult);

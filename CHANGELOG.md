@@ -4,6 +4,28 @@ Release history for **Timesaver Artius Browser**. Entries follow [Keep a Changel
 
 [Archive and version index](changelog/README.md) · [Project entry](README.md)
 
+## [1.20.4] - 2026-11-13
+
+### Changed
+
+- Group toolbar controls by navigation, view, selection and maintenance. The
+  existing density adjustment changes spacing while preserving readable text
+  and usable targets; narrow panels keep a scrollable toolbar and visible grid.
+- Explain which selected files can be compared or deleted. Empty results show
+  the active search, asset types, dates, dimensions and folder context.
+- Enlarge card action targets, keep them apart on small previews and confirm
+  successful copying on the clicked button.
+
+### Fixed
+
+- New search/filter queries start without waiting for obsolete requests.
+  Cancellation and request ownership prevent stale results, errors and cleanup
+  from replacing the current view.
+- File and connection failures show localized recovery guidance. Panel action
+  failures remain visible until the next action; metadata fetch errors are no
+  longer described as missing prompts.
+- Preserve readable text on tinted active controls in light and dark themes.
+
 ## [1.20.3] - 2026-11-02
 
 ### Fixed

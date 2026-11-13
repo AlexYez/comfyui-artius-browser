@@ -112,7 +112,9 @@ export function tsRecordError(...tsArgs) {
     // self-contained without opening the browser console.
     try {
         const tsMessage = tsArgs
-            .map((tsArg) => (tsArg instanceof Error ? `${tsArg.name}: ${tsArg.message}` : String(tsArg)))
+            .map((tsArg) => (tsArg instanceof Error
+                ? `${tsArg.name}: ${tsArg.message}${tsArg.detail ? ` (${String(tsArg.detail).slice(0, 1024)})` : ""}`
+                : String(tsArg)))
             .join(" ");
         const tsEntry = { at: new Date().toISOString(), message: tsMessage };
         tsRecentErrors.push(tsEntry);
@@ -203,9 +205,61 @@ async function tsFetchResponse(tsPath, tsOptions = undefined) {
 export async function tsFetchJSON(tsPath, tsOptions = undefined) {
     const tsResponse = await tsFetchResponse(tsPath, tsOptions);
     if (!tsResponse.ok) {
-        throw new Error(`${tsResponse.status} ${tsResponse.statusText}`);
+        throw await tsBuildResponseError(tsResponse);
     }
     return tsResponse.json();
+}
+
+async function tsBuildResponseError(tsResponse) {
+    const tsError = new Error(`${tsResponse.status} ${tsResponse.statusText}`);
+    tsError.status = Number(tsResponse.status);
+    try {
+        const tsBody = typeof tsResponse.text === "function" ? await tsResponse.text() : await tsResponse.json?.();
+        tsError.detail = String(typeof tsBody === "string" ? tsBody : JSON.stringify(tsBody) || "").slice(0, 4096);
+    } catch {
+        // Status alone is enough when the response body is unavailable.
+    }
+    return tsError;
+}
+
+// Keep technical diagnostics in the warning ring. UI text explains recovery.
+export function tsExplainError(tsError) {
+    const tsStatus = Number(tsError?.status) || Number(String(tsError?.message || "").match(/^\d{3}\b/)?.[0]);
+    const tsDetails = `${tsError?.code || ""} ${tsError?.message || ""} ${tsError?.detail || ""}`;
+    if (tsError?.code === "CLIPBOARD" || tsError?.name === "NotAllowedError") {
+        return tsT("error.clipboard", "Keep this tab active and allow clipboard access in the browser, then try again.");
+    }
+    if (tsStatus === 507 || /ENOSPC|no space left|disk full/i.test(tsDetails)) {
+        return tsT("error.diskSpace", "Free space on the computer running ComfyUI, then try again.");
+    }
+    if ([409, 423].includes(tsStatus) || /EBUSY|ETXTBSY|WinError 32|used by another process|sharing violation/i.test(tsDetails)) {
+        return tsT("error.fileBusy", "Close the file in other applications, wait for active operations to finish, then try again.");
+    }
+    if (tsStatus === 401) {
+        return tsT("error.session", "Reconnect to ComfyUI using your active profile, then try again.");
+    }
+    if (tsStatus === 403 || /EACCES|EPERM|permission denied|access is denied/i.test(tsDetails)) {
+        return tsT("error.permission", "Check access to this folder and whether the action is allowed for it, then try again.");
+    }
+    if (tsStatus === 404 || /ENOENT|file not found/i.test(tsDetails)) {
+        return tsT("error.missingFile", "The file may have moved or been deleted. Rescan the folder and try again.");
+    }
+    if (tsStatus === 413) {
+        return tsT("error.tooLarge", "The server could not accept this amount of data. Try a smaller selection or check its upload limit.");
+    }
+    if (tsStatus === 429 || tsStatus === 503) {
+        return tsT("error.serverBusy", "ComfyUI is busy or temporarily unavailable. Wait a moment and try again.");
+    }
+    if ([408, 504].includes(tsStatus) || /timeout|timed out/i.test(tsDetails)) {
+        return tsT("error.timeout", "ComfyUI took too long to respond. Check the connection and try again.");
+    }
+    if (/failed to fetch|networkerror|network error|fetch failed|connection refused|load failed/i.test(tsDetails)) {
+        return tsT("error.connection", "Check that ComfyUI is running and that your connection is available, then try again.");
+    }
+    if (tsStatus === 400 || tsStatus === 422) {
+        return tsT("error.invalidRequest", "Check the selection and filter values, then try again.");
+    }
+    return tsT("error.retry", "Try the action again. If it keeps failing, check the ComfyUI log for details.");
 }
 
 export async function tsPostJSON(tsPath, tsBody = {}) {
@@ -301,15 +355,17 @@ export async function tsDeleteWorkflowFile(tsRelativePath) {
 // selected. It opens on the machine that runs ComfyUI, which is the user's own
 // machine in the usual local setup. The only answer worth a toast is failure.
 async function tsRevealInFolder(tsRequest) {
+    let tsFailure = null;
     try {
         const tsResult = await tsRequest();
         if (tsResult?.revealed) {
             return true;
         }
     } catch (tsError) {
+        tsFailure = tsError;
         tsConsoleWarn("Timesaver Artius Browser could not show the file in its folder", tsError);
     }
-    tsShowToast("error", tsT("toast.revealFailed", "Could not open the folder"));
+    tsShowToast("error", tsT("toast.revealFailed", "Could not open the folder"), tsExplainError(tsFailure));
     return false;
 }
 

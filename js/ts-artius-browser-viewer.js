@@ -5,6 +5,7 @@ import {
     tsEscapeAttribute,
     tsEscapeHTML,
     tsFetchAssetDetail,
+    tsExplainError,
     tsFormatBytes,
     tsOpenAssetInNewTab,
     tsOpenDownload,
@@ -2084,6 +2085,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         tsShowToast(
             tsCopied ? "success" : "error",
             tsCopied ? this.tsT("toast.copied", "Copied") : this.tsT("toast.copyFailed", "Copy failed"),
+            tsCopied ? "" : tsExplainError({ code: "CLIPBOARD" }),
         );
         if (tsCopied && tsButton.isConnected) {
             // The button itself confirms, where the eye already is; the toast
@@ -2128,7 +2130,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         } catch (tsError) {
             // Previously uncaught: a failed delete rejected tsDeleteCurrent and
             // left the lightbox showing an asset the user thinks is gone.
-            tsShowToast("error", this.tsT("toast.deleteFailed", "Delete failed"), String(tsError?.message || tsError || ""));
+            tsShowToast("error", this.tsT("toast.deleteFailed", "Delete failed"), tsExplainError(tsError));
             return;
         } finally {
             this.tsDeleteInFlight = false;
