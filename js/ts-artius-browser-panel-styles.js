@@ -1112,6 +1112,7 @@ export const tsPanelStyles = `<style>
                     top: var(--ts-card-inset, 8px);
                     right: var(--ts-card-inset, 8px);
                     display: grid;
+                    direction: ltr;
                     grid-template-columns: repeat(2, 24px);
                     gap: 4px;
                     opacity: 0;
@@ -1142,6 +1143,8 @@ export const tsPanelStyles = `<style>
                    were 3px apart, one slip from sending a file to the trash. */
                 .ts-card-actions button[data-action="delete"] {
                     color: var(--ts-danger);
+                    /* Keep the last action at the preview edge on a partial row. */
+                    grid-column: -2 / -1;
                 }
 
                 .ts-card-actions button[data-action="delete"]:not([disabled]):hover {

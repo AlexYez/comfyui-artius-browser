@@ -4,6 +4,12 @@ Release history for **Timesaver Artius Browser**. Entries follow [Keep a Changel
 
 [Archive and version index](changelog/README.md) · [Project entry](README.md)
 
+## [1.20.7] - 2026-11-19
+
+### Fixed
+
+- Keep the Delete button at the right edge of narrow asset previews when the action buttons wrap.
+
 ## [1.20.6] - 2026-11-19
 
 ### Fixed
