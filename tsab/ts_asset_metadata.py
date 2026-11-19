@@ -1,32 +1,28 @@
 from __future__ import annotations
 
 from .ts_metadata_extract import TSExtractPromptText, TSExtractWorkflowText
-from .ts_settings import TS_PROMPT_PARTS_VERSION
+from .ts_settings import TS_IMAGE_METADATA_VERSION, TS_PROMPT_PARTS_VERSION
 from .ts_utils import TSJsonLoads, TSRowValue
 
 
-def TSNeedsPromptMetadataRefresh(ts_asset_type: str, ts_metadata) -> bool:
-    """True when a row's stored prompt/workflow blob predates the current rules.
-
-    Images and videos answer differently, on purpose. An image with an EMPTY
-    blob has already been read and simply has no prompt in it, so calling that
-    stale would re-open the file on every single detail view, forever. A video
-    always gets a version stamp written back - including one with no tags at
-    all - so for a video a missing stamp genuinely means "never extracted under
-    the current rules", which is the state of every video row indexed before
-    embedded workflows were read at all.
-    """
-    ts_stored_version = (
-        int(ts_metadata.get("prompt_parts_version") or 0) if isinstance(ts_metadata, dict) else 0
-    )
+def TSNeedsPromptMetadataRefresh(ts_asset_type: str, ts_metadata, *, ts_on_access: bool = True) -> bool:
+    """Refresh old image adapters on access and stamp even empty results."""
+    ts_blob = ts_metadata if isinstance(ts_metadata, dict) else {}
     if ts_asset_type == "image":
-        return (
-            not isinstance(ts_metadata, dict)
-            or (bool(ts_metadata) and ts_stored_version < TS_PROMPT_PARTS_VERSION)
-        )
-    if ts_asset_type == "video":
-        return ts_stored_version < TS_PROMPT_PARTS_VERSION
-    return False
+        if ts_on_access:
+            return ts_blob.get("image_metadata_version") != TS_IMAGE_METADATA_VERSION
+        # Keep the old scan behavior for rows with stale prompt parts, but
+        # don't queue a rehash of every unchanged image for a parser revision.
+        if "image_metadata_version" in ts_blob:
+            return False
+        if isinstance(ts_metadata, dict) and not ts_blob:
+            return False
+    elif ts_asset_type != "video":
+        return False
+    try:
+        return int(ts_blob.get("prompt_parts_version") or 0) < TS_PROMPT_PARTS_VERSION
+    except (TypeError, ValueError, OverflowError):
+        return True
 
 
 def TSResolveAssetPromptText(ts_row) -> str:

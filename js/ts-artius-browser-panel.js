@@ -322,7 +322,6 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         await this.tsRefreshLocale();
         await this.tsFetchAssets(true);
         void this.tsMaybeBootstrapScan();
-        void this.tsCheckForNewVersion();
     }
 
     tsApplyLocalVersion(tsLocal) {
@@ -343,27 +342,36 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     async tsCheckForNewVersion() {
-        const tsBadge = this.tsRefs?.tsUpdateBadge;
-        if (!tsBadge) {
+        if (!this.tsRefs?.tsUpdateBadge || this.tsVersionCheckPending) {
             return;
         }
+        this.tsVersionCheckPending = true;
         try {
-            const tsInfo = await tsFetchVersionInfo();
-            this.tsApplyLocalVersion(tsInfo?.local);
-            if (!tsInfo?.update_available) {
-                tsBadge.hidden = true;
-                return;
-            }
-            const tsHref = tsInfo.release_url || tsInfo.repository_url;
-            // The URL is relayed from remote GitHub data; accept https only so
-            // a poisoned upstream value cannot become a javascript: link.
-            if (typeof tsHref === "string" && tsHref.startsWith("https://")) {
-                tsBadge.href = tsHref;
-            }
-            tsBadge.hidden = false;
+            this.tsVersionInfo = await tsFetchVersionInfo();
+            this.tsApplyLocalVersion(this.tsVersionInfo?.local);
         } catch (tsError) {
             tsConsoleWarn("Timesaver Artius Browser version check failed", tsError);
-            tsBadge.hidden = true;
+            this.tsVersionInfo = null;
+        } finally {
+            this.tsVersionCheckPending = false;
+            this.tsRenderUpdateBadge();
+        }
+    }
+
+    tsRenderUpdateBadge() {
+        const tsBadge = this.tsRefs.tsUpdateBadge;
+        const tsInfo = this.tsVersionInfo;
+        const tsHref = tsInfo?.update_url || tsInfo?.release_url || tsInfo?.repository_url;
+        const tsCanUpdate = tsInfo?.update_available && typeof tsInfo.remote === "string"
+            && Boolean(tsInfo.remote) && typeof tsHref === "string" && tsHref.startsWith("https://");
+        tsBadge.hidden = !tsCanUpdate;
+        if (tsCanUpdate) {
+            tsBadge.href = tsHref;
+            tsBadge.title = this.tsT("tooltip.newVersion", "Artius Browser {version} is available.")
+                .replace("{version}", () => tsInfo.remote);
+        } else {
+            tsBadge.removeAttribute("href");
+            tsBadge.removeAttribute("title");
         }
     }
 
@@ -402,6 +410,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsHandleSidebarShown() {
         this.tsApplyBrowserWidth();
+        void this.tsCheckForNewVersion();
         // ComfyUI re-attaches the tab, which drops the scroll offset: put the
         // user back where they were before anything renders.
         this.tsRestoreScrollPending = true;
@@ -909,7 +918,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             ${tsPanelStyles}
             <div class="ts-shell" tabindex="0">
                 <div class="ts-toolbar">
-                    <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a><span class="ts-version" hidden></span><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a><a class="ts-update-badge" href="https://github.com/AlexYez/comfyui-artius-browser/releases" target="_blank" rel="noreferrer noopener" hidden></a><button class="ts-help-toggle" type="button">?</button></div>
+                    <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a><span class="ts-version" hidden></span><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a><a class="ts-update-badge" target="_blank" rel="noreferrer noopener" hidden></a><button class="ts-help-toggle" type="button">?</button></div>
                     <div class="ts-toolbar-main-wrap">
                     <div class="ts-toolbar-main">
                         <div class="ts-toolbar-navigation">
@@ -1485,7 +1494,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsDonate.textContent = this.tsT("button.donate", "Donate");
         this.tsRefs.tsDonate.title = this.tsT("tooltip.donate", "Support the project.");
         this.tsRefs.tsUpdateBadge.textContent = this.tsT("badge.newVersion", "New version available");
-        this.tsRefs.tsUpdateBadge.title = this.tsT("tooltip.newVersion", "A newer release of Artius Browser is available on GitHub.");
+        this.tsRenderUpdateBadge();
         this.tsRefs.tsSectionAssets.textContent = this.tsT("button.assets", "Assets");
         this.tsRefs.tsSectionWorkflows.textContent = this.tsT("button.workflows", "Workflows");
         this.tsRefs.tsSortDirection.title = this.tsT("tooltip.sortDirection", "Sort direction: click to reverse.");

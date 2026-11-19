@@ -118,6 +118,8 @@ TS_WORKFLOW_PATH_FORBIDDEN_CHARACTERS = frozenset('<>|"?*') | (frozenset(":") if
 # Keep the existing stamp when dropping optional producer metadata: ordinary
 # prompts do not need a library-wide refresh for that removal.
 TS_PROMPT_PARTS_VERSION = 7
+# Image-only adapter revision. Backfill existing rows on access without a full scan.
+TS_IMAGE_METADATA_VERSION = 1
 
 # Decompression-bomb guard for the image thumbnail path: images above this
 # pixel count get a placeholder instead of a full decode. PIL's own default

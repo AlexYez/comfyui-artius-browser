@@ -461,7 +461,6 @@ async def TSHandleClientLog(ts_runtime, ts_request):
 async def TSHandleVersion(ts_runtime, ts_request):
     TSLogVerbose("route.version.get", path=ts_request.path)
     ts_payload = await asyncio.to_thread(ts_runtime.TSCollectVersionInfo)
-    # Additive diagnostics for bug reports; the version contract keys
-    # (local/remote/update_available/repository_url/release_url) are untouched.
-    ts_payload["diagnostics"] = await asyncio.to_thread(ts_runtime.TSCollectDiagnostics)
-    return TSWeb.json_response(ts_payload)
+    if ts_request.query.get("diagnostics") != "0":
+        ts_payload["diagnostics"] = await asyncio.to_thread(ts_runtime.TSCollectDiagnostics)
+    return TSWeb.json_response(ts_payload, headers={"Cache-Control": "no-store"})

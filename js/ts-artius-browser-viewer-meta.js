@@ -39,9 +39,31 @@ function tsResolveEmptyText(tsDeps, tsEmptyText) {
     return tsDeps.pending ? tsDeps.t("meta.loading", "Loading...") : tsEmptyText;
 }
 
+export function tsFormatGenerationParameters(tsAsset) {
+    const tsParameters = tsAsset?.metadata?.generation_parameters;
+    if (!tsParameters || typeof tsParameters !== "object" || Array.isArray(tsParameters)) {
+        return "";
+    }
+    return Object.entries(tsParameters)
+        .filter(([, tsValue]) => typeof tsValue === "string" && tsValue.trim())
+        .map(([tsLabel, tsValue]) => `${tsLabel}: ${tsValue}`)
+        .join("\n");
+}
+
 export function tsBuildImageMetaMarkup(tsAsset, tsDeps) {
     const tsPromptText = tsAsset.prompt_text || "";
     const tsNegativePromptText = tsAsset.negative_prompt_text || "";
+    const tsParameters = tsFormatGenerationParameters(tsAsset);
+    const tsParametersMarkup = tsParameters ? tsBuildPromptMetaBlock({
+        title: tsAsset.metadata.generation_parameters_are_defaults
+            ? tsDeps.t("meta.workflowDefaults", "Workflow defaults")
+            : tsDeps.t("meta.generationParameters", "Generation parameters"),
+        field: "generation_parameters",
+        text: tsParameters,
+        copyLabel: tsDeps.t("button.copy", "Copy"),
+        escapeHTML: tsDeps.escapeHTML,
+        escapeAttribute: tsDeps.escapeAttribute,
+    }) : "";
     const tsPositivePromptMarkup = tsBuildPromptMetaBlock({
         title: tsDeps.t("meta.positivePrompt", "Positive Prompt"),
         field: "prompt",
@@ -106,6 +128,7 @@ export function tsBuildImageMetaMarkup(tsAsset, tsDeps) {
     return `
         ${tsPositivePromptMarkup}
         ${tsNegativePromptMarkup}
+        ${tsParametersMarkup}
         ${tsSeedMarkup}
         ${tsModelsMarkup}
         ${tsWorkflowButtonMarkup}

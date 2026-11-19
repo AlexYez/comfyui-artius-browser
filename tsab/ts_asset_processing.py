@@ -152,13 +152,8 @@ class TSAssetProcessingService:
             if ts_fresh_row is None:
                 return None
             ts_metadata = TSJsonLoads(ts_fresh_row["metadata"], {})
-            # Re-extract only images whose STORED prompt metadata predates the
-            # current prompt_parts_version (5 added seed/negative, 6 added the
-            # model list) or is malformed. An empty metadata blob means the
-            # image was already processed and simply has no prompt data —
-            # treating that as stale re-opened the file, re-upserted the row and
-            # re-emitted an asset-upsert event on every single detail view,
-            # forever.
+            # Backfill older image parser results once, including legacy empty
+            # blobs. The current parser stamps images even without prompt data.
             ts_needs_prompt_refresh = TSNeedsPromptMetadataRefresh(
                 str(ts_fresh_row["type"] or ""), ts_metadata
             )

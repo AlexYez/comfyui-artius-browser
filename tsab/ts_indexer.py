@@ -238,6 +238,7 @@ class TSIndexer:
         return TSNeedsPromptMetadataRefresh(
             str(ts_existing_row["type"] or ""),
             TSJsonLoads(ts_existing_row["metadata"], {}),
+            ts_on_access=False,
         )
 
     def TSRunScanSync(self, ts_scope: str | None = None, ts_root_id: str | None = None) -> None:
@@ -370,6 +371,7 @@ class TSIndexer:
                                     and TSNeedsPromptMetadataRefresh(
                                         str(ts_effective_row["type"] or ""),
                                         TSJsonLoads(ts_effective_row["metadata"], {}),
+                                        ts_on_access=False,
                                     )
                                 )
                             )

@@ -5,36 +5,34 @@ from pathlib import Path
 from PIL import Image
 
 from .common import TSBuildDiscoveredPayload, TSBuildIndexedPayload
+from .image_generation import TS_GENERATION_TEXT_KEYS, TSResolveImageGeneration
+from .png_text import TS_PNG_SIGNATURE, TSReadPngText
 from ..ts_display_proxy import TSStillImageDecodeAttempts
-from .prompt_metadata import (
-    TSExtractModelsFromPromptField,
-    TSExtractPromptPartsFromPromptField,
-    TSExtractSeedFromPromptField,
+from ..ts_settings import (
+    TS_FFMPEG_IMAGE_EXTENSIONS, TS_IMAGE_EXTENSIONS, TS_IMAGE_METADATA_VERSION, TS_PROMPT_PARTS_VERSION,
 )
-from ..ts_metadata_extract import TSExtractWorkflowText
-from ..ts_settings import TS_FFMPEG_IMAGE_EXTENSIONS, TS_IMAGE_EXTENSIONS, TS_PROMPT_PARTS_VERSION
 from ..ts_types import TSAssetPayload, TSAssetStat
 from ..ts_utils import TSJsonDumps
 
-# The only PNG text keys this handler reads (see TSExtractMetadata). Used to
-# decide whether the expensive post-IDAT text-chunk read is worth doing.
-TS_PNG_METADATA_KEYS = ("Prompt", "prompt", "Workflow", "workflow")
-
-
-def _TSCollectMetadataEntries(ts_metadata: dict[str, str], ts_source: dict) -> None:
-    for ts_key, ts_value in ts_source.items():
-        if ts_value is None:
-            continue
-        if isinstance(ts_value, bytes):
-            try:
-                ts_text = ts_value.decode("utf-8", errors="replace")
-            except Exception:
-                continue
-        else:
-            ts_text = str(ts_value)
-        if not ts_text:
-            continue
-        ts_metadata[str(ts_key)] = ts_text
+def _TSDecodeImageComment(ts_value) -> str:
+    if isinstance(ts_value, str):
+        return ts_value.strip("\0")
+    if not isinstance(ts_value, bytes):
+        return ""
+    ts_prefix, ts_body = ts_value[:8], ts_value[8:]
+    if ts_prefix == b"UNICODE\0":
+        if ts_body.startswith((b"\xff\xfe", b"\xfe\xff")):
+            return ts_body.decode("utf-16", errors="replace").strip("\0")
+        # EXIF writers use either byte order; an unmarked UTF-16 string
+        # containing ASCII reveals the order in its NUL bytes.
+        ts_encoding = "utf-16-le" if ts_body[1::2].count(0) >= ts_body[::2].count(0) else "utf-16-be"
+    elif ts_prefix == b"JIS\0\0\0\0\0":
+        ts_encoding = "shift_jis"
+    else:
+        ts_encoding = "utf-8"
+        if ts_prefix not in {b"ASCII\0\0\0", b"\0" * 8}:
+            ts_body = ts_value
+    return ts_body.decode(ts_encoding, errors="replace").strip("\0")
 
 
 class TSImageHandler:
@@ -108,50 +106,52 @@ class TSImageHandler:
     def _TSReadImageMetadata(self, ts_image_path) -> dict[str, str]:
         ts_metadata: dict[str, str] = {}
         try:
+            with Path(ts_image_path).open("rb") as ts_file:
+                if ts_file.read(len(TS_PNG_SIGNATURE)) == TS_PNG_SIGNATURE:
+                    return TSReadPngText(ts_file, TS_GENERATION_TEXT_KEYS)
             with Image.open(ts_image_path) as ts_image:
-                if isinstance(getattr(ts_image, "info", None), dict):
-                    _TSCollectMetadataEntries(ts_metadata, ts_image.info)
-                # PngImageFile.text is a property that calls load(), decoding the
-                # entire IDAT stream and discarding the pixels, just to reach
-                # text chunks stored AFTER the image data. ComfyUI writes
-                # Prompt/Workflow BEFORE IDAT, so info already carries them and
-                # that decode is pure waste - it doubles the per-image decoding a
-                # scan does. Only pay for it when the fields we actually read are
-                # missing, which is the third-party-writer case it exists for.
-                if not any(ts_key in ts_metadata for ts_key in TS_PNG_METADATA_KEYS):
-                    ts_text_chunks = getattr(ts_image, "text", None)
-                    if isinstance(ts_text_chunks, dict):
-                        _TSCollectMetadataEntries(ts_metadata, ts_text_chunks)
+                for ts_key, ts_value in ts_image.info.items():
+                    ts_name = str(ts_key).lower()
+                    if ts_name in TS_GENERATION_TEXT_KEYS:
+                        ts_metadata[ts_name] = _TSDecodeImageComment(ts_value)[:4_194_304]
+                ts_exif = ts_image.getexif()
+                ts_exif_subifd = ts_exif.get_ifd(34665)
+                for ts_name, ts_value in (
+                    ("description", ts_exif.get(270)),
+                    ("usercomment", ts_exif_subifd.get(37510) or ts_exif.get(37510)),
+                ):
+                    ts_text = _TSDecodeImageComment(ts_value)
+                    if ts_text:
+                        ts_metadata.setdefault(ts_name, ts_text[:4_194_304])
         except Exception:
             # Corrupt or vanished files yield "no metadata" instead of
             # raising through the on-demand ensure chain (mirrors the
             # unreadable-image handling in TSBuildIndexedPayload above).
-            return {}
+            pass
         return ts_metadata
 
     def TSExtractMetadata(self, ts_row) -> dict[str, str]:
-        ts_metadata = self._TSReadImageMetadata(ts_row["path"])
-        ts_prompt_field = ts_metadata.get("Prompt") or ts_metadata.get("prompt") or ""
-        ts_workflow_field = ts_metadata.get("Workflow") or ts_metadata.get("workflow") or ""
-        ts_prompt_text, ts_negative_prompt_text = TSExtractPromptPartsFromPromptField(ts_prompt_field)
-        ts_seed_text = TSExtractSeedFromPromptField(ts_prompt_field)
-        ts_models = TSExtractModelsFromPromptField(ts_prompt_field)
-        ts_workflow_text = TSExtractWorkflowText({"Workflow": ts_workflow_field}) if ts_workflow_field else ""
-        ts_metadata_payload = {}
-        if ts_prompt_text or ts_negative_prompt_text or ts_workflow_text or ts_seed_text or ts_models:
-            ts_metadata_payload = {
-                "prompt_parts_version": TS_PROMPT_PARTS_VERSION,
-                "positive_prompt_text": ts_prompt_text,
-                "negative_prompt_text": ts_negative_prompt_text,
-                "seed": ts_seed_text,
-                "models": ts_models,
-            }
+        ts_generation = TSResolveImageGeneration(self._TSReadImageMetadata(ts_row["path"]))
+        ts_metadata_payload: dict = {"image_metadata_version": TS_IMAGE_METADATA_VERSION}
+        if any((ts_generation.ts_positive, ts_generation.ts_negative, ts_generation.ts_seed,
+                ts_generation.ts_models, ts_generation.ts_workflow, ts_generation.ts_parameters)):
+            ts_metadata_payload.update(
+                prompt_parts_version=TS_PROMPT_PARTS_VERSION,
+                positive_prompt_text=ts_generation.ts_positive,
+                negative_prompt_text=ts_generation.ts_negative,
+                seed=ts_generation.ts_seed,
+                models=ts_generation.ts_models,
+            )
+        if ts_generation.ts_parameters:
+            ts_metadata_payload["generation_parameters"] = ts_generation.ts_parameters
+            if ts_generation.ts_parameters_are_defaults:
+                ts_metadata_payload["generation_parameters_are_defaults"] = True
         return {
-            "metadata": TSJsonDumps(ts_metadata_payload) if ts_metadata_payload else "{}",
-            "prompt_text": ts_prompt_text,
-            "workflow_text": ts_workflow_text,
+            "metadata": TSJsonDumps(ts_metadata_payload),
+            "prompt_text": ts_generation.ts_positive,
+            "workflow_text": ts_generation.ts_workflow,
             # Newline-joined for the FTS "model_text" column; the structured
             # list stays in the metadata blob for display.
-            "model_text": "\n".join(ts_models),
+            "model_text": "\n".join(ts_generation.ts_models),
             "has_metadata": True,
         }

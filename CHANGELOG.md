@@ -4,6 +4,17 @@ Release history for **Timesaver Artius Browser**. Entries follow [Keep a Changel
 
 [Archive and version index](changelog/README.md) · [Project entry](README.md)
 
+## [1.20.5] - 2026-11-19
+
+### Added
+
+- Image metadata can be read from multiple sources, including ComfyUI, AUTOMATIC1111 infotext, structured generation records, and EXIF comments. The lightbox shows and copies generation settings separately from prompts and embedded workflows.
+
+### Fixed
+
+- The update badge reads the installed version from disk whenever the panel opens. It checks GitHub first, falls back to Comfy Registry when GitHub is unavailable, and links to the source that reported the update.
+- PNG metadata after the image data is read without decoding pixels. Existing image metadata is refreshed on access without rebuilding the library.
+
 ## [1.20.4] - 2026-11-13
 
 ### Changed

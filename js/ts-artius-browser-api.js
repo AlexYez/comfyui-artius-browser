@@ -299,7 +299,7 @@ export async function tsFetchBrowserSettings() {
 }
 
 export async function tsFetchVersionInfo() {
-    return tsFetchJSON(`${tsRouteBase}/version`);
+    return tsFetchJSON(`${tsRouteBase}/version?diagnostics=0`, { cache: "no-store" });
 }
 
 export async function tsSaveBrowserSettings(tsUISettings = {}) {

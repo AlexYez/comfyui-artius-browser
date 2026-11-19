@@ -15,7 +15,7 @@ For a persistent failure, collect the [server and browser diagnostics](README.md
 
 | | |
 |---|---|
-| 🖼️ **Images** | Cached thumbnails, PNG prompt + workflow extraction, lightbox with wipe / 2×2 grid compare, zoomed in step |
+| 🖼️ **Images** | Cached thumbnails, embedded prompts, generation parameters and workflows, lightbox with wipe / 2×2 grid compare, zoomed in step |
 | 🎬 **Videos** | Frame-stepping, codec / FPS / duration / audio info, embedded prompt + workflow, sync compare for 2-4 clips |
 | 🎵 **Audio** | Waveform preview, transport controls, channel layout |
 | 🎲 **3D** | Native ComfyUI 3D viewer in the lightbox, captured 3D thumbnails |
@@ -28,7 +28,7 @@ For a persistent failure, collect the [server and browser diagnostics](README.md
 | 🚀 **Drag-and-drop** | Direct into native `LoadImage` / `LoadVideo` / `LoadAudio` / `Load3D` nodes |
 | 🗑️ **Safe delete** | Sends to system trash via `send2trash` — never hard-delete |
 | 🔄 **Autoscan / Rebuild Cache** | Refresh on demand, or rebuild from scratch |
-| 🏷️ **Version label + update badge** | Current version next to the title; checks GitHub once a day, surfaces a `New version available` chip when a newer release ships |
+| 🏷️ **Version label + update badge** | Installed version next to the title. The badge links to GitHub when a newer version is available, or to Comfy Registry if it supplied the fallback result |
 | 🧲 **Multi-select drag** | Drag a whole selection onto the canvas — one native node per asset, auto-arranged in a grid |
 | 📦 **Download selected** | Select any mix of images, videos, audio and 3D, press `Download Selected` — several files arrive as one ZIP, a single file as itself |
 | 📝 **Export prompts**  [local draft](README.md#local-draft-features) | Select images and press `Export Prompts` — one image gives `<name>.txt` with its prompt, several give one ZIP with a `.txt` per image, named after it |
@@ -134,8 +134,7 @@ When another installed pack publishes a better loader, it wins: a video dropped 
 - Mouse-wheel zoom, left/middle-button pan
 - 2-image **wipe** compare with a left-to-right slider
 - 4-image **2×2 grid** compare
-- Separate `Prompt` and `Negative Prompt` panels
-- One-click `Copy Workflow` when the PNG carries it
+- Copy prompts, generation parameters and the embedded workflow from separate sections
 - Open in new tab, show in folder, download, delete
 
 </details>
@@ -168,13 +167,11 @@ When another installed pack publishes a better loader, it wins: a video dropped 
 
 </details>
 
-### 🧠 PNG metadata rules
+### 🧠 Image metadata
 
-- **Prompt** is read **only** from the PNG `Prompt` field
-- **Workflow** is read **only** from the PNG `Workflow` field
-- Positive and negative prompts are split before display
-- If positive and negative are identical, only the positive is shown
-- **Seed** is read from the PNG `Prompt` field and shown in the lightbox (copyable)
+- The executed ComfyUI graph takes priority. AUTOMATIC1111 infotext, supported JSON records and EXIF comments can supply missing prompts or parameters.
+- Positive and negative prompts are shown separately when they differ.
+- The lightbox labels parameters taken from the saved workflow as workflow defaults. An embedded workflow can be copied separately when present.
 
 ### 🛡️ Compatibility & safety
 

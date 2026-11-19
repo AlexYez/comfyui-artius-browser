@@ -21,6 +21,7 @@ import { tsFormatTime } from "./ts-artius-browser-viewer-format.js";
 import {
     tsBuild3DMetaMarkup,
     tsBuildImageMetaMarkup,
+    tsFormatGenerationParameters,
     tsBuildImageTechnicalMarkup,
     tsBuildPromptMetaBlock,
     tsBuildPromptSeedMetaMarkup,
@@ -2069,15 +2070,16 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             return;
         }
         const tsField = tsButton.dataset.copyField;
-        const tsValue = tsField === "workflow"
-            ? tsAsset.workflow_text
-            : tsField === "negative_prompt"
-                ? tsAsset.negative_prompt_text
-            : tsField === "seed"
-                ? tsAsset.seed
-            : tsField === "models"
-                ? (Array.isArray(tsAsset.models) ? tsAsset.models.join("\n") : "")
-            : tsAsset.prompt_text;
+        let tsValue;
+        switch (tsField) {
+            case "workflow": tsValue = tsAsset.workflow_text; break;
+            case "negative_prompt": tsValue = tsAsset.negative_prompt_text; break;
+            case "seed": tsValue = tsAsset.seed; break;
+            case "models": tsValue = Array.isArray(tsAsset.models) ? tsAsset.models.join("\n") : ""; break;
+            case "generation_parameters": tsValue = tsFormatGenerationParameters(tsAsset); break;
+            case "prompt": tsValue = tsAsset.prompt_text; break;
+            default: return;
+        }
         if (!tsValue) {
             return;
         }
