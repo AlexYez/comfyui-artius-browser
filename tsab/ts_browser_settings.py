@@ -18,8 +18,8 @@ class TSBrowserSettingsService:
         return TSNormalizeUISettings(ts_config.get("ui", {}))
 
     def TSSaveUISettings(self, ts_ui_updates: dict[str, Any] | None) -> dict[str, Any]:
-        ts_config = self.ts_config_store.TSLoadConfig()
-        ts_ui = ts_config.setdefault("ui", {})
-        TSApplyUISettingsUpdates(ts_ui, ts_ui_updates)
-        ts_saved_config = self.ts_config_store.TSSaveConfig(ts_config)
+        def TSApply(ts_config: dict) -> None:
+            TSApplyUISettingsUpdates(ts_config.setdefault("ui", {}), ts_ui_updates)
+
+        ts_saved_config = self.ts_config_store.TSUpdateConfig(TSApply)
         return TSNormalizeUISettings(ts_saved_config.get("ui", {}))

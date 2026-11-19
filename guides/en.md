@@ -28,7 +28,7 @@ For a persistent failure, collect the [server and browser diagnostics](README.md
 | 🚀 **Drag-and-drop** | Direct into native `LoadImage` / `LoadVideo` / `LoadAudio` / `Load3D` nodes |
 | 🗑️ **Safe delete** | Sends to system trash via `send2trash` — never hard-delete |
 | 🔄 **Autoscan / Rebuild Cache** | Refresh on demand, or rebuild from scratch |
-| 🏷️ **Version label + update badge** | Installed version next to the title. The badge links to GitHub when a newer version is available, or to Comfy Registry if it supplied the fallback result |
+| 🏷️ **Version label + update badge** | Installed version next to the title. The badge opens the project's GitHub repository when a newer version is available |
 | 🧲 **Multi-select drag** | Drag a whole selection onto the canvas — one native node per asset, auto-arranged in a grid |
 | 📦 **Download selected** | Select any mix of images, videos, audio and 3D, press `Download Selected` — several files arrive as one ZIP, a single file as itself |
 | 📝 **Export prompts**  [local draft](README.md#local-draft-features) | Select images and press `Export Prompts` — one image gives `<name>.txt` with its prompt, several give one ZIP with a `.txt` per image, named after it |

@@ -4,6 +4,7 @@ import copy
 import json
 import threading
 from pathlib import Path
+from typing import Callable
 
 from .ts_settings import (
     TS_CONFIG_BOOLEAN_KEYS,
@@ -16,15 +17,14 @@ from .ts_utils import TSJsonDumps
 
 
 def TSClampConfigNumber(ts_value, ts_default, ts_minimum, ts_maximum, ts_kind):
-    # Booleans are ints in Python and "8" is a perfectly sensible thing to find
-    # in a hand-edited JSON file, so both are accepted; anything that will not
-    # convert falls back to the shipped default rather than raising.
+    # Numeric strings are accepted in hand-edited JSON. Booleans and invalid
+    # numbers use the shipped default.
     if isinstance(ts_value, bool) or ts_value is None:
         ts_number = ts_default
     else:
         try:
             ts_number = ts_kind(ts_value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             ts_number = ts_default
     if ts_number != ts_number or ts_number in (float("inf"), float("-inf")):  # NaN / inf
         ts_number = ts_default
@@ -51,9 +51,7 @@ class TSConfigStore:
         self.ts_config_path = ts_config_path
         self.ts_cached_config: dict | None = None
         # RLock: TSLoadConfig calls TSSaveConfig for missing/corrupt files.
-        # Load/save are called concurrently from the event-loop thread
-        # (settings POST), the scan thread, and preview generators; the lock
-        # prevents read-modify-write pairs from losing updates.
+        # Settings workers, the scanner and preview generators share the store.
         self.ts_config_lock = threading.RLock()
 
     def TSBuildDefaultConfig(self) -> dict:
@@ -64,12 +62,10 @@ class TSConfigStore:
             if self.ts_cached_config is not None:
                 return copy.deepcopy(self.ts_cached_config)
             if not self.ts_config_path.exists():
-                self.ts_cached_config = self.TSBuildDefaultConfig()
-                self.TSSaveConfig(self.ts_cached_config)
-                return copy.deepcopy(self.ts_cached_config)
+                return self.TSSaveConfig(self.TSBuildDefaultConfig())
             try:
-                ts_loaded = json.loads(self.ts_config_path.read_text(encoding="utf-8"))
-            except json.JSONDecodeError as ts_error:
+                ts_loaded = json.loads(self.ts_config_path.read_text(encoding="utf-8-sig"))
+            except (json.JSONDecodeError, UnicodeDecodeError) as ts_error:
                 TSLogVerbose("config.load.failed", path=str(self.ts_config_path), error=str(ts_error))
                 ts_loaded = self.TSBuildDefaultConfig()
                 self._TSBackupCorruptConfig()
@@ -98,6 +94,12 @@ class TSConfigStore:
             self.ts_cached_config = ts_merged
             return copy.deepcopy(ts_merged)
 
+    def TSUpdateConfig(self, ts_apply: Callable[[dict], None]) -> dict:
+        with self.ts_config_lock:
+            ts_config = self.TSLoadConfig()
+            ts_apply(ts_config)
+            return self.TSSaveConfig(ts_config)
+
     def TSMergeDefaults(self, ts_config: dict) -> dict:
         ts_default = self.TSBuildDefaultConfig()
         ts_overrides = ts_config if isinstance(ts_config, dict) else {}
@@ -107,7 +109,7 @@ class TSConfigStore:
         def TSCurrentVersion() -> int:
             try:
                 return int(ts_result.get("version", 0) or 0)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 return 0
 
         if TSCurrentVersion() < 5:

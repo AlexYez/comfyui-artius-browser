@@ -1,4 +1,4 @@
-// One post-generation rescan per browser, not one per open tab.
+// Coordinate claims for completed prompts across tabs of the same browser.
 //
 // The rescan is triggered client-side, from ComfyUI's execution_success event.
 // Every tab with the extension loaded hears that event, so two ComfyUI tabs on
@@ -18,12 +18,19 @@
 // NOT prefixed "tsab:" - that prefix belongs to the ComfyUI event bus and
 // the release gate verifies every name carrying it is a real event.
 export const TS_RESCAN_CLAIM_STORAGE_KEY = "ts-artius-browser:execution-rescan-claim";
+const TS_MAX_STORED_CLAIMS = 64;
 
-function tsReadClaim(tsStorage, tsKey) {
+function tsReadClaims(tsStorage, tsKey) {
+    const tsStored = tsStorage.getItem(tsKey);
+    if (!tsStored) {
+        return [];
+    }
     try {
-        return tsStorage.getItem(tsKey);
+        const tsClaims = JSON.parse(tsStored);
+        return Array.isArray(tsClaims) ? tsClaims.filter((tsClaim) => typeof tsClaim === "string") : [];
     } catch {
-        return null;
+        // Older tabs store one colon-delimited claim at this key.
+        return [tsStored];
     }
 }
 
@@ -49,29 +56,21 @@ export function tsClaimExecutionRescan(tsOptions = {}) {
     }
 
     const tsCurrentTime = tsNow();
-    const tsExisting = tsReadClaim(tsStorage, tsKey);
-    if (tsExisting) {
-        const tsParts = String(tsExisting).split(":");
-        const tsExistingTime = Number(tsParts[0]) || 0;
-        const tsExistingPromptId = tsParts.slice(2).join(":");
-        // A live claim from another tab. A claim older than the window is
-        // treated as abandoned, so a tab that was closed mid-generation cannot
-        // suppress every future rescan.
-        // The window deduplicates tabs reacting to the SAME prompt. It must
-        // not drop the next generation just because that one finished quickly.
-        if (tsExistingPromptId === tsPromptId && tsExistingTime > 0 && tsCurrentTime - tsExistingTime < tsWindowMs) {
-            return false;
-        }
-    }
-
     const tsToken = `${tsCurrentTime}:${tsRandom()}:${tsPromptId}`;
     try {
-        tsStorage.setItem(tsKey, tsToken);
+        const tsLiveClaims = tsReadClaims(tsStorage, tsKey).filter((tsClaim) => {
+            const tsTime = Number(tsClaim.split(":", 1)[0]);
+            return tsTime > 0 && tsCurrentTime >= tsTime && tsCurrentTime - tsTime < tsWindowMs;
+        });
+        // Finishing a different prompt must leave this prompt's claim visible.
+        if (tsLiveClaims.some((tsClaim) => tsClaim.split(":").slice(2).join(":") === tsPromptId)) {
+            return false;
+        }
+        tsLiveClaims.push(tsToken);
+        tsStorage.setItem(tsKey, JSON.stringify(tsLiveClaims.slice(-TS_MAX_STORED_CLAIMS)));
+        return tsReadClaims(tsStorage, tsKey).includes(tsToken);
     } catch {
-        // Quota or a storage failure mid-write: fall back to the old behaviour.
+        // Prefer a redundant request on blocked, full or unreadable storage.
         return true;
     }
-    // Read back: whoever wrote last owns the claim, and every other tab sees a
-    // token that is not its own.
-    return tsReadClaim(tsStorage, tsKey) === tsToken;
 }

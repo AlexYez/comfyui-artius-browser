@@ -688,6 +688,20 @@ class TSDatabase:
         TSLogVerbose("db.favorite.set", asset_id=ts_asset_id, favorite=bool(ts_is_favorite))
         return self.TSGetAssetById(ts_asset_id)
 
+    def TSUpdateAssetTechnicalInfo(self, ts_row: sqlite3.Row, ts_technical_json: str, ts_fps: float | None = None) -> sqlite3.Row | None:
+        # A probe can finish after a delete, re-index or another probe. The
+        # conditional UPDATE never recreates a row or overwrites that revision.
+        self.TSGetConnection().execute(
+            """
+            UPDATE assets SET technical_json = ?, fps = COALESCE(?, fps)
+            WHERE id = ? AND path = ? AND mtime_ns = ? AND size_bytes = ?
+                AND hash IS ? AND technical_json = ?
+            """,
+            (ts_technical_json, ts_fps, ts_row["id"], ts_row["path"], ts_row["mtime_ns"],
+             ts_row["size_bytes"], ts_row["hash"], ts_row["technical_json"]),
+        )
+        return self.TSGetAssetById(int(ts_row["id"]))
+
     def TSGetAssetById(self, ts_asset_id: int) -> sqlite3.Row | None:
         return self.TSGetConnection().execute(
             "SELECT * FROM assets_view WHERE id = ?",

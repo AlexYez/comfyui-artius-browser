@@ -34,15 +34,7 @@ export class TSAssetResponseCache {
         }
     }
 
-    tsDelete(tsKey) {
-        this.tsEntries.delete(tsKey);
-    }
-
     tsClear() {
         this.tsEntries.clear();
-    }
-
-    get tsSize() {
-        return this.tsEntries.size;
     }
 }

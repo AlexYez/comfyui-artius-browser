@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import stat
 from pathlib import Path
 from typing import Iterable
 
@@ -58,7 +59,12 @@ def TSIsIgnoredFileName(ts_name: str) -> bool:
     return ts_name.startswith(TS_APPLEDOUBLE_PREFIX)
 
 
-def TSBuildAssetStatForRelativePath(ts_root: TSRootDefinition, ts_relative_path: str) -> TSAssetStat | None:
+def TSBuildAssetStatForRelativePath(
+    ts_root: TSRootDefinition,
+    ts_relative_path: str,
+    *,
+    ts_retryable: set[str] | None = None,
+) -> TSAssetStat | None:
     """Stat ONE file named relative to a root, for the targeted index path.
 
     The caller is the frontend, naming the files ComfyUI just wrote, so the
@@ -81,14 +87,20 @@ def TSBuildAssetStatForRelativePath(ts_root: TSRootDefinition, ts_relative_path:
         ts_resolved_root = Path(ts_root.ts_path).resolve()
         ts_path = (ts_resolved_root / "/".join(ts_segments)).resolve()
         ts_path.relative_to(ts_resolved_root)
-        if not ts_path.is_file():
+        if ts_path.suffix.lower() not in TS_SUPPORTED_EXTENSIONS:
             return None
-        ts_stat = ts_path.stat()
         ts_file_relative_path = TSRelativePosixPath(ts_path, ts_resolved_root)
-    except (OSError, ValueError) as ts_error:
+    except (OSError, RuntimeError, ValueError) as ts_error:
         TSLogVerbose("indexer.relative_file.rejected", relative_path=ts_normalized, error=str(ts_error))
         return None
-    if ts_path.suffix.lower() not in TS_SUPPORTED_EXTENSIONS:
+    try:
+        ts_stat = ts_path.stat()
+    except OSError as ts_error:
+        TSLogVerbose("indexer.relative_file.unavailable", relative_path=ts_normalized, error=str(ts_error))
+        if ts_retryable is not None:
+            ts_retryable.add(ts_relative_path)
+        return None
+    if not stat.S_ISREG(ts_stat.st_mode):
         return None
     return TSAssetStat(
         ts_path=ts_path,

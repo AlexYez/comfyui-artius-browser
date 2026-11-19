@@ -17,7 +17,6 @@ TS_RELEASES_URL = f"{TS_REPOSITORY_URL}/releases"
 TS_GITHUB_PYPROJECT_URL = "https://raw.githubusercontent.com/AlexYez/comfyui-artius-browser/main/pyproject.toml"
 TS_REGISTRY_NODE_ID = "comfyui-artius-browser"
 TS_REGISTRY_INSTALL_URL = f"https://api.comfy.org/nodes/{TS_REGISTRY_NODE_ID}/install"
-TS_REGISTRY_PAGE_URL = f"https://registry.comfy.org/nodes/{TS_REGISTRY_NODE_ID}"
 TS_REMOTE_FETCH_TIMEOUT_SECONDS = 6.0
 TS_REMOTE_CACHE_TTL_SECONDS = 3600.0
 TS_REMOTE_RETRY_DELAY_SECONDS = 900.0
@@ -175,5 +174,5 @@ def TSCollectVersionInfo(ts_cache_dir: Path) -> dict[str, Any]:
         "repository_url": TS_REPOSITORY_URL,
         "release_url": TS_RELEASES_URL,
         "remote_source": ts_source,
-        "update_url": TS_REGISTRY_PAGE_URL if ts_source == "registry" else TS_REPOSITORY_URL,
+        "update_url": TS_REPOSITORY_URL,
     }

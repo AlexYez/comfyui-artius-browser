@@ -47,7 +47,3 @@ class TSClientErrorLog:
     def TSSnapshot(self) -> list[dict[str, str]]:
         with self._ts_lock:
             return list(self._ts_entries)
-
-    def TSCount(self) -> int:
-        with self._ts_lock:
-            return len(self._ts_entries)

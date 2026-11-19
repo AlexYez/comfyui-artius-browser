@@ -16,6 +16,7 @@ def TSProcessCandidateTuple(
     *,
     ts_detect_supported_type: Callable[[Any], str | None] = TSDetectSupportedType,
     ts_compute_file_hash: Callable[[Any], str] = TSComputeFileHash,
+    ts_retryable: set[str] | None = None,
 ) -> tuple[TSAssetPayload | None, Any | None]:
     ts_asset_stat, ts_existing_row = ts_candidate_tuple
     ts_kind = ts_detect_supported_type(ts_asset_stat.ts_path)
@@ -61,6 +62,8 @@ def TSProcessCandidateTuple(
         ts_payload = TSCarryExistingRowValues(ts_payload, ts_existing_row, ts_reset_processing=False)
         return ts_payload, ts_existing_row
     except Exception as ts_error:
+        if ts_retryable is not None and isinstance(ts_error, OSError):
+            ts_retryable.add(ts_asset_stat.ts_relative_path)
         TSLogVerbose(
             "indexer.candidate.failed",
             path=str(ts_asset_stat.ts_path),

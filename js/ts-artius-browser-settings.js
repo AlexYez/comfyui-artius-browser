@@ -5,6 +5,7 @@
     title: "Artius Browser",
     label: "Browser",
     tooltip: "Timesaver Artius Browser",
+    repositoryUrl: "https://github.com/AlexYez/comfyui-artius-browser",
     defaultLocale: "en",
 });
 

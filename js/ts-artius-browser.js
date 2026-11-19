@@ -28,7 +28,6 @@ import {
 
 let tsExecutionRescanTimer = 0;
 let tsExecutionRescanFirstEventAt = 0;
-let tsExecutionRescanPromptId = "";
 let tsExecutionIndexInFlight = false;
 let tsExecutionFullScanPending = false;
 let tsAutoscanEnabled = true;
@@ -41,15 +40,24 @@ let tsComfyQueueRemaining = 0;
 // indexed immediately; an overflow requests one full scan after the queue ends.
 const tsPendingExecutionFiles = new Set();
 let tsExecutionOutputsOverflowed = false;
-const tsReadyExecutionFiles = new Set();
+const tsReadyExecutionFiles = new Map();
+let tsReadyExecutionFileCount = 0;
 
-function tsQueueReadyExecutionFiles(tsFiles) {
+function tsQueueReadyExecutionFiles(tsFiles, tsPromptId = "") {
+    const tsBatch = tsReadyExecutionFiles.get(tsPromptId) || new Set();
     for (const tsPath of tsFiles) {
-        if (tsReadyExecutionFiles.size >= TS_MAX_TRACKED_EXECUTION_FILES) {
-            tsExecutionFullScanPending = true;
-            return;
+        if (tsBatch.has(tsPath)) {
+            continue;
         }
-        tsReadyExecutionFiles.add(tsPath);
+        if (tsReadyExecutionFileCount >= TS_MAX_TRACKED_EXECUTION_FILES) {
+            tsExecutionFullScanPending = true;
+            break;
+        }
+        tsBatch.add(tsPath);
+        tsReadyExecutionFileCount += 1;
+    }
+    if (tsBatch.size) {
+        tsReadyExecutionFiles.set(tsPromptId, tsBatch);
     }
 }
 
@@ -94,9 +102,9 @@ function tsSetAutoscanEnabled(tsEnabled) {
     if (!tsAutoscanEnabled) {
         tsClearExecutionRescanTimer();
         tsExecutionRescanFirstEventAt = 0;
-        tsExecutionRescanPromptId = "";
         tsExecutionFullScanPending = false;
         tsReadyExecutionFiles.clear();
+        tsReadyExecutionFileCount = 0;
         tsTakePendingExecutionFiles();
     }
 }
@@ -111,10 +119,26 @@ async function tsAttemptRescanNow() {
         // accumulated meanwhile. Never run several indexing jobs in parallel.
         return;
     }
-    const tsFiles = [...tsReadyExecutionFiles];
-    if (tsFiles.length === 0 && (!tsExecutionFullScanPending || tsComfyQueueRemaining > 0)) {
+    if (tsReadyExecutionFiles.size === 0 && (!tsExecutionFullScanPending || tsComfyQueueRemaining > 0)) {
         // A status event restarts the deferred full scan when the queue drains;
         // there is no polling or directory walk while generation is active.
+        return;
+    }
+    const tsOwnedFiles = new Set();
+    for (const [tsPromptId, tsBatch] of tsReadyExecutionFiles) {
+        if (!tsPromptId || tsClaimExecutionRescan({
+            tsWindowMs: tsBrowserRuntimeSettings.executionRescanClaimWindowMs, tsPromptId,
+        })) {
+            for (const tsPath of tsBatch) {
+                tsOwnedFiles.add(tsPath);
+            }
+        }
+    }
+    tsReadyExecutionFiles.clear();
+    tsReadyExecutionFileCount = 0;
+    const tsFiles = [...tsOwnedFiles];
+    if (!tsFiles.length && (!tsExecutionFullScanPending || tsComfyQueueRemaining > 0)) {
+        tsExecutionRescanFirstEventAt = 0;
         return;
     }
     tsExecutionRescanFirstEventAt = 0;
@@ -126,15 +150,6 @@ async function tsAttemptRescanNow() {
     tsExecutionIndexInFlight = true;
     try {
         if (tsFiles.length > 0) {
-            const tsWonClaim = !tsExecutionRescanPromptId || tsClaimExecutionRescan({
-                tsWindowMs: tsBrowserRuntimeSettings.executionRescanClaimWindowMs,
-                tsPromptId: tsExecutionRescanPromptId,
-            });
-            tsExecutionRescanPromptId = "";
-            tsReadyExecutionFiles.clear();
-            if (!tsWonClaim) {
-                return;
-            }
             const tsResult = await tsPostJSON(`${tsApiSettings.routeBase}/index_files`, { root_id: tsRootId, files: tsFiles });
             if (tsResult?.busy) {
                 // Retry just these names after the current indexer job. A full
@@ -144,7 +159,6 @@ async function tsAttemptRescanNow() {
             }
         } else {
             tsExecutionFullScanPending = false;
-            tsExecutionRescanPromptId = "";
             await tsPostJSON(`${tsApiSettings.routeBase}/rescan`, { root_id: tsRootId });
         }
     } catch (tsError) {
@@ -206,8 +220,7 @@ function tsHandleExecutionEnd(tsEvent) {
     // Snapshot at completion: files emitted by the next running prompt must
     // not be mixed into this prompt's delayed request.
     tsExecutionFullScanPending ||= tsNeedsFullScan;
-    tsQueueReadyExecutionFiles(tsFiles);
-    tsExecutionRescanPromptId = String(tsEvent?.detail?.prompt_id || "");
+    tsQueueReadyExecutionFiles(tsFiles, String(tsEvent?.detail?.prompt_id || ""));
     tsDebouncedExecutionRescan();
 }
 

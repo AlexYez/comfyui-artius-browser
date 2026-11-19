@@ -361,16 +361,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     tsRenderUpdateBadge() {
         const tsBadge = this.tsRefs.tsUpdateBadge;
         const tsInfo = this.tsVersionInfo;
-        const tsHref = tsInfo?.update_url || tsInfo?.release_url || tsInfo?.repository_url;
-        const tsCanUpdate = tsInfo?.update_available && typeof tsInfo.remote === "string"
-            && Boolean(tsInfo.remote) && typeof tsHref === "string" && tsHref.startsWith("https://");
+        const tsCanUpdate = tsInfo?.update_available && typeof tsInfo.remote === "string" && Boolean(tsInfo.remote);
         tsBadge.hidden = !tsCanUpdate;
         if (tsCanUpdate) {
-            tsBadge.href = tsHref;
             tsBadge.title = this.tsT("tooltip.newVersion", "Artius Browser {version} is available.")
                 .replace("{version}", () => tsInfo.remote);
         } else {
-            tsBadge.removeAttribute("href");
             tsBadge.removeAttribute("title");
         }
     }
@@ -918,7 +914,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             ${tsPanelStyles}
             <div class="ts-shell" tabindex="0">
                 <div class="ts-toolbar">
-                    <div class="ts-title"><a class="ts-title-link" href="https://github.com/AlexYez/comfyui-artius-browser" target="_blank" rel="noreferrer noopener"></a><span class="ts-version" hidden></span><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a><a class="ts-update-badge" target="_blank" rel="noreferrer noopener" hidden></a><button class="ts-help-toggle" type="button">?</button></div>
+                    <div class="ts-title"><a class="ts-title-link" href="${tsProjectSettings.repositoryUrl}" target="_blank" rel="noreferrer noopener"></a><span class="ts-version" hidden></span><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a><a class="ts-update-badge" href="${tsProjectSettings.repositoryUrl}" target="_blank" rel="noreferrer noopener" hidden></a><button class="ts-help-toggle" type="button">?</button></div>
                     <div class="ts-toolbar-main-wrap">
                     <div class="ts-toolbar-main">
                         <div class="ts-toolbar-navigation">

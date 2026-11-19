@@ -83,8 +83,14 @@ class TSIndexer:
         async with self.ts_async_lock:
             if self.ts_scan_task is not None and not self.ts_scan_task.done():
                 return False
-            await asyncio.to_thread(ts_maintenance_callable)
+            await asyncio.to_thread(self._TSRunMaintenanceSync, ts_maintenance_callable)
             return True
+
+    def _TSRunMaintenanceSync(self, ts_maintenance_callable) -> None:
+        # The worker owns the lock until the disk work ends, even if the
+        # HTTP handler awaiting it is cancelled.
+        with self.ts_thread_lock:
+            ts_maintenance_callable()
 
     async def TSStartBackgroundScan(self, ts_scope: str | None = None, ts_root_id: str | None = None) -> bool:
         async with self.ts_async_lock:
@@ -165,10 +171,31 @@ class TSIndexer:
         ts_result: dict[str, Any] = {"indexed": 0, "skipped": len(ts_requested), "busy": False, "rows": []}
         if not ts_requested:
             return ts_result
-        if self.ts_status.ts_running:
-            # A scan is already walking this root and will pick the files up.
-            ts_result["busy"] = True
-            return ts_result
+        # Most requests complete in one pass. Give just the temporarily
+        # unavailable names two short retries without holding the scan lock.
+        ts_pending = ts_requested
+        ts_seen_paths: set[str] = set()
+        for ts_delay in (0, 0.1, 0.25):
+            if ts_delay:
+                time.sleep(ts_delay)
+            if self.ts_status.ts_running or not self.ts_thread_lock.acquire(blocking=False):
+                ts_result["busy"] = True
+                break
+            try:
+                ts_rows, ts_retryable = self._TSIndexRelativeFilesPass(ts_root_id, ts_pending, ts_seen_paths)
+                ts_result["rows"].extend(ts_rows)
+            finally:
+                self.ts_thread_lock.release()
+            if not ts_retryable:
+                break
+            ts_pending = sorted(ts_retryable)
+        ts_result["indexed"] = len(ts_result["rows"])
+        ts_result["skipped"] = len(ts_requested) - ts_result["indexed"]
+        TSLogVerbose("indexer.index_files.done", root_id=ts_root_id, requested=len(ts_requested),
+                     indexed=ts_result["indexed"], skipped=ts_result["skipped"])
+        return ts_result
+
+    def _TSIndexRelativeFilesPass(self, ts_root_id: str, ts_paths: list[str], ts_seen_paths: set[str]) -> tuple[list, set[str]]:
         ts_config = self.ts_config_store.TSLoadConfig()
         ts_root = next(
             (ts_candidate for ts_candidate in self.ts_storage_paths.TSBuildBaseRoots(ts_config)
@@ -177,12 +204,12 @@ class TSIndexer:
         )
         if ts_root is None:
             TSLogVerbose("indexer.index_files.unknown_root", root_id=ts_root_id)
-            return ts_result
+            return [], set()
 
         ts_payloads: list[TSAssetPayload] = []
-        ts_seen_paths: set[str] = set()
-        for ts_relative_path in ts_requested:
-            ts_asset_stat = TSBuildAssetStatForRelativePath(ts_root, ts_relative_path)
+        ts_retryable: set[str] = set()
+        for ts_relative_path in ts_paths:
+            ts_asset_stat = TSBuildAssetStatForRelativePath(ts_root, ts_relative_path, ts_retryable=ts_retryable)
             if ts_asset_stat is None:
                 continue
             ts_normalized_path = TSNormalizePathString(ts_asset_stat.ts_path)
@@ -192,8 +219,10 @@ class TSIndexer:
             ts_existing_row = self.ts_database.TSGetAssetByPath(ts_normalized_path)
             if not self._TSRelativeFileNeedsIndex(ts_asset_stat, ts_existing_row):
                 continue
-            ts_payload, _ts_row = self._TSProcessCandidateTuple((ts_asset_stat, ts_existing_row))
+            ts_payload, _ts_row = self._TSProcessCandidateTuple((ts_asset_stat, ts_existing_row), ts_retryable=ts_retryable)
             if ts_payload is None:
+                if ts_asset_stat.ts_relative_path in ts_retryable:
+                    ts_seen_paths.discard(ts_normalized_path)
                 continue
             if ts_existing_row is not None and str(ts_existing_row["hash"] or "") != ts_payload.ts_hash:
                 # Same rule as the scan: the old preview belongs to the old
@@ -203,17 +232,7 @@ class TSIndexer:
                     self.ts_preview_cache.TSPurgePreview(ts_existing_preview_path)
             ts_payloads.append(ts_payload)
 
-        if ts_payloads:
-            ts_result["rows"] = list(self.ts_database.TSUpsertAssets(ts_payloads))
-            ts_result["indexed"] = len(ts_payloads)
-        ts_result["skipped"] = len(ts_requested) - ts_result["indexed"]
-        TSLogVerbose(
-            "indexer.index_files.done",
-            root_id=ts_root_id,
-            requested=len(ts_requested),
-            indexed=ts_result["indexed"],
-        )
-        return ts_result
+        return list(self.ts_database.TSUpsertAssets(ts_payloads)) if ts_payloads else [], ts_retryable
 
     def _TSRelativeFileNeedsIndex(self, ts_asset_stat: TSAssetStat, ts_existing_row) -> bool:
         # The same cheap compare the scan uses, so a duplicate request for an
@@ -564,8 +583,12 @@ class TSIndexer:
     def _TSProcessCandidateTuple(
         self,
         ts_candidate_tuple: tuple[TSAssetStat, Any | None],
+        *,
+        ts_retryable: set[str] | None = None,
     ) -> tuple[TSAssetPayload | None, Any | None]:
-        return TSProcessCandidateTuple(ts_candidate_tuple, self.ts_handler_registry, self.ts_preview_cache)
+        return TSProcessCandidateTuple(
+            ts_candidate_tuple, self.ts_handler_registry, self.ts_preview_cache, ts_retryable=ts_retryable,
+        )
 
 
 

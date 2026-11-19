@@ -254,6 +254,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 }
                 .ts-head {
                     display: flex;
+                    direction: ltr;
                     gap: 12px;
                     align-items: center;
                     justify-content: space-between;
@@ -1064,9 +1065,6 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     padding: 8px 0;
                     font-weight: 700;
                 }
-                .ts-head > div:first-child {
-                    min-width: 0;
-                }
                 .ts-title,
                 .ts-subtitle {
                     overflow: hidden;
@@ -1076,6 +1074,14 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                 .ts-actions {
                     flex-wrap: wrap;
                     justify-content: flex-end;
+                    min-width: 0;
+                }
+                /* The title block yields first (its text ellipsizes), so the
+                   buttons wrap only when they cannot fit beside an empty
+                   title - not as soon as a long filename takes its half. */
+                .ts-head > :first-child {
+                    flex: 1 1 0;
+                    min-width: 0;
                 }
                 .ts-actions .ts-delete:not([disabled]):hover {
                     border-color: color-mix(in srgb, #d24b4b 72%, var(--ts-text));
@@ -1393,7 +1399,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         this.tsCanLoadMore = typeof tsOptions?.tsCanLoadMore === "function" ? tsOptions.tsCanLoadMore : null;
         this.tsCompareItems = Array.isArray(tsOptions?.tsCompareItems) ? [...tsOptions.tsCompareItems] : [];
         this.tsOnDeleted = typeof tsOptions?.tsOnDeleted === "function" ? tsOptions.tsOnDeleted : null;
+        this.tsViewerSession = Symbol();
         this.tsMoreRequestPromise = null;
+        this.tsStageRenderToken += 1;
+        this.tsSwapPending = false;
         // Reopened while the previous close was still fading: that close is
         // abandoned, and the focus to return to is still the one it saved.
         const tsWasClosing = this.tsCancelClosing();
@@ -1437,6 +1446,8 @@ export class TSArtiusBrowserViewer extends HTMLElement {
     // keyboard is released at once and the lightbox reports itself closed, so
     // nothing waits on the animation; opening again cancels it.
     tsClose() {
+        this.tsViewerSession = null;
+        this.tsMoreRequestPromise = null;
         const tsRoot = this.tsRefs?.tsRoot;
         const tsReduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
         if (this.tsClosingTimer) {
@@ -1832,20 +1843,23 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         if (this.tsMoreRequestPromise) {
             return this.tsMoreRequestPromise;
         }
-        const tsCurrentAssetId = this.tsItems[this.tsIndex]?.id ?? null;
-        this.tsMoreRequestPromise = (async () => {
-            try {
-                const tsLoaded = await this.tsRequestMore(tsTargetIndex);
-                if (tsLoaded) {
-                    this.tsSyncItemsFromSource(tsCurrentAssetId);
-                    this.tsRender();
-                }
-                return Boolean(tsLoaded);
-            } finally {
+        const tsRequestMore = this.tsRequestMore;
+        const tsRequest = Promise.resolve().then(() => tsRequestMore(tsTargetIndex)).then((tsLoaded) => {
+            if (this.tsMoreRequestPromise !== tsRequest || !tsLoaded) {
+                return false;
+            }
+            this.tsSyncItemsFromSource();
+            if (!this.tsSwapPending) {
+                this.tsRender();
+            }
+            return true;
+        }).finally(() => {
+            if (this.tsMoreRequestPromise === tsRequest) {
                 this.tsMoreRequestPromise = null;
             }
-        })();
-        return this.tsMoreRequestPromise;
+        });
+        this.tsMoreRequestPromise = tsRequest;
+        return tsRequest;
     }
 
     // The lightbox rebuilds its stage on every navigation, so the new <img>
@@ -2001,13 +2015,20 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         if (!this.tsItems.length) {
             return;
         }
+        const tsSession = this.tsViewerSession;
         if (tsDirection > 0) {
             await this.tsMaybePrefetchMore(this.tsIndex);
+            if (tsSession !== this.tsViewerSession) {
+                return;
+            }
             this.tsSyncItemsFromSource(this.tsItems[this.tsIndex]?.id ?? null);
         }
         let tsNextIndex = Math.max(0, Math.min(this.tsIndex + tsDirection, this.tsItems.length - 1));
         if (tsDirection > 0 && tsNextIndex === this.tsIndex) {
             const tsLoaded = await this.tsMaybePrefetchMore(this.tsIndex, true);
+            if (tsSession !== this.tsViewerSession) {
+                return;
+            }
             if (tsLoaded) {
                 this.tsSyncItemsFromSource(this.tsItems[this.tsIndex]?.id ?? null);
                 tsNextIndex = Math.max(0, Math.min(this.tsIndex + tsDirection, this.tsItems.length - 1));

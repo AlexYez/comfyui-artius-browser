@@ -96,18 +96,22 @@ class TSAssetCatalogService:
         if ts_row is None:
             return None
         try:
-            ts_row = self.ts_ensure_metadata(ts_row) or ts_row
+            ts_row = self.ts_ensure_metadata(ts_row)
         except Exception:
             # On-demand enrichment must never turn the detail route into a
             # 500: a file that vanished mid-request, a corrupt image, or a
             # root removed from config degrades to the card built from the
             # stored row instead.
             TSLogger.warning("TS asset detail enrichment failed for asset %s", ts_asset_id, exc_info=True)
+        if ts_row is None:
+            return None
         ts_technical_info = TSResolveTechnicalInfo(ts_row)
         if str(ts_row["type"] or "") == "video":
             ts_row, ts_technical_info = TSEnrichVideoTechnicalInfo(ts_row, self.ts_database, self.ts_tools, ts_technical_info)
         elif str(ts_row["type"] or "") == "audio":
             ts_row, ts_technical_info = TSEnrichAudioTechnicalInfo(ts_row, self.ts_database, self.ts_tools, ts_technical_info)
+        if ts_row is None:
+            return None
         ts_payload = TSBuildAssetCard(ts_row, self._TSRootMap(), self.ts_preview_cache)
         ts_payload["detail_loaded"] = True
         ts_payload["metadata"] = TSJsonLoads(ts_row["metadata"], {})

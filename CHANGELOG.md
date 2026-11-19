@@ -4,6 +4,17 @@ Release history for **Timesaver Artius Browser**. Entries follow [Keep a Changel
 
 [Archive and version index](changelog/README.md) · [Project entry](README.md)
 
+## [1.20.6] - 2026-11-19
+
+### Fixed
+
+- The update badge opens the project's GitHub repository.
+- The lightbox keeps Close at the right edge when the action buttons wrap.
+- Keep late media probes from restoring deleted assets and keep targeted indexing out of cache rebuilds.
+- Keep completed outputs from different generations separate across tabs, and retry named files that are temporarily unavailable.
+- Preserve the current lightbox selection when the next page finishes loading.
+- Recover malformed configuration values and save settings without blocking ComfyUI's event loop.
+
 ## [1.20.5] - 2026-11-19
 
 ### Added

@@ -409,14 +409,14 @@ async def TSHandleWorkflowReveal(ts_runtime, ts_request):
 
 async def TSHandleSettingsGet(ts_runtime, ts_request):
     TSLogVerbose("route.settings.get", path=ts_request.path)
-    return TSWeb.json_response({"ui": ts_runtime.TSGetUISettings()})
+    return TSWeb.json_response({"ui": await asyncio.to_thread(ts_runtime.TSGetUISettings)})
 
 
 async def TSHandleSettingsPost(ts_runtime, ts_request):
     ts_payload = await TSReadJsonObject(ts_request)
     TSLogVerbose("route.settings.post", path=ts_request.path, keys=sorted((ts_payload or {}).keys()))
     ts_ui_updates = ts_payload.get("ui")
-    return TSWeb.json_response({"ui": ts_runtime.TSSaveUISettings(ts_ui_updates)})
+    return TSWeb.json_response({"ui": await asyncio.to_thread(ts_runtime.TSSaveUISettings, ts_ui_updates)})
 
 
 async def TSHandleWorkflowDelete(ts_runtime, ts_request):
