@@ -21,7 +21,7 @@ import {
     tsLoadLocale,
     tsOpenAssetInNewTab,
     tsOpenDownload,
-    tsDownloadVideoFrame,
+    tsSaveVideoFrame,
     tsRevealAssetInFolder,
     tsRevealWorkflowInFolder,
     tsDeleteWorkflowFile,
@@ -258,6 +258,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     }
 
     disconnectedCallback() {
+        this.tsStopWorkflowPreview();
         window.removeEventListener("tsab:locale-changed", this.tsLocaleChangedListener);
         this.ts3DQueue.tsDispose();
         for (const tsTimerId of this.tsSidebarRefreshTimers) {
@@ -915,7 +916,18 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             ${tsPanelStyles}
             <div class="ts-shell" tabindex="0">
                 <div class="ts-toolbar">
-                    <div class="ts-title"><a class="ts-title-link" href="${tsProjectSettings.repositoryUrl}" target="_blank" rel="noreferrer noopener"></a><span class="ts-version" hidden></span><a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a><a class="ts-update-badge" href="${tsProjectSettings.repositoryUrl}" target="_blank" rel="noreferrer noopener" hidden></a><button class="ts-help-toggle" type="button">?</button></div>
+                    <div class="ts-title">
+                        <span class="ts-panel-title"></span>
+                        <a class="ts-donate" href="https://timesavervfx.com/donate/" target="_blank" rel="noreferrer noopener"></a>
+                        <a class="ts-update-badge" href="${tsProjectSettings.repositoryUrl}" target="_blank" rel="noreferrer noopener" hidden></a>
+                        <button class="ts-help-toggle" type="button">?</button>
+                        <button class="ts-project-toggle" type="button" popovertarget="ts-project-menu">⋯</button>
+                        <div class="ts-project-menu" id="ts-project-menu" popover="auto">
+                            <span class="ts-version" hidden></span>
+                            <a class="ts-title-link" href="${tsProjectSettings.repositoryUrl}" target="_blank" rel="noreferrer noopener">GitHub</a>
+                            <button class="ts-rebuild-cache" type="button"></button>
+                        </div>
+                    </div>
                     <div class="ts-toolbar-main-wrap">
                     <div class="ts-toolbar-main">
                         <div class="ts-toolbar-navigation">
@@ -928,6 +940,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                             <button class="ts-toggle-button ts-search-scope" type="button" data-active="false"></button>
                         </div>
                         </div>
+                        <div class="ts-toolbar-slot">
                         <div class="ts-toolbar-view">
                         <div class="ts-toolbar-cluster ts-root-group">
                             <select class="ts-root-select"></select>
@@ -947,20 +960,19 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                         <button class="ts-toggle-button ts-favorites-toggle" type="button" data-active="false"></button>
                         <button class="ts-toggle-button ts-filters-toggle" type="button" data-active="false"></button>
                         </div>
+                        <div class="ts-toolbar-selection" hidden>
+                        <button class="ts-selection-count" type="button"></button>
+                        <button class="ts-compare-selected" type="button" aria-describedby="ts-selection-status"></button>
+                        <button class="ts-download-selected" type="button"></button>
+                        <button class="ts-delete-selected" type="button" aria-describedby="ts-selection-status"></button>
+                        <div id="ts-selection-status" class="ts-selection-status" role="status" aria-live="polite" hidden></div>
+                        </div>
+                        </div>
                         <div class="ts-toolbar-actions">
                         <button class="ts-toggle-button ts-autoscan" type="button" data-active="true">
                             <span class="ts-autoscan-label"></span>
                         </button>
                         <button class="ts-rescan" type="button"></button>
-                        <div class="ts-toolbar-selection">
-                        <button class="ts-compare-selected" type="button" aria-describedby="ts-selection-status"></button>
-                        <button class="ts-download-selected" type="button"></button>
-                        <button class="ts-delete-selected" type="button" aria-describedby="ts-selection-status"></button>
-                        </div>
-                        </div>
-                        <div id="ts-selection-status" class="ts-selection-status" role="status" aria-live="polite" hidden></div>
-                        <div class="ts-toolbar-maintenance">
-                        <button class="ts-rebuild-cache" type="button"></button>
                         </div>
                     </div>
                     </div>
@@ -1024,9 +1036,13 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsToolbarMain: this.shadowRoot.querySelector(".ts-toolbar-main"),
             tsToolbarResizer: this.shadowRoot.querySelector(".ts-toolbar-resizer"),
             tsSelectionStatus: this.shadowRoot.querySelector(".ts-selection-status"),
+            tsSelectionBar: this.shadowRoot.querySelector(".ts-toolbar-selection"),
+            tsSelectionCount: this.shadowRoot.querySelector(".ts-selection-count"),
             tsOperationStatus: this.shadowRoot.querySelector(".ts-operation-status"),
             tsTitle: this.shadowRoot.querySelector(".ts-title"),
-            tsTitleLink: this.shadowRoot.querySelector(".ts-title-link"),
+            tsPanelTitle: this.shadowRoot.querySelector(".ts-panel-title"),
+            tsProjectToggle: this.shadowRoot.querySelector(".ts-project-toggle"),
+            tsProjectMenu: this.shadowRoot.querySelector(".ts-project-menu"),
             tsVersion: this.shadowRoot.querySelector(".ts-version"),
             tsDonate: this.shadowRoot.querySelector(".ts-donate"),
             tsUpdateBadge: this.shadowRoot.querySelector(".ts-update-badge"),
@@ -1230,7 +1246,21 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsBindFilterInputs();
         this.tsRefs.tsFilterClear.addEventListener("click", () => this.tsClearFilters());
         this.tsRefs.tsRescan.addEventListener("click", () => this.tsRequestRescan());
-        this.tsRefs.tsRebuildCache.addEventListener("click", () => this.tsRequestRebuildCache());
+        this.tsRefs.tsRebuildCache.addEventListener("click", () => {
+            this.tsRefs.tsProjectMenu.hidePopover();
+            this.tsRequestRebuildCache();
+        });
+        this.tsRefs.tsProjectMenu.addEventListener("beforetoggle", (tsEvent) => {
+            if (tsEvent.newState !== "open") return;
+            const tsRect = this.tsRefs.tsProjectToggle.getBoundingClientRect();
+            this.tsRefs.tsProjectMenu.style.top = `${tsRect.bottom + 4}px`;
+            this.tsRefs.tsProjectMenu.style.right = `${Math.max(4, document.documentElement.clientWidth - tsRect.right)}px`;
+        });
+        this.tsRefs.tsProjectMenu.querySelector("a").addEventListener("click", () => this.tsRefs.tsProjectMenu.hidePopover());
+        this.tsRefs.tsSelectionCount.addEventListener("click", () => {
+            this.tsClearSelection();
+            this.tsRefs.tsShell.focus({ preventScroll: true });
+        });
         this.tsRefs.tsCompareSelected.addEventListener("click", () => this.tsCompareSelected());
         this.tsRefs.tsDownloadSelected.addEventListener("click", () => this.tsDownloadSelected());
         this.tsRefs.tsDeleteSelected.addEventListener("click", () => this.tsDeleteSelected());
@@ -1487,7 +1517,9 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRemoveItemsByIds([tsAssetId]);
     }
     tsHydrateText() {
-        this.tsRefs.tsTitleLink.textContent = this.tsT("panel.title", tsProjectSettings.title);
+        this.tsRefs.tsPanelTitle.textContent = this.tsT("panel.title", tsProjectSettings.title);
+        this.tsRefs.tsProjectToggle.title = this.tsT("menu.project", "Project and maintenance");
+        this.tsRefs.tsProjectToggle.setAttribute("aria-label", this.tsRefs.tsProjectToggle.title);
         this.tsRefs.tsDonate.textContent = this.tsT("button.donate", "Donate");
         this.tsRefs.tsDonate.title = this.tsT("tooltip.donate", "Support the project.");
         this.tsRefs.tsUpdateBadge.textContent = this.tsT("badge.newVersion", "New version available");
@@ -3067,6 +3099,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             && !this.tsHasLoadedOnce
             && this.tsState.tsSettingsHydrated;
         if (tsShowSkeletons) {
+            if (this.tsHoveredWorkflowVideo) this.tsStopWorkflowPreview();
             this.tsRefs.tsEmpty.textContent = "";
             this.tsLastEmptyMarkup = "";
             this.tsRenderSkeletonGrid(tsMetrics);
@@ -3082,6 +3115,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         if (tsItems.length === 0) {
             this.tsRefs.tsGalleryContent.innerHTML = "";
+            if (this.tsHoveredWorkflowVideo) this.tsStopWorkflowPreview();
             this.tsLastGridMarkupKey = "empty";
             return;
         }
@@ -3122,6 +3156,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         const tsEnteringFromSkeleton = String(this.tsLastGridMarkupKey || "").startsWith("skeleton:");
         this.tsLastGridMarkupKey = tsMarkupKey;
         this.tsReconcileGridCards(tsVisibleStartIndex, tsVisibleEndIndex, tsMetrics, tsWorkflowSection);
+        if (this.tsHoveredWorkflowVideo && !this.tsHoveredWorkflowVideo.isConnected) this.tsStopWorkflowPreview();
         if (tsEnteringFromSkeleton) {
             this.tsPlayGridEntrance();
         }
@@ -3295,13 +3330,22 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     tsRenderSelectionButtons() {
         const tsSelectedItems = this.tsGetSelectedItems();
         const tsWorkflowSection = this.tsIsWorkflowSection();
+        if (this.tsRefs.tsSelectionBar) {
+            this.tsRefs.tsSelectionBar.hidden = tsWorkflowSection || tsSelectedItems.length === 0;
+            const tsCount = this.tsT("selection.count", "Selected: {count}").replace("{count}", String(tsSelectedItems.length));
+            this.tsRefs.tsSelectionCount.textContent = tsCount;
+            this.tsRefs.tsSelectionCount.title = this.tsT("shortcuts.clearSelection", "Clear the selection");
+            this.tsRefs.tsSelectionCount.setAttribute("aria-label", `${tsCount}. ${this.tsRefs.tsSelectionCount.title}`);
+        }
         const tsDeletableCount = tsWorkflowSection ? 0 : tsSelectedItems.filter((tsItem) => tsItem.allow_delete).length;
         this.tsRefs.tsRescan.disabled = tsWorkflowSection || Boolean(this.tsState.tsScanStatus?.running);
         this.tsRefs.tsRebuildCache.disabled = tsWorkflowSection || Boolean(this.tsState.tsScanStatus?.running);
         this.tsRefs.tsDeleteSelected.disabled = tsDeletableCount === 0;
         // Say how many files the click will move, the way Compare does.
-        const tsDeleteLabel = this.tsT("button.deleteSelected", "Delete Selected");
-        const tsDeleteText = tsDeletableCount > 1 ? `${tsDeleteLabel} (${tsDeletableCount})` : tsDeleteLabel;
+        const tsDeleteLabel = this.tsT("menu.delete", "Delete");
+        const tsDeleteText = tsDeletableCount > 0 && tsDeletableCount < tsSelectedItems.length
+            ? this.tsT("selection.deleteSubsetAction", "Delete {count} of {total}").replace("{count}", tsDeletableCount).replace("{total}", tsSelectedItems.length)
+            : tsDeleteLabel;
         if (this.tsRefs.tsDeleteSelected.textContent !== tsDeleteText) {
             this.tsRefs.tsDeleteSelected.textContent = tsDeleteText;
         }
@@ -3314,13 +3358,15 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         this.tsRefs.tsDeleteSelected.title = tsDeleteHint;
         if (this.tsRefs.tsSelectionStatus) {
             const tsCompare = this.tsResolveCompareSelection(tsSelectedItems);
-            const tsParts = [this.tsT("selection.count", "Selected: {count}").replace("{count}", String(tsSelectedItems.length))];
+            const tsParts = [];
             if (!tsWorkflowSection && tsSelectedItems.length > 0) {
-                tsParts.push(this.tsBuildCompareHint(tsSelectedItems, tsCompare));
+                if (tsCompare.length !== tsSelectedItems.length || tsCompare.length < TS_COMPARE_MIN_ITEMS) {
+                    tsParts.push(this.tsBuildCompareHint(tsSelectedItems, tsCompare));
+                }
                 if (tsDeletableCount < tsSelectedItems.length) tsParts.push(tsDeleteHint);
             }
             const tsText = tsParts.join(" ");
-            this.tsRefs.tsSelectionStatus.hidden = tsSelectedItems.length === 0;
+            this.tsRefs.tsSelectionStatus.hidden = !tsParts.length;
             if (this.tsRefs.tsSelectionStatus.textContent !== tsText) this.tsRefs.tsSelectionStatus.textContent = tsText;
         }
     }
@@ -3331,12 +3377,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             return;
         }
         const tsCount = tsWorkflowSection ? 0 : tsSelectedItems.length;
-        const tsLabel = this.tsT("button.downloadSelected", "Download Selected");
-        let tsText = tsCount > 1 ? `${tsLabel} (${tsCount})` : tsLabel;
+        let tsText = this.tsT("button.download", "Download");
         if (this.tsArchiveBusy) {
             tsText = this.tsT("status.archivePacking", "Packing...");
         }
         tsButton.disabled = tsCount === 0 || Boolean(this.tsArchiveBusy);
+        tsButton.setAttribute?.("aria-label", this.tsArchiveBusy ? tsText : this.tsT("button.downloadSelected", "Download Selected"));
         if (tsButton.textContent !== tsText) {
             tsButton.textContent = tsText;
         }
@@ -3408,9 +3454,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         }
         const tsCompareSelection = tsWorkflowSection ? [] : this.tsResolveCompareSelection(tsSelectedItems);
         const tsLabel = this.tsT("button.compareSelected", "Compare");
-        // The button stays visible and merely disabled while the selection is
-        // too small: a control that only appears once you already know the
-        // trick teaches nobody. Disabled, with the tooltip, it IS the hint.
+        // Keep the comparison hint available after the first selection.
         tsButton.textContent = tsCompareSelection.length >= TS_COMPARE_MIN_ITEMS
             ? tsCompareSelection.length < tsSelectedItems.length
                 ? this.tsT("selection.compareSubset", "Compare {count} of {total}")
@@ -3711,16 +3755,18 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         tsItems.push({ tsAction: "download", tsLabel: this.tsT("menu.download", "Download") });
         if (tsAsset.type === "video") {
             tsItems.push(
-                { tsAction: "first-frame", tsLabel: this.tsT("menu.firstFramePNG", "Download first frame as PNG") },
-                { tsAction: "last-frame", tsLabel: this.tsT("menu.lastFramePNG", "Download last frame as PNG") },
+                { tsAction: "first-frame", tsLabel: this.tsT("menu.firstFramePNG", "Save first frame") },
+                { tsAction: "last-frame", tsLabel: this.tsT("menu.lastFramePNG", "Save last frame") },
             );
         }
         // Right-clicking inside a multi-selection keeps it, so the menu can
         // offer the whole selection as one archive.
-        const tsSelectionCount = this.tsState.tsSelection.has(tsAsset.id) ? this.tsGetSelectedItems().length : 0;
+        const tsSelection = this.tsState.tsSelection.has(tsAsset.id) ? this.tsGetSelectedItems() : [tsAsset];
+        const tsSelectionCount = tsSelection.length;
         if (tsSelectionCount > 1) {
             tsItems.push({
                 tsAction: "download-zip",
+                tsSelection: true,
                 tsLabel: this.tsT("menu.downloadZip", "Download selected as ZIP ({count})").replace("{count}", String(tsSelectionCount)),
                 tsDisabled: Boolean(this.tsArchiveBusy),
             });
@@ -3729,10 +3775,14 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsItems.push({ tsAction: "open-tab", tsLabel: this.tsT("menu.openInNewTab", "Open in new tab") });
         }
         tsItems.push({ tsAction: "reveal", tsLabel: this.tsT("menu.showInFolder", "Show in folder") });
+        const tsDeletable = tsSelection.filter((tsItem) => tsItem.allow_delete).length;
         tsItems.push({
             tsAction: "delete",
-            tsLabel: this.tsT("menu.delete", "Delete"),
-            tsDisabled: !tsAsset.allow_delete,
+            tsSelection: tsSelectionCount > 1,
+            tsLabel: tsSelectionCount > 1 && tsDeletable < tsSelectionCount
+                ? this.tsT("selection.deleteSubsetAction", "Delete {count} of {total}").replace("{count}", tsDeletable).replace("{total}", tsSelectionCount)
+                : this.tsT("menu.delete", "Delete"),
+            tsDisabled: !tsDeletable,
             tsDanger: true,
         });
         return tsItems;
@@ -3807,8 +3857,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
     tsOpenContextMenu(tsClientX, tsClientY, tsAsset, tsFocusFirst = false) {
         const tsMenu = this.tsRefs.tsContextMenu;
         const tsItems = this.tsBuildContextMenuItems(tsAsset);
-        tsMenu.innerHTML = tsItems
-            .map((tsItem) => `
+        const tsMenuButton = (tsItem) => `
                 <button
                     class="ts-context-item"
                     type="button"
@@ -3818,8 +3867,19 @@ export class TSArtiusBrowserPanel extends HTMLElement {
                     data-danger="${String(Boolean(tsItem.tsDanger))}"
                     ${tsItem.tsDisabled ? "disabled" : ""}
                 >${this.tsEscapeHTML(tsItem.tsLabel)}</button>
-            `)
-            .join("");
+            `;
+        const tsGroup = (tsLabel, tsEntries) => `
+            <div class="ts-context-group" role="group" aria-label="${this.tsEscapeAttribute(tsLabel)}">
+                <div class="ts-context-label" aria-hidden="true">${this.tsEscapeHTML(tsLabel)}</div>
+                ${tsEntries.map(tsMenuButton).join("")}
+            </div>`;
+        if (tsItems.some((tsItem) => tsItem.tsSelection)) {
+            const tsCount = this.tsGetSelectedItems().length;
+            tsMenu.innerHTML = tsGroup(this.tsT("menu.thisFile", "This file"), tsItems.filter((tsItem) => !tsItem.tsSelection))
+                + tsGroup(this.tsT("selection.count", "Selected: {count}").replace("{count}", tsCount), tsItems.filter((tsItem) => tsItem.tsSelection));
+        } else {
+            tsMenu.innerHTML = tsItems.map(tsMenuButton).join("");
+        }
         tsMenu.hidden = false;
         tsMenu.dataset.open = "true";
         // Position within the shell, flipping if it would overflow the viewport.
@@ -3931,7 +3991,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         } else if (tsAction === "download-zip") {
             void this.tsDownloadAssetsAsArchive(this.tsGetSelectedItems());
         } else if (tsAction === "first-frame" || tsAction === "last-frame") {
-            void tsDownloadVideoFrame(tsAsset, tsAction === "first-frame" ? "first" : "last");
+            void tsSaveVideoFrame(tsAsset, tsAction === "first-frame" ? "first" : "last");
         } else if (tsAction === "open-tab") {
             tsOpenAssetInNewTab(tsAsset);
         } else if (tsAction === "reveal") {
@@ -3944,7 +4004,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             if (this.tsIsWorkflowSection()) {
                 void this.tsDeleteWorkflowById(tsAsset.id);
             } else {
-                this.tsDeleteAssets(this.tsGetSelectedItems().length > 0 ? this.tsGetSelectedItems() : [tsAsset]);
+                this.tsDeleteAssets(this.tsState.tsSelection.has(tsAsset.id) ? this.tsGetSelectedItems() : [tsAsset]);
             }
         }
     }
@@ -4045,7 +4105,7 @@ export class TSArtiusBrowserPanel extends HTMLElement {
         // Ignore movement WITHIN one card: pointerover/out fire for every
         // child element, and restarting the clip on each of them would make a
         // hovered preview stutter instead of play.
-        const tsCard = tsEvent?.target?.closest?.("[data-card-id]");
+        const tsCard = tsEvent?.target?.closest?.(".ts-card[data-card-id]");
         if (!tsCard || (tsEvent.relatedTarget && tsCard.contains(tsEvent.relatedTarget))) {
             return null;
         }
@@ -4054,28 +4114,30 @@ export class TSArtiusBrowserPanel extends HTMLElement {
 
     tsHandleGalleryPointerOver(tsEvent) {
         const tsVideo = this.tsResolveHoveredPreviewVideo(tsEvent);
-        if (!tsVideo) {
+        if (!tsVideo || tsEvent.pointerType === "touch" || tsVideo === this.tsHoveredWorkflowVideo) {
             return;
         }
-        // Muted playback is allowed without a gesture, but a play() that loses
-        // a race with the next pointerout rejects; that is not an error worth
-        // surfacing.
-        const tsPlayed = tsVideo.play();
-        if (tsPlayed && typeof tsPlayed.catch === "function") {
-            tsPlayed.catch(() => {});
-        }
+        this.tsStopWorkflowPreview();
+        this.tsHoveredWorkflowVideo = tsVideo;
+        this.tsWorkflowHoverTimer = window.setTimeout(() => {
+            this.tsWorkflowHoverTimer = null;
+            if (tsVideo.closest(".ts-card:hover")) tsVideo.play()?.catch(() => {});
+        }, tsPanelSettings.workflowHoverDelayMs);
     }
 
     tsHandleGalleryPointerOut(tsEvent) {
         const tsVideo = this.tsResolveHoveredPreviewVideo(tsEvent);
-        if (!tsVideo) {
-            return;
-        }
-        tsVideo.pause();
-        try {
-            tsVideo.currentTime = 0;
-        } catch {
-            // Not seekable yet (metadata still loading) - it starts at 0 anyway.
+        if (tsVideo && tsVideo === this.tsHoveredWorkflowVideo) this.tsStopWorkflowPreview();
+    }
+
+    tsStopWorkflowPreview() {
+        window.clearTimeout(this.tsWorkflowHoverTimer);
+        this.tsWorkflowHoverTimer = null;
+        const tsVideo = this.tsHoveredWorkflowVideo;
+        this.tsHoveredWorkflowVideo = null;
+        if (tsVideo) {
+            if (!tsVideo.paused) tsVideo.pause();
+            if (tsVideo.currentTime > 0) tsVideo.currentTime = 0;
         }
     }
 

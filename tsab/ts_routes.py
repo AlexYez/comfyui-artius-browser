@@ -4,6 +4,7 @@ import asyncio
 
 from aiohttp import web as TSWeb
 from .ts_route_errors import TSWrapRouteHandler
+from .ts_saved_frame import TS_MAX_FRAME_UPLOAD
 from .ts_settings import (
     TS_ARCHIVE_MAX_ASSETS,
     TS_DEFAULT_PAGE_SIZE,
@@ -30,6 +31,7 @@ TS_ROUTE_DEFINITIONS = (
     ("GET", "/asset_browser/file", "TSHandleFile"),
     ("GET", "/asset_browser/display/{id}", "TSHandleDisplay"),
     ("GET", "/asset_browser/frame/{id}", "TSHandleVideoFrame"),
+    ("POST", "/asset_browser/frame/{id}/save", "TSHandleSaveVideoFrame"),
     ("POST", "/asset_browser/rescan", "TSHandleRescan"),
     ("POST", "/asset_browser/index_files", "TSHandleIndexFiles"),
     ("POST", "/asset_browser/rebuild_cache", "TSHandleRebuildCache"),
@@ -239,14 +241,41 @@ async def TSHandlePreviewWarm(ts_runtime, ts_request):
     return TSWeb.json_response(await asyncio.to_thread(ts_runtime.TSWarmPreview, ts_asset_id))
 
 
-async def TSHandleVideoFrame(ts_runtime, ts_request):
-    ts_asset_id = TSParseRouteAssetId(ts_request)
+def TSParseFramePosition(ts_request):
     ts_position = ts_request.query.get("position", "")
     if ts_position not in {"first", "last"}:
         if not (1 <= len(ts_position) <= 15 and ts_position.isascii() and ts_position.isdecimal()):
             raise TSWeb.HTTPBadRequest(reason="Expected first, last or playback time in microseconds")
         ts_position = int(ts_position)
+    return ts_position
+
+
+async def TSHandleVideoFrame(ts_runtime, ts_request):
+    ts_asset_id = TSParseRouteAssetId(ts_request)
+    ts_position = TSParseFramePosition(ts_request)
     return await asyncio.to_thread(ts_runtime.TSBuildVideoFrameResponse, ts_asset_id, ts_position)
+
+
+async def TSHandleSaveVideoFrame(ts_runtime, ts_request):
+    ts_asset_id = TSParseRouteAssetId(ts_request)
+    ts_position = TSParseFramePosition(ts_request)
+    ts_upload = None
+    ts_hint = 0
+    if ts_request.can_read_body:
+        if ts_request.content_type != "image/png":
+            raise TSWeb.HTTPUnsupportedMediaType()
+        ts_value = ts_request.query.get("frame", "")
+        if not (1 <= len(ts_value) <= 15 and ts_value.isascii() and ts_value.isdecimal()):
+            raise TSWeb.HTTPBadRequest(reason="Expected nonnegative frame index")
+        ts_hint = int(ts_value)
+        ts_data = bytearray()
+        async for ts_chunk in ts_request.content.iter_chunked(65536):
+            if len(ts_data) + len(ts_chunk) > TS_MAX_FRAME_UPLOAD:
+                raise TSWeb.HTTPRequestEntityTooLarge(max_size=TS_MAX_FRAME_UPLOAD, actual_size=len(ts_data) + len(ts_chunk))
+            ts_data.extend(ts_chunk)
+        ts_upload = bytes(ts_data)
+    ts_result = await asyncio.to_thread(ts_runtime.TSSaveVideoFrame, ts_asset_id, ts_position, ts_upload, ts_hint)
+    return TSWeb.json_response(ts_result, status=201)
 
 
 async def TSHandleFile(ts_runtime, ts_request):

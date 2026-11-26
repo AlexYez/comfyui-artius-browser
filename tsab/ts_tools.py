@@ -496,6 +496,47 @@ class TSToolLocator:
                     break
         return None
 
+    def TSExtractNumberedFrame(self, ts_source: Path, ts_position: str | int) -> tuple[bytes, int] | None:
+        if ts_position in ("first", 0):
+            ts_png = self.TSExtractVideoFramePNG(ts_source, "first")
+            return (ts_png, 0) if ts_png else None
+        ts_executable = self.TSResolveTool("ffmpeg")
+        if not ts_executable:
+            return None
+        if ts_position == "last":
+            # MP4/MOV commonly carry the actual frame count in the header.
+            # In that case keep the fast tail seek even for a long clip.
+            ts_probe = self.TSResolveTool("ffprobe")
+            if ts_probe:
+                ts_info = self._TSRunBoundedCommand(self.ts_ffprobe_semaphore, [
+                    ts_probe, "-v", "error", "-protocol_whitelist", "file", "-select_streams", "V:0",
+                    "-show_entries", "stream=nb_frames", "-of", "csv=p=0", str(ts_source),
+                ], 10)
+                ts_count_text = ts_info.stdout.strip() if ts_info and ts_info.returncode == 0 else ""
+                if ts_count_text.isdecimal() and int(ts_count_text) > 0:
+                    ts_png = self.TSExtractVideoFramePNG(ts_source, "last")
+                    if ts_png:
+                        return ts_png, int(ts_count_text) - 1
+        # Count presentation frames through the chosen instant in the same
+        # decode that supplies the PNG. Average FPS is unreliable for VFR.
+        ts_trim = f",trim=end_pts={ts_position + 1}" if isinstance(ts_position, int) else ""
+        ts_graph = f"[0:V:0]settb=AVTB{ts_trim},split[count][frames];[frames]setpts=250000,fps=1:eof_action=pass[picture]"
+        with tempfile.TemporaryDirectory() as ts_dir:
+            ts_png_path = Path(ts_dir) / "frame.png"
+            ts_result = self._TSRunBoundedCommand(self.ts_ffmpeg_semaphore, [
+                ts_executable, "-nostdin", "-v", "error", "-protocol_whitelist", "file", "-i", str(ts_source),
+                "-filter_complex", ts_graph, "-map", "[count]", "-fps_mode", "passthrough", "-f", "null", "-",
+                "-map", "[picture]", "-frames:v", "1", "-threads", "1", "-progress", "pipe:1", str(ts_png_path),
+            ], 120)
+            if ts_result and ts_result.returncode == 0 and ts_png_path.is_file():
+                for ts_line in reversed(ts_result.stdout.splitlines()):
+                    if ts_line.startswith("frame="):
+                        ts_count = int(ts_line.split("=", 1)[1])
+                        if ts_count > 0:
+                            return ts_png_path.read_bytes(), ts_count - 1
+                        break
+        return None
+
     def TSExtractStillImage(
         self,
         ts_source_path: Path,

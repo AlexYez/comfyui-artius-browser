@@ -152,7 +152,7 @@ class TSIndexer:
             else:
                 self.ts_scan_task = None
 
-    def TSIndexRelativeFilesSync(self, ts_root_id: str, ts_relative_paths: Iterable[str]) -> dict[str, Any]:
+    def TSIndexRelativeFilesSync(self, ts_root_id: str, ts_relative_paths: Iterable[str], *, ts_wait: bool = False) -> dict[str, Any]:
         """Index a named handful of files instead of walking a whole root.
 
         The post-generation autoscan used to walk the entire output root to
@@ -178,7 +178,7 @@ class TSIndexer:
         for ts_delay in (0, 0.1, 0.25):
             if ts_delay:
                 time.sleep(ts_delay)
-            if self.ts_status.ts_running or not self.ts_thread_lock.acquire(blocking=False):
+            if (not ts_wait and self.ts_status.ts_running) or not self.ts_thread_lock.acquire(blocking=ts_wait):
                 ts_result["busy"] = True
                 break
             try:

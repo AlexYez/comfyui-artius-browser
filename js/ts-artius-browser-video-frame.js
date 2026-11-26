@@ -1,3 +1,5 @@
+import { tsResolveLastFrameTime, tsResolveVideoFrameIndex } from "./ts-artius-browser-viewer-state.js";
+
 // Wait for a decoded picture, including after a seek. A stalled range
 // request must not leave a decoder (or the download button) busy forever.
 function tsWaitForPicture(tsVideo, tsEvent, tsStart) {
@@ -22,24 +24,27 @@ function tsWaitForPicture(tsVideo, tsEvent, tsStart) {
     });
 }
 
-function tsPicturePNG(tsVideo) {
+async function tsPicturePNG(tsVideo, tsPosition, tsFPS) {
+    const tsTime = tsPosition === "last" ? tsResolveLastFrameTime(tsVideo.duration, tsFPS) : tsVideo.currentTime;
+    const tsHint = tsResolveVideoFrameIndex(tsTime, tsFPS);
     const tsCanvas = document.createElement("canvas");
     tsCanvas.width = tsVideo.videoWidth;
     tsCanvas.height = tsVideo.videoHeight;
     tsCanvas.getContext("2d").drawImage(tsVideo, 0, 0);
-    return new Promise((tsResolve, tsReject) => {
+    const tsBlob = await new Promise((tsResolve, tsReject) => {
         tsCanvas.toBlob(tsBlob => tsBlob ? tsResolve(tsBlob) : tsReject(new Error("PNG encoding failed")), "image/png");
     });
+    return { tsBlob, tsHint };
 }
 
-export async function tsCaptureBrowserFrame(tsURL, tsPosition, tsPlayer) {
+export async function tsCaptureBrowserFrame(tsURL, tsPosition, tsPlayer, tsFPS) {
     if (!tsURL) throw new Error("Missing original video URL");
     // The user may have moved to another frame or closed the viewer while
     // the server was responding. Only reuse the exact paused original.
     if (tsPlayer?.paused && !tsPlayer.seeking && tsPlayer.videoWidth && tsPlayer.readyState >= 2
         && tsPlayer.currentSrc === new URL(tsURL, document.baseURI).href
         && (tsPosition === "last" ? tsPlayer.ended : Math.round(tsPlayer.currentTime * 1e6) === tsPosition)) {
-        return tsPicturePNG(tsPlayer);
+        return tsPicturePNG(tsPlayer, tsPosition, tsFPS);
     }
 
     const tsVideo = document.createElement("video");
@@ -61,7 +66,7 @@ export async function tsCaptureBrowserFrame(tsURL, tsPosition, tsPlayer) {
                 }
             }
         }
-        return tsPicturePNG(tsVideo);
+        return tsPicturePNG(tsVideo, tsPosition, tsFPS);
     } finally {
         tsVideo.removeAttribute("src");
         tsVideo.load();

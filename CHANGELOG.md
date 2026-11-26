@@ -4,6 +4,15 @@ Release history for **Timesaver Artius Browser**. Entries follow [Keep a Changel
 
 [Archive and version index](changelog/README.md) · [Project entry](README.md)
 
+## [1.20.9] - 2026-11-26
+
+### Changed
+
+- Save a video frame as a PNG in the asset library under `output/Images/Extracted-Frames`. Use **Save** beside the frame controls in the lightbox, or save the first or last frame from the thumbnail menu. **Download video** downloads the original clip.
+- Selecting assets shows actions in place of view settings and keeps the gallery at the same position. The context menu groups commands by the file or selection they affect and shows how many selected files can be deleted.
+- Find the installed version, GitHub link and cache rebuild under **⋯** in the header. The update badge stays visible when an update is available.
+- The lightbox shows loading and empty metadata as a single line. Workflow video previews start after the pointer rests on a card for 150 ms.
+
 ## [1.20.8] - 2026-11-26
 
 ### Added

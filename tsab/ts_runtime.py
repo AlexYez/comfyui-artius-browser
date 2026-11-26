@@ -37,6 +37,7 @@ from .ts_preview import TSPreviewCache
 from .ts_reveal import TSRevealInFileManager
 from .ts_routes import TSRegisterRoutes
 from .ts_scan_service import TSScanService
+from .ts_saved_frame import TSBrowserFrameNumber, TSNormalizeBrowserFrame, TSWriteLibraryFrame
 from .ts_settings import TS_EVENT_ASSET_UPSERT
 from .ts_storage import TSStoragePaths
 from .ts_tools import TSToolLocator
@@ -434,7 +435,7 @@ class TSAssetBrowserRuntime:
             raise TSWeb.HTTPNotFound()
         return self._TSApplyRevalidateHeaders(TSWeb.FileResponse(ts_file_path))
 
-    def TSBuildVideoFrameResponse(self, ts_asset_id: int, ts_position: str | int) -> TSWeb.Response:
+    def _TSVideoFrameSource(self, ts_asset_id: int) -> Path:
         ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
         if ts_row is None:
             raise TSWeb.HTTPNotFound()
@@ -443,14 +444,54 @@ class TSAssetBrowserRuntime:
             raise TSWeb.HTTPNotFound()
         if ts_row["type"] != "video":
             raise TSWeb.HTTPBadRequest(reason="Expected a video asset")
+        # The database lookup path is case-folded on Windows. Resolve the
+        # existing file to preserve its actual spelling in exported names.
+        return ts_source.resolve()
+
+    def _TSRequireFrameDecoder(self) -> None:
         if not self.ts_tools.TSResolveTool("ffmpeg"):
             raise TSWeb.HTTPServiceUnavailable(
                 reason="FFmpeg is unavailable", headers={"X-Artius-Frame-Error": "ffmpeg_unavailable"},
             )
+
+    def TSBuildVideoFrameResponse(self, ts_asset_id: int, ts_position: str | int) -> TSWeb.Response:
+        ts_source = self._TSVideoFrameSource(ts_asset_id)
+        self._TSRequireFrameDecoder()
         ts_png = self.ts_tools.TSExtractVideoFramePNG(ts_source, ts_position)
         if not ts_png:
             raise TSWeb.HTTPUnprocessableEntity(reason="Cannot decode video frame")
         return TSWeb.Response(body=ts_png, content_type="image/png", headers={"Cache-Control": "no-store"})
+
+    def TSSaveVideoFrame(self, ts_asset_id: int, ts_position: str | int, ts_upload: bytes | None, ts_hint: int) -> dict:
+        ts_source = self._TSVideoFrameSource(ts_asset_id)
+        ts_output = self._TSBuildRootMap().get("output")
+        if ts_output is None:
+            raise TSWeb.HTTPConflict(reason="Output library is disabled")
+        ts_approximate = False
+        if ts_upload is None:
+            self._TSRequireFrameDecoder()
+            ts_frame = self.ts_tools.TSExtractNumberedFrame(ts_source, ts_position)
+            if ts_frame is None:
+                raise TSWeb.HTTPUnprocessableEntity(reason="Cannot decode video frame")
+            ts_png, ts_number = ts_frame
+        else:
+            with self.ts_tools.ts_ffmpeg_semaphore:
+                ts_png = TSNormalizeBrowserFrame(ts_upload)
+                ts_number, ts_approximate = TSBrowserFrameNumber(ts_source, ts_position, ts_hint)
+        ts_root = Path(ts_output.ts_path)
+        ts_path = TSWriteLibraryFrame(ts_root, ts_source, ts_number, ts_png)
+        ts_relative = ts_path.relative_to(ts_root).as_posix()
+        try:
+            # A manual save can wait for an active scan on this worker. A
+            # transient busy response would leave the new file undiscoverable.
+            self.ts_indexer.TSIndexRelativeFilesSync("output", [ts_relative], ts_wait=True)
+            ts_row = self.ts_database.TSGetAssetByPath(TSNormalizePathString(ts_path))
+            if ts_row is not None:
+                self._TSEmitAssetUpsert(ts_row)
+        except Exception:
+            TSLogger.exception("Could not index saved video frame %s", ts_relative)
+            ts_row = None
+        return {"path": ts_relative, "indexed": ts_row is not None, "frame_number": ts_number, "approximate": ts_approximate}
 
     def TSBuildDisplayResponse(self, ts_asset_id: int, ts_force_proxy: bool = False) -> TSWeb.FileResponse:
         """The file the lightbox SHOWS: the original, or a converted copy.

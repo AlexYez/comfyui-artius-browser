@@ -18,14 +18,16 @@ export function tsResolveChannelLayoutLabel(tsChannelCount, tsLabels = {}) {
 }
 
 export function tsBuildPromptMetaBlock(tsOptions = {}) {
-    const tsResolvedText = tsOptions.text || tsOptions.emptyText;
+    if (!tsOptions.text) {
+        return tsOptions.emptyText ? `<p class="ts-meta-note">${tsOptions.escapeHTML(tsOptions.emptyText)}</p>` : "";
+    }
     return `
         <div class="ts-meta-block">
             <div class="ts-meta-row">
                 <h4>${tsOptions.escapeHTML(tsOptions.title)}</h4>
-                <button class="ts-meta-copy" type="button" data-copy-field="${tsOptions.escapeAttribute(tsOptions.field)}" ${tsOptions.text ? "" : "disabled"}>${tsOptions.copyLabel}</button>
+                <button class="ts-meta-copy" type="button" data-copy-field="${tsOptions.escapeAttribute(tsOptions.field)}">${tsOptions.copyLabel}</button>
             </div>
-            <div class="ts-prompt">${tsOptions.escapeHTML(tsResolvedText)}</div>
+            <div class="ts-prompt">${tsOptions.escapeHTML(tsOptions.text)}</div>
         </div>
     `;
 }
@@ -154,14 +156,7 @@ function tsBuildTechnicalRowsMarkup(tsRows, tsDeps) {
 }
 
 function tsBuildEmptyTechnicalMarkup(tsEmptyText, tsDeps) {
-    return `
-        <div class="ts-meta-block">
-            <div class="ts-meta-row">
-                <h4>${tsDeps.t("meta.technical", "Technical")}</h4>
-            </div>
-            <div class="ts-technical-empty">${tsEmptyText}</div>
-        </div>
-    `;
+    return `<p class="ts-meta-note">${tsDeps.escapeHTML(tsResolveEmptyText(tsDeps, tsEmptyText))}</p>`;
 }
 
 export function tsBuild3DMetaMarkup(tsAsset, tsDeps) {
@@ -200,19 +195,17 @@ export function tsBuildImageTechnicalMarkup(tsAsset, tsDeps) {
 }
 
 export function tsBuildPromptSeedMetaMarkup(tsAsset, tsDeps) {
-    const tsPromptText = tsAsset.prompt_text || tsResolveEmptyText(tsDeps, tsDeps.t("meta.noPrompt", "No prompt metadata found."));
-    return `
-        <div class="ts-meta-block">
-            <div class="ts-meta-row">
-                <h4>${tsDeps.t("meta.prompt", "Prompt")}</h4>
-                <button class="ts-meta-copy" type="button" data-copy-field="prompt" ${tsAsset.prompt_text ? "" : "disabled"}>${tsDeps.t("button.copy", "Copy")}</button>
-            </div>
-            <div class="ts-prompt">${tsDeps.escapeHTML(tsPromptText)}</div>
-        </div>
-    `;
+    return tsBuildPromptMetaBlock({
+        ...tsDeps,
+        title: tsDeps.t("meta.prompt", "Prompt"),
+        field: "prompt",
+        text: tsAsset.prompt_text,
+        emptyText: tsResolveEmptyText(tsDeps, tsDeps.t("meta.noPrompt", "No prompt metadata found.")),
+        copyLabel: tsDeps.t("button.copy", "Copy"),
+    });
 }
 
-export function tsBuildTechnicalMetaMarkup(tsAsset, tsDeps) {
+export function tsBuildTechnicalMetaMarkup(tsAsset, tsDeps, tsShowEmpty = true) {
     const tsTechnical = tsAsset?.technical_info || {};
     const tsRows = [];
     if (tsTechnical.format_name) {
@@ -253,7 +246,7 @@ export function tsBuildTechnicalMetaMarkup(tsAsset, tsDeps) {
         tsRows.push({ tsLabel: tsDeps.t("meta.bitrate", "Bitrate"), tsValue: tsBitrateText });
     }
     if (tsRows.length === 0) {
-        return tsBuildEmptyTechnicalMarkup(tsResolveEmptyText(tsDeps, tsDeps.t("meta.noTechnical", "No ffprobe metadata found.")), tsDeps);
+        return tsShowEmpty ? tsBuildEmptyTechnicalMarkup(tsDeps.t("meta.noTechnical", "No ffprobe metadata found."), tsDeps) : "";
     }
     return tsBuildTechnicalRowsMarkup(tsRows, tsDeps);
 }

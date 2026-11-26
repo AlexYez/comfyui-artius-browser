@@ -64,6 +64,7 @@ export const tsPanelSettings = Object.freeze({
     defaultRootId: "all",
     defaultMode: "flat",
     defaultAutoscan: true,
+    workflowHoverDelayMs: 150,
     defaultSort: {
         key: "created_at",
         direction: "desc",

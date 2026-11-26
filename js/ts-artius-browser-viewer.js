@@ -9,7 +9,7 @@ import {
     tsFormatBytes,
     tsOpenAssetInNewTab,
     tsOpenDownload,
-    tsDownloadVideoFrame,
+    tsSaveVideoFrame,
     tsRevealAssetInFolder,
     tsShowToast,
 } from "./ts-artius-browser-api.js";
@@ -539,9 +539,13 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     padding: 4px 10px;
                     font-size: 11px;
                 }
+                .ts-meta-note {
+                    margin: 0;
+                    color: var(--ts-text-muted);
+                    font-size: 12px;
+                }
                 .ts-prompt,
-                .ts-seed,
-                .ts-technical-empty {
+                .ts-seed {
                     white-space: pre-wrap;
                     word-break: break-word;
                     font: 500 12px/1.6 "Cascadia Code", "Consolas", monospace;
@@ -891,8 +895,8 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    gap: 6px;
-                    flex-wrap: wrap;
+                    gap: 3px;
+                    flex-wrap: nowrap;
                 }
                 .ts-video-shell {
                     width: min(100%, 1180px);
@@ -919,8 +923,16 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     padding: 6px 10px;
                     font-size: 12px;
                 }
+                .ts-video-stepper .ts-video-step {
+                    min-width: 30px;
+                    padding-inline: 5px;
+                    font-size: 16px;
+                }
+                .ts-video-controls .ts-video-loop {
+                    margin-inline-start: 6px;
+                }
                 .ts-video-frame {
-                    min-width: 120px;
+                    min-width: 6ch;
                     text-align: center;
                     padding: 6px 10px;
                     border: 1px solid var(--ts-border);
@@ -1113,8 +1125,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
                     border-color: var(--ts-accent);
                     background: color-mix(in srgb, var(--ts-accent) 22%, var(--ts-bg-2));
                 }
-                .ts-meta[data-pending="true"] .ts-prompt,
-                .ts-meta[data-pending="true"] .ts-technical-empty {
+                .ts-meta[data-pending="true"] .ts-prompt {
                     color: var(--ts-text-muted);
                 }
                 .ts-media-status {
@@ -2210,7 +2221,8 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             // there will be, so the blocks do not pop in a moment later.
             const tsWillHaveEmbedded = this.tsHasEmbeddedGenerationMetadata(tsAsset)
                 || (tsDeps.pending && Boolean(tsAsset?.has_prompt || tsAsset?.has_workflow));
-            return `${tsWillHaveEmbedded ? tsBuildImageMetaMarkup(tsAsset, tsDeps) : ""}${tsBuildTechnicalMetaMarkup(tsAsset, tsDeps)}`;
+            const tsPromptAlreadyShowsLoading = tsWillHaveEmbedded && tsDeps.pending && !tsAsset.prompt_text;
+            return `${tsWillHaveEmbedded ? tsBuildImageMetaMarkup(tsAsset, tsDeps) : ""}${tsBuildTechnicalMetaMarkup(tsAsset, tsDeps, !tsPromptAlreadyShowsLoading)}`;
         }
         if (tsAsset?.type === "3d") {
             return tsBuild3DMetaMarkup(tsAsset, tsDeps);
@@ -2301,7 +2313,8 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             }
             tsButton.title = tsTitle;
         };
-        tsLabelButton(this.tsRefs.tsDownloadButton, this.tsT("button.download", "Download"), this.tsT("tooltip.viewerDownload", "Download the original file"));
+        const tsDownloadLabel = tsAsset?.type === "video" ? this.tsT("button.downloadVideo", "Download video") : this.tsT("button.download", "Download");
+        tsLabelButton(this.tsRefs.tsDownloadButton, tsDownloadLabel, this.tsT("tooltip.viewerDownload", "Download the original file"));
         tsLabelButton(this.tsRefs.tsOpenInNewTabButton, this.tsT("button.openInNewTab", "Open In New Tab"), this.tsT("tooltip.viewerOpenTab", "Open the original file in a new browser tab"));
         tsLabelButton(this.tsRefs.tsShowInFolderButton, this.tsT("button.showInFolder", "Show In Folder"), this.tsT("tooltip.viewerShowInFolder", "Open the folder that holds this file, with the file selected"));
         tsLabelButton(
@@ -2526,7 +2539,7 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsSavingFrame = true;
             tsUpdateSaveFrame();
             try {
-                await tsDownloadVideoFrame(tsAsset, tsPosition, tsVideo);
+                await tsSaveVideoFrame(tsAsset, tsPosition, tsVideo);
             } finally {
                 tsSavingFrame = false;
                 tsUpdateSaveFrame();

@@ -111,6 +111,10 @@ export const tsPanelStyles = `<style>
                     position: absolute;
                     z-index: 40;
                     min-width: 168px;
+                    max-width: calc(100% - 8px);
+                    max-height: calc(100% - 8px);
+                    overflow: auto;
+                    box-sizing: border-box;
                     padding: 4px;
                     display: flex;
                     flex-direction: column;
@@ -147,6 +151,23 @@ export const tsPanelStyles = `<style>
 
                 .ts-context-item[data-danger="true"] {
                     color: var(--ts-danger);
+                    border-top: 1px solid var(--ts-border);
+                    border-radius: 0 0 7px 7px;
+                    margin-top: 3px;
+                }
+
+                .ts-context-group {
+                    display: grid;
+                }
+                .ts-context-label {
+                    padding: 5px 10px 2px;
+                    color: var(--ts-muted);
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+                .ts-context-group + .ts-context-group {
+                    border-top: 1px solid var(--ts-border);
+                    margin-top: 3px;
                 }
 
                 .ts-context-item[data-danger="true"]:hover:not(:disabled) {
@@ -287,6 +308,30 @@ export const tsPanelStyles = `<style>
                 .ts-title-link:hover {
                     text-decoration: underline;
                 }
+                .ts-project-toggle {
+                    min-width: 30px;
+                    padding: 0 6px;
+                    font-size: 18px;
+                }
+                .ts-project-menu {
+                    position: fixed;
+                    inset: auto;
+                    margin: 0;
+                    padding: 8px;
+                    border: 1px solid var(--ts-border);
+                    border-radius: 8px;
+                    background: var(--ts-bg-2);
+                    color: var(--ts-text);
+                    box-shadow: var(--ts-shadow);
+                }
+                .ts-project-menu:popover-open {
+                    display: grid;
+                    gap: 4px;
+                }
+                .ts-project-menu > * {
+                    padding: 5px 8px;
+                    text-align: start;
+                }
 
                 .ts-donate {
                     display: inline-flex;
@@ -374,14 +419,26 @@ export const tsPanelStyles = `<style>
                     min-width: 0;
                 }
 
-                .ts-toolbar-maintenance {
-                    border-top: 1px solid var(--ts-border);
-                    padding-top: calc(8px * var(--ts-toolbar-scale, 1));
-                }
-
-                .ts-shell[data-section="workflows"] .ts-toolbar-actions,
-                .ts-shell[data-section="workflows"] .ts-toolbar-maintenance {
+                .ts-shell[data-section="workflows"] .ts-toolbar-actions {
                     display: none;
+                }
+                .ts-toolbar-slot {
+                    position: relative;
+                    min-width: 0;
+                }
+                .ts-toolbar-slot:has(.ts-toolbar-selection:not([hidden])) .ts-toolbar-view {
+                    visibility: hidden;
+                }
+                .ts-toolbar-selection {
+                    position: absolute;
+                    inset: 0;
+                    overflow: auto;
+                    align-content: safe center;
+                    scrollbar-width: thin;
+                }
+                .ts-selection-count::after {
+                    content: " ×";
+                    color: var(--ts-muted);
                 }
 
                 .ts-selection-status,

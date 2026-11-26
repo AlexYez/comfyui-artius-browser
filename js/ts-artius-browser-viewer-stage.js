@@ -34,6 +34,19 @@ function tsBuildLoopButtonMarkup(tsClassName, tsDeps) {
     return `<button class="${tsClassName} ts-media-loop" type="button" aria-pressed="false" data-ts-i18n="button.loop" data-ts-i18n-title="tooltip.loop" title="${tsDeps.escapeAttribute(tsDeps.t("tooltip.loop", "Start again from the beginning when the end is reached"))}">${tsDeps.escapeHTML(tsDeps.t("button.loop", "Loop"))}</button>`;
 }
 
+function tsBuildFrameStepper(tsDeps) {
+    const tsStep = (tsPrev) => {
+        const tsKey = tsPrev ? "button.prevFrame" : "button.nextFrame";
+        const tsLabel = tsDeps.escapeAttribute(tsPrev ? tsDeps.t("button.prevFrame", "Previous Frame") : tsDeps.t("button.nextFrame", "Next Frame"));
+        return `<button class="ts-video-step ts-video-${tsPrev ? "prev" : "next"}-frame" type="button" title="${tsLabel}" aria-label="${tsLabel}" data-ts-i18n-title="${tsKey}" data-ts-i18n-aria-label="${tsKey}">${tsPrev ? "‹" : "›"}</button>`;
+    };
+    return `<div class="ts-video-stepper">
+        ${tsBuildEdgeButtonMarkup("first", tsDeps)}${tsStep(true)}
+        <div class="ts-video-frame">${tsDeps.t("label.currentFrame", "Frame")} 0</div>
+        ${tsStep(false)}${tsBuildEdgeButtonMarkup("last", tsDeps)}
+    </div>`;
+}
+
 export function tsBuildStageMarkup(tsAsset, tsDeps) {
     // Asset/preview URLs are backend-generated and safe today, but they are
     // interpolated into HTML attributes just like alt/aria-label — escape them
@@ -129,13 +142,7 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                             ${tsBuildLoopButtonMarkup("ts-video-loop", tsDeps)}
                         </div>
                         <div class="ts-video-compare-status" data-active="false" role="status"></div>
-                        <div class="ts-video-stepper">
-                            ${tsBuildEdgeButtonMarkup("first", tsDeps)}
-                            <button class="ts-video-step ts-video-prev-frame" type="button" data-ts-i18n="button.prevFrame">${tsDeps.t("button.prevFrame", "Previous Frame")}</button>
-                            <div class="ts-video-frame">${tsDeps.t("label.currentFrame", "Frame")} 0</div>
-                            <button class="ts-video-step ts-video-next-frame" type="button" data-ts-i18n="button.nextFrame">${tsDeps.t("button.nextFrame", "Next Frame")}</button>
-                            ${tsBuildEdgeButtonMarkup("last", tsDeps)}
-                        </div>
+                        ${tsBuildFrameStepper(tsDeps)}
                     </div>
                 </div>
             `;
@@ -151,13 +158,9 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                 <video${tsSizeAttributes}${tsPosterAttribute} src="${tsFileURL}" controls autoplay playsinline preload="auto"></video>
                 ${tsBuildMediaStatusMarkup(tsAsset, tsDeps)}
                 <div class="ts-video-controls">
-                    ${tsBuildEdgeButtonMarkup("first", tsDeps)}
-                    <button class="ts-video-step ts-video-prev-frame" type="button" data-ts-i18n="button.prevFrame">${tsDeps.t("button.prevFrame", "Previous Frame")}</button>
-                    <div class="ts-video-frame">${tsDeps.t("label.currentFrame", "Frame")} 0</div>
-                    <button class="ts-video-step ts-video-next-frame" type="button" data-ts-i18n="button.nextFrame">${tsDeps.t("button.nextFrame", "Next Frame")}</button>
-                    ${tsBuildEdgeButtonMarkup("last", tsDeps)}
+                    ${tsBuildFrameStepper(tsDeps)}
+                    <button class="ts-video-step ts-save-frame" type="button" disabled data-ts-i18n="button.framePNG" data-ts-i18n-title="tooltip.saveFrame" title="${tsDeps.escapeAttribute(tsDeps.t("tooltip.saveFrame", "Save frame to library"))}">${tsDeps.t("button.framePNG", "Save")}</button>
                     ${tsBuildLoopButtonMarkup("ts-video-loop", tsDeps)}
-                    <button class="ts-video-step ts-save-frame" type="button" disabled data-ts-i18n="button.framePNG">${tsDeps.t("button.framePNG", "Download frame as PNG")}</button>
                 </div>
             </div>
         `;

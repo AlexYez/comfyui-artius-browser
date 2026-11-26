@@ -143,7 +143,7 @@ When another installed pack publishes a better loader, it wins: a video dropped 
 <summary><strong>🎬 Videos</strong></summary>
 
 - Inline playback with current-frame display
-- Open one video, seek or step to the frame, then choose **Download frame as PNG**. Right-click a thumbnail to download its first or last frame directly. If ComfyUI has no FFmpeg, the browser extracts the PNG itself for video formats it can decode.
+- Open a video, seek or step to a frame, then choose **Save**. Right-click its thumbnail to save the first or last frame directly. Find the PNG in the library under `output/Images/Extracted-Frames`. The first frame of `clip.mp4` is `clip_frame_000000.png`. Repeated saves add a counter. Without FFmpeg, the browser captures frames from videos it can decode.
 - ⬅️ / ➡️ frame-stepping
 - Codec, FPS, duration, bitrate, format, audio-track info
 - Sync compare for 2, 3 or 4 selected videos with one shared transport (**Compare** button in the toolbar)
@@ -206,7 +206,7 @@ When another installed pack publishes a better loader, it wins: a video dropped 
 <details>
 <summary><strong>Some previews look stale</strong></summary>
 
-Hit **Rebuild Cache**. Preview URLs auto-bust the browser cache via an `mtime` token, so a hard refresh is usually unnecessary. If it still looks stale, restart ComfyUI and `Ctrl+F5`.
+In Assets, open **⋯** in the header and select **Rebuild Cache**. If the preview still looks stale, restart ComfyUI and press `Ctrl+F5`.
 
 </details>
 
