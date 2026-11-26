@@ -9,6 +9,7 @@ import {
     tsFormatBytes,
     tsOpenAssetInNewTab,
     tsOpenDownload,
+    tsDownloadVideoFrame,
     tsRevealAssetInFolder,
     tsShowToast,
 } from "./ts-artius-browser-api.js";
@@ -2509,6 +2510,34 @@ export class TSArtiusBrowserViewer extends HTMLElement {
         const tsLoopButton = tsStage.querySelector(".ts-video-loop");
         const tsFirstFrameButton = tsStage.querySelector(".ts-video-first-frame");
         const tsLastFrameButton = tsStage.querySelector(".ts-video-last-frame");
+        const tsSaveFrameButton = tsStage.querySelector(".ts-save-frame");
+        let tsSavingFrame = false;
+        const tsUpdateSaveFrame = () => {
+            if (tsSaveFrameButton) {
+                tsSaveFrameButton.disabled = tsSavingFrame || tsVideo.seeking || tsVideo.readyState < 2 || !tsVideo.videoWidth || Boolean(tsVideo.error);
+            }
+        };
+        const tsSaveFrame = async () => {
+            if (tsSaveFrameButton.disabled) {
+                return;
+            }
+            tsVideo.pause();
+            const tsPosition = tsVideo.ended ? "last" : Math.round(tsVideo.currentTime * 1e6);
+            tsSavingFrame = true;
+            tsUpdateSaveFrame();
+            try {
+                await tsDownloadVideoFrame(tsAsset, tsPosition, tsVideo);
+            } finally {
+                tsSavingFrame = false;
+                tsUpdateSaveFrame();
+            }
+        };
+        const tsFrameEvents = ["loadeddata", "seeking", "seeked", "emptied", "error"];
+        tsSaveFrameButton?.addEventListener("click", tsSaveFrame);
+        for (const tsEvent of tsFrameEvents) {
+            tsVideo.addEventListener(tsEvent, tsUpdateSaveFrame);
+        }
+        tsUpdateSaveFrame();
         tsVideo.loop = tsReadLoopPreference();
         tsRenderLoopButton(tsLoopButton, tsVideo.loop);
         const tsHandleLoopClick = () => {
@@ -2677,6 +2706,10 @@ export class TSArtiusBrowserViewer extends HTMLElement {
             tsPrevFrameButton.removeEventListener("click", tsHandlePrevFrame);
             tsNextFrameButton.removeEventListener("click", tsHandleNextFrame);
             tsFirstFrameButton?.removeEventListener("click", tsHandleFirstFrame);
+            tsSaveFrameButton?.removeEventListener("click", tsSaveFrame);
+            for (const tsEvent of tsFrameEvents) {
+                tsVideo.removeEventListener(tsEvent, tsUpdateSaveFrame);
+            }
             tsLastFrameButton?.removeEventListener("click", tsHandleLastFrame);
             tsLoopButton?.removeEventListener("click", tsHandleLoopClick);
             tsVideo.removeEventListener("loadedmetadata", tsHandleLoadedMetadata);

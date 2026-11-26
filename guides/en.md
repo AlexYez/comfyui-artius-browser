@@ -143,6 +143,7 @@ When another installed pack publishes a better loader, it wins: a video dropped 
 <summary><strong>🎬 Videos</strong></summary>
 
 - Inline playback with current-frame display
+- Open one video, seek or step to the frame, then choose **Download frame as PNG**. Right-click a thumbnail to download its first or last frame directly. If ComfyUI has no FFmpeg, the browser extracts the PNG itself for video formats it can decode.
 - ⬅️ / ➡️ frame-stepping
 - Codec, FPS, duration, bitrate, format, audio-track info
 - Sync compare for 2, 3 or 4 selected videos with one shared transport (**Compare** button in the toolbar)

@@ -1,4 +1,11 @@
 {
+    "error.browserFrame": "浏览器无法读取此帧。请在运行 ComfyUI 的计算机上安装 FFmpeg，然后重试。",
+    "button.framePNG": "将当前帧下载为 PNG",
+    "menu.firstFramePNG": "将首帧下载为 PNG",
+    "menu.lastFramePNG": "将末帧下载为 PNG",
+    "status.extractingFrame": "正在提取视频帧…",
+    "toast.frameFailed": "无法提取视频帧",
+    "error.frameDecode": "请确认 ComfyUI 可以调用 FFmpeg，并且 FFmpeg 可以读取此视频。",
     "panel.title": "Artius Browser",
     "button.donate": "赞助",
     "tooltip.donate": "支持本项目。",

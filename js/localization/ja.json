@@ -1,4 +1,11 @@
 {
+    "error.browserFrame": "ブラウザーでこのフレームを読み取れませんでした。ComfyUI を実行しているコンピューターに FFmpeg をインストールして、もう一度お試しください。",
+    "button.framePNG": "現在のフレームをPNGで保存",
+    "menu.firstFramePNG": "最初のフレームをPNGで保存",
+    "menu.lastFramePNG": "最後のフレームをPNGで保存",
+    "status.extractingFrame": "フレームを抽出中…",
+    "toast.frameFailed": "フレームを抽出できませんでした",
+    "error.frameDecode": "ComfyUI から FFmpeg を利用でき、この動画を読み込めることを確認してください。",
     "panel.title": "Artius Browser",
     "button.donate": "支援する",
     "tooltip.donate": "プロジェクトを支援します。",

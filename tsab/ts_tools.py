@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 from pathlib import Path
 from typing import Any
@@ -460,6 +461,40 @@ class TSToolLocator:
                 error=(ts_result.stderr[-400:] if ts_result and ts_result.stderr else ""),
             )
         return ts_success
+
+    def TSExtractVideoFramePNG(self, ts_source: Path, ts_position: str | int) -> bytes | None:
+        """Extract the first, last, or visible frame at a playback time in microseconds."""
+        ts_window_us = 1_000_000
+        if ts_position == "last":
+            ts_seeks = [(["-sseof", "-1"], 0), ([], 0)]
+        elif isinstance(ts_position, int) and ts_position > ts_window_us:
+            ts_start = ts_position - ts_window_us
+            ts_seeks = [(["-ss", f"{ts_start}us"], ts_start), ([], 0)]
+        else:
+            ts_seeks = [([], 0)]
+
+        with tempfile.TemporaryDirectory() as ts_dir:
+            ts_png = Path(ts_dir) / "frame.png"
+            for ts_seek, ts_start in ts_seeks:
+                ts_args = [*ts_seek, "-protocol_whitelist", "file", "-i", str(ts_source), "-map", "0:V:0"]
+                if ts_position != "first" and ts_position != 0:
+                    # Keep the last frame whose presentation timestamp is <= the
+                    # playhead (or the very last frame at EOF). Collapse the
+                    # timestamps into one fps bucket: it retains only the last
+                    # candidate and eof_action=pass flushes it even for a still.
+                    ts_filters = ["settb=AVTB"]
+                    if isinstance(ts_position, int):
+                        ts_filters.append(f"trim=end_pts={ts_position - ts_start + 1}")
+                    ts_filters.extend(["setpts=250000", "fps=1:eof_action=pass"])
+                    ts_args.extend(["-vf", ",".join(ts_filters)])
+                ts_args.extend(["-frames:v", "1", "-threads", "1"])
+                if self.TSRunFFmpegConversion(ts_args, ts_png, 120):
+                    return ts_png.read_bytes()
+                # A seek may land in a long VFR gap or an audio-only tail.
+                # Retry from the beginning only when it produced no picture.
+                if ts_png.exists() and ts_png.stat().st_size:
+                    break
+        return None
 
     def TSExtractStillImage(
         self,

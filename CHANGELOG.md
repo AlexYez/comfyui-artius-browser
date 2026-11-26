@@ -4,6 +4,12 @@ Release history for **Timesaver Artius Browser**. Entries follow [Keep a Changel
 
 [Archive and version index](changelog/README.md) · [Project entry](README.md)
 
+## [1.20.8] - 2026-11-26
+
+### Added
+
+- Download the selected video frame as a PNG from the lightbox, or download the first or last frame from the thumbnail's context menu. When FFmpeg is unavailable, the browser can extract frames from videos it can decode.
+
 ## [1.20.7] - 2026-11-19
 
 ### Fixed

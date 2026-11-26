@@ -29,6 +29,7 @@ TS_ROUTE_DEFINITIONS = (
     ("POST", "/asset_browser/preview/{id}/warm", "TSHandlePreviewWarm"),
     ("GET", "/asset_browser/file", "TSHandleFile"),
     ("GET", "/asset_browser/display/{id}", "TSHandleDisplay"),
+    ("GET", "/asset_browser/frame/{id}", "TSHandleVideoFrame"),
     ("POST", "/asset_browser/rescan", "TSHandleRescan"),
     ("POST", "/asset_browser/index_files", "TSHandleIndexFiles"),
     ("POST", "/asset_browser/rebuild_cache", "TSHandleRebuildCache"),
@@ -236,6 +237,16 @@ async def TSHandlePreviewWarm(ts_runtime, ts_request):
     ts_asset_id = TSParseRouteAssetId(ts_request)
     TSLogVerbose("route.preview.warm.request", asset_id=ts_asset_id, path=ts_request.path)
     return TSWeb.json_response(await asyncio.to_thread(ts_runtime.TSWarmPreview, ts_asset_id))
+
+
+async def TSHandleVideoFrame(ts_runtime, ts_request):
+    ts_asset_id = TSParseRouteAssetId(ts_request)
+    ts_position = ts_request.query.get("position", "")
+    if ts_position not in {"first", "last"}:
+        if not (1 <= len(ts_position) <= 15 and ts_position.isascii() and ts_position.isdecimal()):
+            raise TSWeb.HTTPBadRequest(reason="Expected first, last or playback time in microseconds")
+        ts_position = int(ts_position)
+    return await asyncio.to_thread(ts_runtime.TSBuildVideoFrameResponse, ts_asset_id, ts_position)
 
 
 async def TSHandleFile(ts_runtime, ts_request):

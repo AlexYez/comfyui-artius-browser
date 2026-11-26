@@ -1,4 +1,11 @@
 {
+    "error.browserFrame": "Браузеру не удалось прочитать этот кадр. Установите FFmpeg на компьютере с ComfyUI и попробуйте снова.",
+    "button.framePNG": "Скачать кадр в PNG",
+    "menu.firstFramePNG": "Скачать первый кадр в PNG",
+    "menu.lastFramePNG": "Скачать последний кадр в PNG",
+    "status.extractingFrame": "Извлекаем кадр…",
+    "toast.frameFailed": "Не удалось извлечь кадр",
+    "error.frameDecode": "Проверьте, что FFmpeg доступен в ComfyUI и может прочитать это видео.",
     "panel.title": "Artius Browser",
     "button.donate": "Поддержать",
     "tooltip.donate": "Поддержать проект.",

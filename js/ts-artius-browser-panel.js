@@ -21,6 +21,7 @@ import {
     tsLoadLocale,
     tsOpenAssetInNewTab,
     tsOpenDownload,
+    tsDownloadVideoFrame,
     tsRevealAssetInFolder,
     tsRevealWorkflowInFolder,
     tsDeleteWorkflowFile,
@@ -3708,6 +3709,12 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             });
         }
         tsItems.push({ tsAction: "download", tsLabel: this.tsT("menu.download", "Download") });
+        if (tsAsset.type === "video") {
+            tsItems.push(
+                { tsAction: "first-frame", tsLabel: this.tsT("menu.firstFramePNG", "Download first frame as PNG") },
+                { tsAction: "last-frame", tsLabel: this.tsT("menu.lastFramePNG", "Download last frame as PNG") },
+            );
+        }
         // Right-clicking inside a multi-selection keeps it, so the menu can
         // offer the whole selection as one archive.
         const tsSelectionCount = this.tsState.tsSelection.has(tsAsset.id) ? this.tsGetSelectedItems().length : 0;
@@ -3923,6 +3930,8 @@ export class TSArtiusBrowserPanel extends HTMLElement {
             tsOpenDownload(tsAsset);
         } else if (tsAction === "download-zip") {
             void this.tsDownloadAssetsAsArchive(this.tsGetSelectedItems());
+        } else if (tsAction === "first-frame" || tsAction === "last-frame") {
+            void tsDownloadVideoFrame(tsAsset, tsAction === "first-frame" ? "first" : "last");
         } else if (tsAction === "open-tab") {
             tsOpenAssetInNewTab(tsAsset);
         } else if (tsAction === "reveal") {

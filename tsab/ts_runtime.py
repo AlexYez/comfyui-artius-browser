@@ -434,6 +434,24 @@ class TSAssetBrowserRuntime:
             raise TSWeb.HTTPNotFound()
         return self._TSApplyRevalidateHeaders(TSWeb.FileResponse(ts_file_path))
 
+    def TSBuildVideoFrameResponse(self, ts_asset_id: int, ts_position: str | int) -> TSWeb.Response:
+        ts_row = self.ts_database.TSGetAssetById(ts_asset_id)
+        if ts_row is None:
+            raise TSWeb.HTTPNotFound()
+        ts_source = self._TSAuthorizeAssetPath(ts_row)
+        if not ts_source.is_file():
+            raise TSWeb.HTTPNotFound()
+        if ts_row["type"] != "video":
+            raise TSWeb.HTTPBadRequest(reason="Expected a video asset")
+        if not self.ts_tools.TSResolveTool("ffmpeg"):
+            raise TSWeb.HTTPServiceUnavailable(
+                reason="FFmpeg is unavailable", headers={"X-Artius-Frame-Error": "ffmpeg_unavailable"},
+            )
+        ts_png = self.ts_tools.TSExtractVideoFramePNG(ts_source, ts_position)
+        if not ts_png:
+            raise TSWeb.HTTPUnprocessableEntity(reason="Cannot decode video frame")
+        return TSWeb.Response(body=ts_png, content_type="image/png", headers={"Cache-Control": "no-store"})
+
     def TSBuildDisplayResponse(self, ts_asset_id: int, ts_force_proxy: bool = False) -> TSWeb.FileResponse:
         """The file the lightbox SHOWS: the original, or a converted copy.
 
@@ -458,6 +476,11 @@ class TSAssetBrowserRuntime:
         # its own cache, never to the asset row.
         ts_proxy_path = self.ts_display_proxy.TSEnsureProxy(ts_row, ts_file_path)
         if ts_proxy_path is None:
+            # The codec table is conservative. When conversion is unavailable,
+            # a browser with native support can still open and inspect the
+            # original. A forced proxy means it already tried the original.
+            if ts_type == "video" and not ts_force_proxy and not self.ts_tools.TSResolveTool("ffmpeg"):
+                return self._TSApplyRevalidateHeaders(TSWeb.FileResponse(ts_file_path))
             # No ffmpeg, no usable encoder, or a file ffmpeg cannot decode.
             raise TSWeb.HTTPUnprocessableEntity(reason="Display copy could not be created")
         # Explicit type: Python's mimetypes table on Windows has no ".webp",

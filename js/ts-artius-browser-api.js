@@ -1,5 +1,6 @@
 import { app } from "/scripts/app.js";
 import { api } from "/scripts/api.js";
+import { tsCaptureBrowserFrame } from "./ts-artius-browser-video-frame.js";
 
 import {
     tsApiSettings,
@@ -484,6 +485,55 @@ export async function tsCopyText(tsText) {
 
 export function tsOpenDownload(tsAsset) {
     return tsOpenDownloadImpl(tsAsset, { document, apiURL: tsApiURL });
+}
+
+const tsFrameDownloads = new Set();
+
+export async function tsDownloadVideoFrame(tsAsset, tsPosition, tsPlayer = null) {
+    const tsKey = `${tsAsset.id}:${tsPosition}`;
+    if (tsAsset.type !== "video" || tsFrameDownloads.has(tsKey)) {
+        return;
+    }
+    tsFrameDownloads.add(tsKey);
+    try {
+        tsShowToast("info", tsT("status.extractingFrame", "Extracting video frame…"), tsAsset.filename);
+        const tsResponse = await tsFetchResponse(`${tsRouteBase}/frame/${tsAsset.id}?position=${encodeURIComponent(tsPosition)}`);
+        let tsBlob;
+        if (tsResponse.ok) {
+            tsBlob = await tsResponse.blob();
+        } else {
+            const tsError = await tsBuildResponseError(tsResponse);
+            if (tsError.status !== 503 || (tsResponse.headers.get("X-Artius-Frame-Error") !== "ffmpeg_unavailable"
+                && !tsError.detail?.includes("FFmpeg is unavailable"))) {
+                throw tsError;
+            }
+            try {
+                tsBlob = await tsCaptureBrowserFrame(tsAssetFileURL(tsAsset), tsPosition, tsPlayer);
+            } catch {
+                tsShowToast("error", tsT("toast.frameFailed", "Could not extract the frame"),
+                    tsT("error.browserFrame", "The browser could not read this frame. Install FFmpeg on the computer running ComfyUI and try again."));
+                return;
+            }
+        }
+        if (tsBlob.type !== "image/png" || !tsBlob.size) {
+            throw new Error("Expected a PNG frame");
+        }
+        const tsURL = URL.createObjectURL(tsBlob);
+        try {
+            const tsStem = String(tsAsset.filename || "video").replace(/\.[^.]+$/, "") || "video";
+            const tsSuffix = typeof tsPosition === "number" ? `${tsPosition / 1e6}s` : tsPosition;
+            tsOpenDownload({ file_url: tsURL, filename: `${tsStem}-${tsSuffix}.png` });
+        } finally {
+            window.setTimeout(() => URL.revokeObjectURL(tsURL), 1000);
+        }
+    } catch (tsError) {
+        const tsDetail = tsError.status === 422
+            ? tsT("error.frameDecode", "Check that FFmpeg is available to ComfyUI and can read this video.")
+            : tsExplainError(tsError);
+        tsShowToast("error", tsT("toast.frameFailed", "Could not extract the frame"), tsDetail);
+    } finally {
+        tsFrameDownloads.delete(tsKey);
+    }
 }
 
 export function tsOpenAssetInNewTab(tsAsset) {

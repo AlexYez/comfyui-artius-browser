@@ -1,4 +1,11 @@
 {
+    "error.browserFrame": "The browser could not read this frame. Install FFmpeg on the computer running ComfyUI and try again.",
+    "button.framePNG": "Download frame as PNG",
+    "menu.firstFramePNG": "Download first frame as PNG",
+    "menu.lastFramePNG": "Download last frame as PNG",
+    "status.extractingFrame": "Extracting video frame…",
+    "toast.frameFailed": "Could not extract the frame",
+    "error.frameDecode": "Check that FFmpeg is available to ComfyUI and can read this video.",
     "panel.title": "Artius Browser",
     "button.donate": "Donate",
     "tooltip.donate": "Support the project.",

@@ -157,6 +157,7 @@ export function tsBuildStageMarkup(tsAsset, tsDeps) {
                     <button class="ts-video-step ts-video-next-frame" type="button" data-ts-i18n="button.nextFrame">${tsDeps.t("button.nextFrame", "Next Frame")}</button>
                     ${tsBuildEdgeButtonMarkup("last", tsDeps)}
                     ${tsBuildLoopButtonMarkup("ts-video-loop", tsDeps)}
+                    <button class="ts-video-step ts-save-frame" type="button" disabled data-ts-i18n="button.framePNG">${tsDeps.t("button.framePNG", "Download frame as PNG")}</button>
                 </div>
             </div>
         `;
